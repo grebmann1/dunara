@@ -1,14 +1,15 @@
 import { constants } from 'node:fs';
-import { lstat, open, readdir } from 'node:fs/promises';
+import { lstat, open, readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { BuilderError } from './contracts.js';
 import { noSymlinks } from './storage.js';
 import { revision } from './files.js';
 import { createHash } from 'node:crypto';
 import type { WorkspaceFile } from './native-workspace-contracts.js';
+import { templateRoot } from './projects.js';
 
 const directories = new Set(['app', 'src', 'assets', 'components', 'hooks', 'constants']);
-const rootFiles = new Set(['app.json', 'eas.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'expo-env.d.ts']);
+const rootFiles = new Set(['app.json', 'eas.json', 'package.json', 'package-lock.json', 'tsconfig.json', 'expo-env.d.ts', 'metro.config.js']);
 const ignored = new Set(['node_modules', 'dist', 'build', 'coverage', 'exports', 'web-build', '.git', '.expo', '.builder', '.mobile-builder.json', 'README.md', 'LICENSE', 'NOTICE', 'supabase', 'docs']);
 const extensions = new Set(['.ts', '.tsx', '.js', '.jsx', '.json', '.css', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.avif', '.svg', '.ttf', '.otf', '.woff', '.woff2', '.mp3', '.wav', '.mp4', '.txt']);
 const privateFile = (name: string) => /^\.env(?:\.|$)|^(?:credentials|openai-images|openai-assistant)(?:\.|$)|\.(?:key|pem|p8|p12|pfx|keystore|jks|log)$|^\.credential-/i.test(name);
@@ -47,6 +48,9 @@ export async function sourceSnapshot(root: string): Promise<Snapshot> {
     }
     if (depth === 0 && !rootFiles.has(name) || !extensions.has(path.extname(name)) || relative.length > 240 || !/^[a-zA-Z0-9_()[\]. /@+-]+$/.test(relative)) throw new BuilderError('INVALID_PATH', `Review unsupported build file: ${relative}`);
     const data = await boundedFile(root, relative);
+    // Only the distribution's reviewed metadata exclusions are managed here.
+    // A custom executable Metro configuration still requires its own integration.
+    if (relative === 'metro.config.js' && !data.equals(await readFile(path.join(templateRoot, 'metro.config.js')))) throw new BuilderError('INVALID_PATH', 'Review unsupported build file: metro.config.js');
     bytes += data.length;
     if (contents.size >= 600 || bytes > 64_000_000) throw new BuilderError('LIMIT_EXCEEDED', 'Build source exceeds 600 files or 64 MB.');
     contents.set(relative, data);

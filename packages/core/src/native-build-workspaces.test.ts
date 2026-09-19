@@ -42,6 +42,7 @@ it('prepares immutable reviewed inputs and all exports without changing the sour
   for (const name of ['.env', '.env.local', 'credentials.json', 'src/.env.local', 'src/signing.p8']) await writeFile(file(name), 'PRIVATE_CANARY');
   const original = await sourceSnapshot(appRoot), stop = vi.spyOn(engine.previews, 'stop');
   const plan = await service.plan(id, selection), input = confirm(plan);
+  expect(plan.files).toContainEqual(expect.objectContaining({ path: 'metro.config.js' }));
   expect((await service.plan(id, selection)).proposedRevision).toBe(plan.proposedRevision);
   expect(plan.files.some(item => /env.local|credentials|signing/.test(item.path))).toBe(false);
   const pending = await service.prepare(id, input), result = await terminal(pending);

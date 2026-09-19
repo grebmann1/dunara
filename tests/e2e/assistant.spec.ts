@@ -550,6 +550,26 @@ test('reading earlier messages stays put during streaming and Latest message ret
   finish(); await expect(panel.getByRole('button', { name: 'Send message' })).toBeVisible(); expect(calls).toBe(1);
 });
 
+test('a staged message waits for draft restoration before Send becomes available', async ({ page }) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/assistant/drafts/read', async route => { await pending; await route.continue(); });
+  try {
+    await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+    const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
+    await panel.getByRole('button', { name: /^Refine this screen/ }).click();
+    await expect(message).toHaveValue('Review the current screen and suggest improvements to its layout, spacing, and typography.');
+    await expect(message).toHaveAttribute('readonly', '');
+    await expect(panel.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+    expect(calls).toBe(0);
+    release();
+    await expect(message).not.toHaveAttribute('readonly');
+    await panel.getByRole('button', { name: 'Send message', exact: true }).click();
+    await expect(panel.getByText('A local fixture answer.')).toBeVisible(); expect(calls).toBe(1);
+  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+});
+
 test('failed turns can be edited without resubmitting automatically', async ({ page }) => {
   await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
   behavior = async () => { throw new Error('Offline fixture failure'); };

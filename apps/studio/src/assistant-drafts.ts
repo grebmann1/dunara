@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStudioClient } from './api';
 import type { DraftScope, DraftSnapshot, DraftValue } from '../../../packages/assistant/src/drafts';
 
@@ -13,6 +13,9 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
   const entry = entries.current.get(key);
   function notify(message: string, target = key) { if (mounted.current && latest.current.key === target) { setNotice(message); render(version => version + 1); } }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  // Close the editable frame between history becoming ready and its draft read.
+  // Otherwise the first keystroke can land just as the composer becomes read-only.
+  useLayoutEffect(() => { setLoading(ready && !entries.current.has(key)); }, [key, ready, version]);
   useEffect(() => {
     if (!ready) { if (entries.current.get(key)?.failed) entries.current.delete(key); return; }
     if (entries.current.has(key)) return;

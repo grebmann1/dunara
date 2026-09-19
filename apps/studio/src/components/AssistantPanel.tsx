@@ -34,7 +34,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   const toolEvents = here ? a.activity.filter(event => event.runId === active.runId && event.type === 'tool') : [];
   const runningTool = toolEvents.length > (lastTurn?.tools.length ?? 0) ? toolEvents.at(-1)?.tool : undefined;
   const promptBytes = new TextEncoder().encode(a.draft).length, maxBytes = a.status?.limits?.promptBytes ?? 16384;
-  const canSend = !a.working && !a.loading && !a.historyError && !!a.status?.epoch && a.status.configured && a.status.available && !a.status.busy && !!a.draft.trim() && promptBytes <= maxBytes;
+  const canSend = !a.working && !a.loading && !a.persistence.loading && !a.historyError && !!a.status?.epoch && a.status.configured && a.status.available && !a.status.busy && !!a.draft.trim() && promptBytes <= maxBytes;
   const progress = reviews.length ? 'Waiting for your review' : runningTool ? `Working · ${toolLabel(runningTool)}` : active?.state === 'starting' ? 'Getting started…' : lastTurn?.response ? 'Writing…' : 'Thinking…';
   const send = () => { if (canSend) { following.current = true; setAtBottom(true); input.current?.focus(); void a.send(); } };
   return <Dialog.Root open={open} onOpenChange={onOpenChange} modal={narrow}>
