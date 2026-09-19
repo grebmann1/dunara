@@ -1,6 +1,6 @@
 # Dunara naming and compatibility
 
-The product is **Dunara** (formerly Mobile App Builder), with **Dunara Studio**, **Dunara Assistant**, and **Dunara SDK** as the product family. The website retains the approved ivory, sand, charcoal and rust palette and the line **A new world. Built by you.** The shared mark is an ivory D and dune with an amber navigation star.
+The product is **Dunara** (formerly Mobile App Builder), with **Dunara Studio**, **Dunara Assistant**, and **Dunara SDK** as the product family. The website retains the approved ivory, sand, charcoal and rust palette and the line **A new world. Built by you.** The shared mark is a white geometric D with a rising diagonal cut on a coral tile. The catalogue exports this SVG for the Studio header and for website branding, the simulated walkthrough and favicon.
 
 The September 19, 2026 rename updates website branding and metadata, Studio branding/favicon and setup copy, desktop window/application labels and menus, Assistant instructions, bundled plugin guides and current user/SDK documentation. The native operations menu is now **Studio** (Show Studio, Reconnect Studio, Restart backend, Copy MCP socket path, Runtime status); the application menu is **Dunara**.
 
