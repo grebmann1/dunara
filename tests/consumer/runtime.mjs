@@ -40,4 +40,4 @@ try {
   transport = await connectDesktop(mcp.socketPath);
   await transport.close(); transport = undefined;
   console.log('Installed runtime: resources, offline scaffold, plugin discovery, execution trust, HTTP protocol, MCP and cleanup passed.');
-} finally { await transport?.close(); await mcp?.close(); await studio?.close(); await engine.close(); }
+} finally { await transport?.close(); await mcp?.close(); await studio?.close(); await Promise.all([engine.close(), engine.close()]); }

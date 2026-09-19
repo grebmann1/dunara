@@ -33,6 +33,7 @@ import { BuilderKernel } from '../../core/src/kernel.js';
 
 /** First-party distribution composition; the core Engine export remains a compatibility facade. */
 export class Engine extends BuilderKernel {
+  private shutdown?: Promise<void>;
   readonly plugins: PluginRuntime;
   readonly actions: BuiltinActions;
   readonly assets: Assets;
@@ -136,5 +137,6 @@ export class Engine extends BuilderKernel {
       return this.previews.setTransport(id, input, signal);
     });
   }
-  async close() { await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
+  close() { return this.shutdown ??= this.dispose(); }
+  private async dispose() { await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
 }
