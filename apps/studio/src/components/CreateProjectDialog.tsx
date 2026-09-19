@@ -1,25 +1,73 @@
-import { useRef, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Database, Smartphone } from 'lucide-react';
+import type { Backends } from '../../../../packages/core/src/backends';
+import { useStudioClient } from '../api';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
+import { SupabaseSettings } from './BackendPanel';
+import '../project-creation.css';
 
-type Props = { open: boolean; onOpenChange: (open: boolean) => void; busy: boolean; name: string; slug: string; onName: (value: string) => void; onSlug: (value: string) => void; onSubmit: (event: FormEvent<HTMLFormElement>) => void; error: ReactNode };
-export function CreateProjectDialog({ open, onOpenChange, busy, name, slug, onName, onSlug, onSubmit, error }: Props) {
-  const returnFocus = useRef<HTMLElement | null>(null);
-  return <Dialog open={open} onOpenChange={onOpenChange}>
-    <DialogContent onOpenAutoFocus={() => { returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); }}>
-      <DialogTitle className="m-0 pr-10 text-xl font-semibold tracking-tight">Create an app</DialogTitle>
-      <DialogDescription className="mt-2 text-sm leading-6 text-muted-foreground">Start with the Expo wellness recipe: three working screens and editable design tokens. Your agent can replace the content and add routes.</DialogDescription>
-      <form onSubmit={onSubmit} className="mt-6">
-        {error}
-        <fieldset disabled={busy} className="m-0 grid min-w-0 gap-4 border-0 p-0">
-          <div className="grid gap-2"><Label htmlFor="app-name">App name</Label><Input id="app-name" required maxLength={60} value={name} onChange={event => onName(event.target.value)} /></div>
-          <div className="grid gap-2"><Label htmlFor="app-slug">Directory slug</Label><Input id="app-slug" required pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" maxLength={48} value={slug} onChange={event => onSlug(event.target.value)} /></div>
-          <p className="text-sm text-muted-foreground">Creates source only. Installing and running it requires explicit execution trust.</p>
-          <div className="flex flex-wrap justify-end gap-2"><Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit">Create app</Button></div>
+export type CreationSetup = { brief: string; backend: 'supabase' | 'none' };
+type Props = { open: boolean; onOpenChange: (open: boolean) => void; busy: boolean; backendEnabled: boolean; name: string; slug: string; onName: (value: string) => void; onSlug: (value: string) => void; onSubmit: (setup: CreationSetup) => Promise<boolean>; error: ReactNode };
+export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, name, slug, onName, onSlug, onSubmit, error }: Props) {
+  const { api } = useStudioClient();
+  const returnFocus = useRef<HTMLElement | null>(null), heading = useRef<HTMLHeadingElement>(null);
+  const [step, setStep] = useState<'idea' | 'backend'>('idea'), [brief, setBrief] = useState('');
+  const [backend, setBackend] = useState<CreationSetup['backend']>();
+  const [connection, setConnection] = useState<ReturnType<Backends['status']>>();
+  const [connectionError, setConnectionError] = useState(''), [checking, setChecking] = useState(false);
+  const alive = useRef(false), submitting = useRef(false), connectionVersion = useRef(0);
+  const locked = busy || checking;
+  useEffect(() => { alive.current = open; return () => { alive.current = false; }; }, [open]);
+  useEffect(() => { if (open) { setStep('idea'); setBackend(undefined); setConnection(undefined); setConnectionError(''); setChecking(false); } }, [open]);
+  useEffect(() => { if (open && step === 'backend') heading.current?.focus(); }, [open, step]);
+  useEffect(() => {
+    if (!open || step !== 'backend' || backend !== 'supabase' || !backendEnabled) return;
+    let mounted = true; const version = ++connectionVersion.current;
+    void api<ReturnType<Backends['status']>>('/backend/connection').then(value => { if (mounted && version === connectionVersion.current) setConnection(value); }).catch(() => { if (mounted && version === connectionVersion.current) setConnectionError('Connection unavailable. Try connecting again.'); });
+    return () => { mounted = false; };
+  }, [open, step, backend, backendEnabled, api]);
+  async function create() {
+    if (locked || submitting.current || !backend) return;
+    submitting.current = true; setChecking(true); setConnectionError('');
+    try {
+      if (backend === 'supabase') {
+        connectionVersion.current++;
+        const current = await api<ReturnType<Backends['status']>>('/backend/connection');
+        if (!alive.current) return;
+        setConnection(current);
+        if (!current.configured || !backendEnabled) throw new Error('Connect your Supabase account before creating this app, or choose No backend for now.');
+      }
+      if (await onSubmit({ brief: brief.trim(), backend })) setBrief('');
+    } catch (cause) { if (alive.current) setConnectionError(cause instanceof Error ? cause.message : 'App creation failed. Try again.'); }
+    finally { submitting.current = false; if (alive.current) setChecking(false); }
+  }
+  return <Dialog open={open} onOpenChange={value => { if (!locked) onOpenChange(value); }}>
+    <DialogContent className="project-creation-dialog" onOpenAutoFocus={() => { returnFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null; }} onCloseAutoFocus={event => { event.preventDefault(); if (returnFocus.current?.isConnected) returnFocus.current.focus(); }}>
+      <div className="project-creation-progress" aria-label="Creation steps"><span aria-current={step === 'idea' ? 'step' : undefined}>1 · App idea</span><span aria-hidden>→</span><span aria-current={step === 'backend' ? 'step' : undefined}>2 · Backend</span></div>
+      <DialogTitle ref={heading} tabIndex={-1}>{step === 'idea' ? 'What are you making?' : 'Choose your backend'}</DialogTitle>
+      <DialogDescription>{step === 'idea' ? 'Start with a name and a simple idea. You can refine both as you build.' : 'Set up accounts and shared data before building your app’s features.'}</DialogDescription>
+      {error}
+      {step === 'idea' ? <form onSubmit={event => { event.preventDefault(); setStep('backend'); }}>
+        <fieldset disabled={locked}>
+          <div className="creation-field"><Label htmlFor="app-name">App name</Label><Input id="app-name" required maxLength={60} value={name} onChange={event => onName(event.target.value)} /></div>
+          <div className="creation-field"><Label htmlFor="new-app-brief">The idea <span className="optional-label">optional</span></Label><textarea id="new-app-brief" rows={3} maxLength={2000} value={brief} onChange={event => setBrief(event.target.value)} placeholder="An app for… that helps them…" /><small>A short brief for your project. Leave out private information.</small></div>
+          <details className="creation-folder"><summary>Project folder <span>{slug}</span><ChevronDown size={14} aria-hidden /></summary><Label htmlFor="app-slug">Directory slug</Label><Input id="app-slug" required pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" maxLength={48} value={slug} onChange={event => onSlug(event.target.value)} onInvalid={event => { const details = event.currentTarget.closest('details'); if (details) details.open = true; }} /></details>
+          <footer><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit">Continue<ArrowRight size={14} aria-hidden /></Button></footer>
         </fieldset>
-      </form>
+      </form> : <>
+        <fieldset className="creation-backend-options" disabled={locked}>
+          <legend className="sr-only">Backend choice</legend>
+          {backendEnabled && <label data-selected={backend === 'supabase'}><input type="radio" name="creation-backend" value="supabase" checked={backend === 'supabase'} onChange={() => { setBackend('supabase'); setConnectionError(''); }} /><Database size={18} aria-hidden /><span><strong>Supabase</strong><small>Sign-in, shared data, and file uploads</small></span></label>}
+          <label data-selected={backend === 'none'}><input type="radio" name="creation-backend" value="none" checked={backend === 'none'} onChange={() => { setBackend('none'); setConnectionError(''); }} /><Smartphone size={18} aria-hidden /><span><strong>No backend for now</strong><small>Start locally. Connect one later if you need it.</small></span></label>
+        </fieldset>
+        {backend === 'supabase' && (connection?.configured ? <div className="creation-account-ready" role="status"><Check size={16} aria-hidden /><div><strong>Account connection saved</strong><p>After creation, choose a Supabase project and review the connection in Backend.</p></div></div> : <SupabaseSettings compact disabled={locked} onConnected={async () => { const version = ++connectionVersion.current; const value = await api<ReturnType<Backends['status']>>('/backend/connection'); if (alive.current && version === connectionVersion.current) { setConnection(value); setConnectionError(''); } }} />)}
+        {connectionError && <p role="alert">{connectionError}</p>}
+        <p className="creation-recipe-note">Starts with an editable three-screen Expo app. You can replace its content with the Assistant.</p>
+        <footer><Button variant="ghost" disabled={locked} onClick={() => setStep('idea')}><ArrowLeft size={14} aria-hidden />Back</Button><Button disabled={locked || !backend || (backend === 'supabase' && (!connection?.configured || !backendEnabled))} onClick={() => void create()}>{locked ? 'Creating…' : 'Create app'}</Button></footer>
+      </>}
     </DialogContent>
   </Dialog>;
 }

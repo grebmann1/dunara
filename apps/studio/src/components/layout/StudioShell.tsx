@@ -5,6 +5,8 @@ import { ProjectPicker } from '../ProjectPicker';
 import { Button } from '../ui/button';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { DockWorkspace } from './WorkspaceDock';
+import { ProjectDownload } from '../ProjectDownload';
+import { useStudioClient } from '../../api';
 
 export type Workspace = 'preview' | 'assets' | 'icons' | 'backend' | 'activity' | 'settings' | 'plugins';
 const destinations = [
@@ -27,6 +29,8 @@ type Props = {
 
 export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const { capabilities } = useStudioClient();
+  const project = projects.find(project => project.id === selected);
   function navigateWithKeyboard(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([aria-disabled="true"])'));
@@ -51,8 +55,9 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
         <div className="workspace-label">Project</div>
         {projects.length ? <ProjectPicker projects={projects} selected={selected} onSelect={onSelect} /> : <p className="project-empty">{usable ? 'No projects yet' : 'No project selected'}</p>}
         <Button className="new-project w-full" variant="outline" aria-label="+ New app" disabled={!usable || busy} onClick={onCreate}><Plus aria-hidden />New app</Button>
+        {project && capabilities.localPaths && <ProjectDownload key={project.id} projectId={project.id} name={project.name} disabled={!usable || busy} />}
         <nav className="workspace-nav" aria-label="Workspace" onKeyDown={navigateWithKeyboard}>
-          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Button key={id} disabled={!usable} variant="ghost" className="workspace-nav-item justify-start aria-pressed:bg-muted aria-pressed:font-semibold" aria-pressed={workspace === id} aria-current={workspace === id ? 'page' : undefined} onClick={() => onNavigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span></Button>)}
+          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Button key={id} disabled={!usable} variant="ghost" className="workspace-nav-item justify-start aria-pressed:bg-primary-soft aria-pressed:text-primary-ink aria-pressed:font-semibold" aria-pressed={workspace === id} aria-current={workspace === id ? 'page' : undefined} onClick={() => onNavigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span></Button>)}
         </nav>
         {selected && pendingReview > 0 && <p className="review-notice" role="status"><Button className="review-notice-action" variant="ghost" onClick={() => onNavigate('activity')}><span>{pendingReview} paid {pendingReview === 1 ? 'request' : 'requests'} awaiting review in Activity</span><ArrowRight aria-hidden /></Button></p>}
       </aside>

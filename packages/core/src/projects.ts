@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, realpath, rm } from 'node:fs/promises';
+import { cp, mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -7,6 +7,8 @@ import { BuilderError, createSchema, projectSchema, type Project } from './contr
 import { atomicWrite, canonicalDirectory, exists, noSymlinks, readText, SerialQueue } from './storage.js';
 import { presets } from '../../templates/src/catalog.js';
 import { defaultStudio, projectMetadataSchema, recipeApplicationSchema, type StudioPreferences } from './studio-contracts.js';
+import type { JourneyPreferences } from './journey-contracts.js';
+export type UnavailableProject = { project: Project; reason: 'missing' | 'unreadable' | 'invalid' };
 export const projectMetadataFile = '.mobile-builder.json';
 export const templateRoot = fileURLToPath(new URL('../../templates/expo/', import.meta.url));
 
@@ -27,9 +29,33 @@ export class Projects {
     if (path.dirname(project.root) !== this.workspace || path.basename(project.root) !== project.slug) throw new BuilderError('INVALID_PATH', 'Project is outside the configured workspace');
     await noSymlinks(this.workspace, project.root);
     if (await realpath(project.root) !== project.root) throw new BuilderError('INVALID_PATH', 'Project root changed');
+    if (!(await stat(project.root)).isDirectory()) throw new BuilderError('INVALID_PATH', 'Project root is not a directory');
     return project;
   }
-  async list() { return Promise.all((await this.records()).map(p => this.validate(p))); }
+  async catalog() {
+    const projects: Project[] = [], unavailable: UnavailableProject[] = [];
+    for (const project of await this.records()) {
+      try { await this.metadata(project); projects.push(project); }
+      catch (error) {
+        const code = (error as NodeJS.ErrnoException).code;
+        unavailable.push({ project, reason: code === 'ENOENT' ? 'missing' : code === 'EACCES' || code === 'EPERM' ? 'unreadable' : 'invalid' });
+      }
+    }
+    return { projects, unavailable };
+  }
+  async list() { return (await this.catalog()).projects; }
+  async removeUnavailable(id: string, expectedRoot: string) {
+    return this.mutations.run(async () => {
+      const records = await this.records(), project = records.find(record => record.id === id);
+      if (!project) throw new BuilderError('PROJECT_NOT_FOUND', 'No registered project with this ID');
+      if (project.root !== expectedRoot) throw new BuilderError('REVISION_CONFLICT', 'Project location changed. Review the project list again.');
+      let available = false;
+      try { await this.metadata(project); available = true; } catch { /* Only unavailable registrations may be removed here. */ }
+      if (available) throw new BuilderError('REVISION_CONFLICT', 'This app is available again. Its registration was kept.');
+      await atomicWrite(path.join(this.home, 'projects.json'), JSON.stringify(records.filter(record => record.id !== id), null, 2));
+      return { removed: id, sourceDeleted: false as const };
+    });
+  }
   async get(id: string) {
     const project = (await this.records()).find(p => p.id === id);
     if (!project) throw new BuilderError('PROJECT_NOT_FOUND', 'No registered project with this ID');
@@ -74,13 +100,14 @@ export class Projects {
     return value;
   }
   // Call under mutations; the dotfile is deliberately outside generic source-file writes.
-  async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[]) {
+  async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {
     await this.validate(project);
     const file = path.join(project.root, projectMetadataFile);
     await noSymlinks(project.root, file);
     const existing = await this.metadata(project);
     const recipeApplications = applications ?? ('recipeApplications' in existing ? existing.recipeApplications : undefined);
-    const value = projectMetadataSchema.parse({ version: 1, project: { id: project.id, name: project.name, slug: project.slug, recipe: project.recipe, createdAt: project.createdAt }, studio, ...(recipeApplications ? { recipeApplications } : {}) });
+    const savedJourney = journey ?? ('journey' in existing ? existing.journey : undefined);
+    const value = projectMetadataSchema.parse({ version: 1, project: { id: project.id, name: project.name, slug: project.slug, recipe: project.recipe, createdAt: project.createdAt }, studio, ...(recipeApplications ? { recipeApplications } : {}), ...(savedJourney ? { journey: savedJourney } : {}) });
     const content = JSON.stringify(value, null, 2) + '\n';
     if (Buffer.byteLength(content) > 16_384) throw new BuilderError('LIMIT_EXCEEDED', 'Studio preferences exceed 16 KiB. Use shorter screen names or fewer screens.');
     await atomicWrite(file, content);

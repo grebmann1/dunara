@@ -34,7 +34,7 @@ function metadata(result: CallToolResult): Record<string, unknown> {
   return z.record(z.string(), z.unknown()).parse(result.structuredContent);
 }
 const selectedSchema = z.object({ projectId: z.uuid().nullable(), revision: z.string() }).passthrough();
-export type GatewayContext = { approvals: ApprovalBroker; mode?: AssistantMode; bindProject(projectId: string): Promise<void> };
+export type GatewayContext = { approvals: ApprovalBroker; mode?: AssistantMode; sourceToken?: string; bindProject(projectId: string): Promise<void> };
 export class McpGateway implements AssistantGateway {
   private closed = false;
   private dispatching = false;
@@ -63,7 +63,7 @@ export class McpGateway implements AssistantGateway {
   private guard(signal: AbortSignal) { signal.throwIfAborted(); this.lifetime.throwIfAborted(); if (this.closed) throw new Error('Assistant MCP connection is closed'); }
   private async invoke(name: string, args: Record<string, unknown>, signal: AbortSignal) {
     this.guard(signal);
-    const result = CallToolResultSchema.parse(await this.client.callTool({ name, arguments: args }, CallToolResultSchema, { signal, timeout: 240_000 }));
+    const result = CallToolResultSchema.parse(await this.client.callTool({ name, arguments: args, ...(this.context.sourceToken ? { _meta: { 'dunara/source-turn': this.context.sourceToken } } : {}) }, CallToolResultSchema, { signal, timeout: 240_000 }));
     this.guard(signal); return bounded(result);
   }
   private scope(projectId: unknown) { if (!this.binding.projectId || projectId !== this.binding.projectId) throw new Error('Cross-project access denied. Open or create a project through an explicit human review first.'); }

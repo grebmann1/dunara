@@ -1,7 +1,7 @@
 .studio-console { flex-shrink: 0; min-width: 0; background: var(--surface); border-top: 1px solid var(--line); z-index: 7; }
 .console-bar { display: flex; align-items: center; gap: 8px; padding: 0 16px; height: 44px; }
 .console-bar .console-toggle { padding: 8px 10px; min-height: 36px; height: 36px; border-radius: 5px; font-size: 12px; gap: 8px; }
-.console-toggle[aria-expanded=true] { background: #eeedf9; color: #514bad; }
+.console-toggle[aria-expanded=true] { background: var(--primary-soft); color: var(--primary-ink); }
 .console-health, .console-count { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
 .console-health[data-error=true] { color: #b42318; background: #fff0ed; border-radius: 4px; padding: 1px 5px; }
 .console-bar .console-close { margin-left: auto; width: 36px; min-width: 36px; min-height: 36px; height: 36px; padding: 8px; }

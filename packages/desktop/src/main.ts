@@ -101,6 +101,9 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(async () => {
   app.setName('Dunara');
+  const appIcon = fileURLToPath(new URL('../assets/app-icon.png', import.meta.url));
+  app.dock?.setIcon(appIcon);
+  app.setAboutPanelOptions({ applicationName: 'Dunara', iconPath: appIcon });
   // Ephemeral browser storage; provider credentials remain only in the Node backend.
   const browserSession = session.fromPartition('builder-desktop');
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

@@ -86,7 +86,9 @@ it('renders the built studio, creates a project, edits a preset, and never enabl
     expect(response.headers.get('content-type')).toBe('image/svg+xml');
     await page.getByRole('button', { name: /Create your first app/ }).click();
     await page.getByLabel('App name', { exact: true }).fill('Studio test');
-    await page.getByRole('dialog', { name: 'Create an app' }).getByRole('button', { name: 'Create app', exact: true }).click();
+    await page.getByRole('button', { name: 'Continue', exact: true }).click();
+    await page.getByRole('radio', { name: /No backend for now/ }).check();
+    await page.getByRole('button', { name: 'Create app', exact: true }).click();
     await page.getByRole('button', { name: 'Design', exact: true }).click();
     await page.getByRole('button', { name: 'clay', exact: true }).click();
     await page.waitForFunction(() => document.querySelector('.preset.clay')?.getAttribute('aria-pressed') === 'true');

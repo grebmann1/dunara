@@ -2,7 +2,7 @@ import type { Engine } from '../../../packages/core/src/engine';
 import type { Diagnostics } from '../../../packages/core/src/diagnostics';
 import type { AssistantService } from '../../../packages/assistant/src/service';
 export type AssistantPacket = ReturnType<AssistantService['events']>;
-export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'epoch' | 'accountContext' | 'provider' | 'model' | 'models' | 'limits' | 'source' | 'environmentAvailable'>>;
+export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'epoch' | 'sourceChanges' | 'accountContext' | 'provider' | 'model' | 'models' | 'limits' | 'source' | 'environmentAvailable'>>;
 export type AssistantConversation = Awaited<ReturnType<AssistantService['conversation']>>;
 export type AssistantConversationList = Awaited<ReturnType<AssistantService['conversations']>>;
 export type StudioSession = Awaited<ReturnType<Engine['studio']['snapshot']>>;
@@ -119,6 +119,14 @@ async function kitDownload(projectId: string, bundleId: string, fileId: string) 
   if (!response.ok) { await result(response); throw new Error('Kit download failed'); }
   return URL.createObjectURL(await response.blob());
 }
+async function projectDownload(projectId: string, signal?: AbortSignal) {
+  const response = await request(`/api/projects/${projectId}/download`, { signal, headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) { await result(response); throw new Error('Project download failed'); }
+  if (response.headers.get('Content-Type') !== 'application/zip') throw new Error('Dunara returned an invalid project archive. Try again.');
+  const filename = /filename="([a-z0-9-]+\.zip)"/.exec(response.headers.get('Content-Disposition') ?? '')?.[1];
+  if (!filename) throw new Error('Project download filename is unavailable. Try again.');
+  return { filename, blob: await response.blob() };
+}
 async function mediaImage(projectId: string, id: string) {
   const response = await request(`/api/projects/${projectId}/media/images/${id}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error('Asset image unavailable. Refresh the library or repair the local file.');
@@ -140,7 +148,7 @@ function subscribe(onChange: () => void, onStatus: (connected: boolean) => void)
   if (!controller.signal.aborted) connect(); return stop;
 }
 
-  return { [studioClientBrand]: true as const, capabilities, origin, authenticate, api, boardImage, streamAssistant, image, kitDownload, mediaImage, uploadMedia, subscribe,
+  return { [studioClientBrand]: true as const, capabilities, origin, authenticate, api, boardImage, streamAssistant, image, kitDownload, projectDownload, mediaImage, uploadMedia, subscribe,
     dispose() { compatible = false; token = ''; controller.abort(); },
   };
 }

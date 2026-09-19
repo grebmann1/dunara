@@ -5,6 +5,7 @@
 @import "./assistant.css" layer(legacy);
 @import "./creative.css" layer(legacy);
 @import "./media-workspace.css";
+@import "./compact-studio.css";
 /* No global Preflight: unmigrated creative workflows retain their reset. */
 @import "tailwindcss/utilities.css" layer(utilities) source(".");
 
@@ -17,6 +18,9 @@
   --color-muted: var(--ui-muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-ink: var(--primary-ink);
   --color-primary-foreground: var(--primary-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
@@ -25,16 +29,20 @@
 }
 
 :root {
-  --background: #f7f8fa;
-  --foreground: #242630;
+  --background: #f7f7f6;
+  --foreground: #272729;
   --card: #ffffff;
-  --ui-muted: #eceef3;
-  --muted-foreground: #646978;
-  --primary: #5e5bd6;
+  --ui-muted: #efefee;
+  --muted-foreground: #656569;
+  --primary: #c43c2b;
+  --primary-hover: #b33425;
+  --primary-soft: #fff0ec;
+  --primary-ink: #a43123;
+  --primary-border: #e9b5aa;
   --primary-foreground: #ffffff;
-  --border: #e2e5eb;
-  --input: #969cab;
-  --ring: #6563df;
+  --border: #e3e3e1;
+  --input: #959599;
+  --ring: var(--primary);
   --destructive: #a32d35;
 }
 

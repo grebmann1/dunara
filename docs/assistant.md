@@ -25,6 +25,7 @@ Pi (`@earendil-works/pi-coding-agent` and `pi-ai` 0.85.1) and typebox 1.3.7 are 
 - **Search conversations** searches titles, messages and checklist labels in the current project. **Export chat** downloads the current conversation as Markdown, including message modes, task status and action outcomes. Images are not embedded, and raw tool inputs/protocol data are not exported.
 - Replies format headings, lists, links, code and Markdown tables, including column alignment and inline formatting in cells. Wide tables scroll horizontally within the chat; focus a table and use the arrow keys to scroll it. Use **Copy** for the response or a code block. Scrolling up pauses automatic scrolling; **Latest message** returns to the current reply.
 - During a turn, Send becomes **Stop**. You can draft your next message while it runs. A rejected send keeps the draft; **Edit and resend** on a failed turn restores its prompt without sending automatically.
+- Completed or stopped Build turns offer **Review source changes**. Compare the recorded file diffs, then explicitly restore that turn's managed text edits. Newer edits block restore; no files change when the initial conflict check fails. Stop itself does not restore anything.
 - **Usage & privacy** below the composer explains external data and charges. The preview remains mounted when chat opens, and desktop inspection controls stay reachable below the panel.
 
 ## Credentials and external data
@@ -71,7 +72,19 @@ The adapter records image content as accepted only when an actual provider reque
 
 History is local to Dunara home under private `assistant/`, keyed by conversation/project, outside `.mobile-builder.json`, generated apps, Launch Kits, and release snapshots. Directories are mode 0700; atomic history files are mode 0600 with ownership, symlink, regular-file, schema and size checks. Use the panel's history selector and explicit delete action to remove conversations. Deletion is refused during an active turn. There is no cloud sync.
 
-Persisted records contain messages, bounded tool summaries, attachment reference/status metadata and turn states—not credentials, full source snapshots, raw protocol traffic, approval tokens or PNG binaries. Only bounded recent history is supplied on a later explicit turn; it is historical context, never renewed permission. Expired captures remain expired.
+Chat records contain messages, bounded tool summaries, attachment reference/status metadata and turn states—not credentials, full source snapshots, raw protocol traffic, approval tokens or PNG binaries. Only bounded recent history is supplied on a later explicit turn; it is historical context, never renewed permission. Expired captures remain expired.
+
+### Source checkpoints
+
+The local Studio runtime records managed text writes made by each Build turn in a separate private `source-changes/` directory in Dunara home. A file's first content and final content are retained, including write intents for interrupted operations. These receipts contain source text and are protected by owner-only directory/file permissions. They stay outside the app, exports and model conversation context. Deleting a conversation deletes its checkpoints while keeping the current app files. Existing turns from before this feature have no checkpoint.
+
+**Review source changes** lists modified and added files and shows before/after diffs. **Restore this turn** writes each recorded original file and removes recorded additions. The runtime checks every affected file against its recorded result before starting. A manual edit or later Assistant edit blocks the whole restore until reviewed; there is no force-overwrite action. Unrelated files are preserved. Review refreshes do not write app source.
+
+Restores require an idle Assistant, the original app selected in Studio, a current session/account and an explicit confirmation. If a restore is interrupted after changing some files, its durable state offers **Finish restoring** after another review. Already restored files are recognized, newer edits still block it, and restarting never replays a restore automatically. Cancellation drains in-flight managed writes before finalizing a turn's checkpoint. Moving or replacing the app root invalidates the old checkpoint.
+
+This covers source/design text changes made through the managed file writer. It does not undo app creation, source operations performed by external tools, generated media, backend/provider operations, native build setup, dependency installation or plugin side effects. Those operations retain their existing recovery flows. A turn cannot move to another app after recording source edits; begin a new conversation for that app.
+
+Each checkpoint is bounded to 100 paths and 8 MiB, and local checkpoint storage to 1,000 records and 100 MiB. File text remains limited to 256 KB. A write that cannot first save its recovery intent is refused. Old checkpoints are not silently evicted; delete an old conversation to free space.
 
 Limits:
 

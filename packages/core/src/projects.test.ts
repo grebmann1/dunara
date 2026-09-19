@@ -1,4 +1,4 @@
-import { mkdtemp, mkdir, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { afterEach, beforeEach, expect, it } from 'vitest';
@@ -75,7 +75,8 @@ it('reports missing roots and malformed registry or design without deleting reco
   await expect(new Designs(files).read(app.id)).rejects.toThrow();
   expect(await projects.get(app.id)).toEqual(app);
   await rm(app.root, { recursive: true });
-  await expect(projects.list()).rejects.toThrow();
+  expect(await projects.list()).toEqual([]);
+  expect((await projects.catalog()).unavailable).toEqual([{ project: app, reason: 'missing' }]);
   expect(await readFile(registry, 'utf8')).toBe(original);
   await writeFile(registry, '{broken');
   await expect(projects.list()).rejects.toThrow();
@@ -90,4 +91,36 @@ it('serializes racing writers and rejects binary content', async () => {
   expect(results.find(r => r.status === 'rejected')).toMatchObject({ reason: { code: 'REVISION_CONFLICT' } });
   await writeFile(path.join(app.root, 'binary.txt'), Buffer.from([0, 1, 2]));
   await expect(files.read(app.id, 'binary.txt')).rejects.toMatchObject({ code: 'LIMIT_EXCEEDED' });
+});
+
+it('isolates unavailable registrations, recovers restored folders, and removes only a reviewed registration', async () => {
+  const missing = await projects.create({ name: 'Missing', slug: 'missing' });
+  const healthy = await projects.create({ name: 'Healthy', slug: 'healthy' });
+  const saved = path.join(dir, 'saved-app');
+  await rename(missing.root, saved);
+  expect(await projects.list()).toEqual([healthy]);
+  expect((await projects.catalog()).unavailable).toEqual([{ project: missing, reason: 'missing' }]);
+  await expect(projects.removeUnavailable(missing.id, 'wrong-root')).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  await rename(saved, missing.root);
+  expect((await projects.catalog()).unavailable).toEqual([]);
+  await expect(projects.removeUnavailable(missing.id, missing.root)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  await rename(missing.root, saved);
+  expect(await projects.removeUnavailable(missing.id, missing.root)).toEqual({ removed: missing.id, sourceDeleted: false });
+  expect(await readFile(path.join(saved, 'app.json'), 'utf8')).toContain('Missing');
+  expect(await projects.list()).toEqual([healthy]);
+  await rename(saved, missing.root);
+  expect(await projects.register(missing.slug)).toEqual(missing);
+});
+it('isolates malformed identity and symlinked roots without relaxing project access', async () => {
+  const invalid = await projects.create({ name: 'Invalid', slug: 'invalid' });
+  const healthy = await projects.create({ name: 'Healthy', slug: 'healthy' });
+  await writeFile(path.join(invalid.root, '.mobile-builder.json'), '{bad');
+  expect(await projects.list()).toEqual([healthy]);
+  expect((await projects.catalog()).unavailable[0]?.reason).toBe('invalid');
+  await rm(invalid.root, { recursive: true });
+  await symlink(healthy.root, invalid.root);
+  expect(await projects.list()).toEqual([healthy]);
+  await expect(projects.get(invalid.id)).rejects.toMatchObject({ code: 'INVALID_PATH' });
+  await projects.removeUnavailable(invalid.id, invalid.root);
+  expect(await files.read(healthy.id, 'app.json')).toMatchObject({ path: 'app.json' });
 });

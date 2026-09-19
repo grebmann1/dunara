@@ -1,0 +1,35 @@
+.project-creation-dialog { padding: 24px; max-width: 480px; font-size: 13px; }
+.project-creation-progress { display: flex; gap: 10px; align-items: center; margin: 0 30px 18px 0; color: var(--muted-foreground); font-size: 11px; }
+.project-creation-progress [aria-current] { color: var(--primary-ink); font-weight: 600; }
+.project-creation-dialog h2 { font-size: 21px; margin: 0; letter-spacing: -.6px; outline: none; }
+.project-creation-dialog > p { font-size: 13px; color: var(--muted-foreground); line-height: 1.6; margin: 6px 0 20px; }
+.project-creation-dialog fieldset { display: grid; min-width: 0; padding: 0; margin: 0; border: 0; gap: 16px; }
+.creation-field { display: grid; gap: 6px; }
+.creation-field textarea { font-size: 13px; line-height: 1.5; min-height: 80px; }
+.creation-field small { font-size: 11px; color: var(--muted-foreground); }
+.optional-label { color: var(--muted-foreground); font-weight: 400; font-size: 11px; margin-left: 4px; }
+.creation-folder { font-size: 12px; }
+.creation-folder summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding: 4px 0; color: var(--muted-foreground); }
+.creation-folder summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
+.creation-folder label { display: block; margin: 8px 0 6px; }
+.project-creation-dialog footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.project-creation-dialog .creation-backend-options { gap: 8px; margin: 20px 0 16px; }
+.creation-backend-options label { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; }
+.creation-backend-options label[data-selected=true] { border-color: var(--primary-border); background: var(--primary-soft); }
+.creation-backend-options input { min-height: 0; margin: 0; width: 16px; height: 16px; accent-color: var(--primary); }
+.creation-backend-options strong { display: block; font-size: 13px; font-weight: 550; }
+.creation-backend-options small { display: block; font-size: 11px; color: var(--muted-foreground); margin-top: 3px; }
+.creation-account-ready { display: flex; align-items: start; gap: 8px; padding: 12px; border-radius: 8px; background: var(--background); }
+.creation-account-ready > svg { flex-shrink: 0; margin-top: 2px; color: #38725e; }
+.creation-account-ready strong { font-size: 12px; font-weight: 550; }
+.creation-account-ready p { font-size: 12px; margin-top: 4px; color: var(--muted-foreground); }
+.project-creation-dialog .creation-recipe-note { font-size: 11px; margin: 16px 0; }
+.project-creation-dialog [role=alert] { color: var(--destructive); font-size: 12px; margin-block: 12px; }
+.project-creation-dialog .backend-connection { padding: 12px; border-radius: 9px; }
+.project-creation-dialog .backend-connection h2 { font-size: 14px; }
+.project-creation-dialog .backend-connection p, .project-creation-dialog .backend-connection label { font-size: 12px; }
+.project-creation-dialog .backend-connection form { margin-top: 12px; }
+.project-creation-dialog .backend-connection fieldset { gap: 8px; }
+.project-creation-dialog .backend-connection fieldset > p { margin: 0; font-size: 11px; }
+.project-creation-dialog .backend-actions { gap: 6px; }
+@media (max-width: 600px) { .project-creation-dialog { padding: 20px; } }

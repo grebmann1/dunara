@@ -294,7 +294,7 @@ test('asset controls fit mobile and 200 percent scaling and image failures are r
   for (const width of [375, 768, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const small = await page.locator('.assets-workspace button:visible, .assets-workspace input:not([type=checkbox]):visible, .assets-workspace select:visible, .assets-workspace textarea:visible').evaluateAll(elements => elements.filter(el => { const box = el.getBoundingClientRect(); return box.width < 44 || box.height < 44; }).map(el => el.outerHTML));
+    const small = await page.locator('.assets-workspace button:visible, .assets-workspace input:not([type=checkbox]):visible, .assets-workspace select:visible, .assets-workspace textarea:visible').evaluateAll(elements => elements.filter(el => { const box = el.getBoundingClientRect(); const minimum = matchMedia('(max-width: 760px), (pointer: coarse)').matches ? 44 : 36; return box.width < minimum || box.height < minimum; }).map(el => el.outerHTML));
     expect(small).toEqual([]);
   }
   await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
@@ -364,7 +364,7 @@ test('creative forms and selected review stay reachable at six widths and 200 pe
         await closeMediaDrawer(page); await page.getByRole('button', { name: form, exact: true }).click();
         const overflow = await page.evaluate(() => [...document.querySelectorAll('body *')].filter(el => { const box = el.getBoundingClientRect(); return box.width && box.right > innerWidth + 1; }).map(el => `${el.tagName}.${el.className}: ${Math.round(el.getBoundingClientRect().right)}`));
         expect(overflow, `${width}px / ${zoom} zoom / ${form}`).toEqual([]);
-        const small = await page.locator('.assets-workspace button:visible, .assets-workspace input:not([type=checkbox]):visible, .assets-workspace textarea:visible').evaluateAll(elements => elements.filter(el => { const box = el.getBoundingClientRect(); return box.width < 44 || box.height < 44; }).map(el => el.outerHTML));
+        const small = await page.locator('.assets-workspace button:visible, .assets-workspace input:not([type=checkbox]):visible, .assets-workspace textarea:visible').evaluateAll(elements => elements.filter(el => { const box = el.getBoundingClientRect(); const minimum = matchMedia('(max-width: 760px), (pointer: coarse)').matches ? 44 : 36; return box.width < minimum || box.height < minimum; }).map(el => el.outerHTML));
         expect(small).toEqual([]);
         await closeMediaDrawer(page);
       }
@@ -426,7 +426,7 @@ test('icon candidates render at small sizes and config application requires revi
   for (const width of [375, 1440]) {
     await page.setViewportSize({ width, height: 1100 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await expect.poll(() => page.getByRole('region', { name: 'App icon workflow' }).locator('button:visible,input:not([type=checkbox]):visible,select:visible').evaluateAll(elements => elements.filter(el => { const b = el.getBoundingClientRect(); return b.width < 44 || b.height < 44; }).map(el => el.outerHTML))
+    await expect.poll(() => page.getByRole('region', { name: 'App icon workflow' }).locator('button:visible,input:not([type=checkbox]):visible,select:visible').evaluateAll(elements => elements.filter(el => { const b = el.getBoundingClientRect(); const minimum = matchMedia('(max-width: 760px), (pointer: coarse)').matches ? 44 : 36; return b.width < minimum || b.height < minimum; }).map(el => el.outerHTML))
     ).toEqual([]);
   }
 });

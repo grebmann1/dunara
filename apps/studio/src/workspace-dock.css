@@ -12,22 +12,22 @@
 .dock-host .assistant-identity { gap: 7px; flex: 1; }
 .dock-host .assistant-mark { display: none; }
 .dock-host .assistant-header-actions button { width: 32px; min-width: 32px; min-height: 32px; height: 32px; padding: 7px; }
-.dock-tabs { display: flex; gap: 4px; padding: 4px 8px 0; border-bottom: 1px solid var(--line); background: #f7f7fb; flex-shrink: 0; }
+.dock-tabs { display: flex; gap: 4px; padding: 4px 8px 0; border-bottom: 1px solid var(--line); background: var(--background); flex-shrink: 0; }
 .dock-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; padding: 8px; min-height: 36px; font-size: 12px; color: var(--muted); background: transparent; }
 .dock-tabs button[aria-selected=true] { color: var(--primary); border-bottom-color: var(--primary); background: var(--surface); }
-.dock-grip { display: grid; place-items: center; flex-shrink: 0; min-width: 24px; width: 24px; min-height: 32px; height: 32px; border: 0; padding: 4px; background: transparent; color: #9696a7; cursor: grab; border-radius: 4px; touch-action: none; }
-.dock-grip:hover { color: var(--primary); background: #f0effc; }
+.dock-grip { display: grid; place-items: center; flex-shrink: 0; min-width: 24px; width: 24px; min-height: 32px; height: 32px; border: 0; padding: 4px; background: transparent; color: var(--muted-foreground); cursor: grab; border-radius: 4px; touch-action: none; }
+.dock-grip:hover { color: var(--primary); background: var(--primary-soft); }
 .dock-grip:active { cursor: grabbing; }
 .dock-grip svg { width: 15px; height: 15px; }
 .dock-menu { position: relative; flex-shrink: 0; }
 .dock-menu > summary { display: grid; place-items: center; list-style: none; padding: 7px; min-height: 32px; height: 32px; width: 32px; border-radius: 4px; color: var(--muted); }
 .dock-menu > summary::-webkit-details-marker { display: none; }
 .dock-menu > summary svg { width: 16px; height: 16px; }
-.dock-menu[open] > summary, .dock-menu > summary:hover { background: #eeedf9; color: var(--primary); }
+.dock-menu[open] > summary, .dock-menu > summary:hover { background: var(--primary-soft); color: var(--primary); }
 .dock-menu-content { position: absolute; right: 0; top: 100%; z-index: 55; min-width: 210px; padding: 6px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); box-shadow: 0 12px 32px #24243b20; }
 .dock-menu-content p { font-size: 11px; padding: 6px 8px; color: var(--muted); }
 .dock-menu-content button { width: 100%; height: auto; min-height: 36px; justify-content: flex-start; font-size: 12px; padding: 8px; }
-.dock-menu-content button[aria-pressed=true] { background: #f0effc; color: var(--primary); }
+.dock-menu-content button[aria-pressed=true] { background: var(--primary-soft); color: var(--primary); }
 .dock-menu-content button:last-child { border-top: 1px solid var(--line); border-radius: 0; margin-top: 6px; }
 .dock-host .dock-menu-content button { width: 100%; height: auto; min-height: 36px; padding: 8px; }
 .dock-slot[data-position=bottom] .dock-menu-content { top: auto; bottom: calc(100% + 4px); }
@@ -35,15 +35,15 @@
 .dock-resize[data-position=left] { left: calc(var(--dock-left) - 3px); top: 0; bottom: var(--dock-bottom); width: 6px; cursor: col-resize; }
 .dock-resize[data-position=right] { right: calc(var(--dock-right) - 3px); top: 0; bottom: var(--dock-bottom); width: 6px; cursor: col-resize; }
 .dock-resize[data-position=bottom] { bottom: calc(var(--dock-bottom) - 3px); left: 0; right: 0; height: 6px; cursor: row-resize; }
-.dock-resize:hover, .dock-resize:focus-visible { background: #7366ef80; outline: 0; }
+.dock-resize:hover, .dock-resize:focus-visible { background: color-mix(in srgb, var(--primary) 50%, transparent); outline: 0; }
 .dock-resize-shield { position: absolute; inset: 0; z-index: 14; cursor: col-resize; }
 .dock-resize-shield[data-position=bottom] { cursor: row-resize; }
-.dock-drop-overlay { position: absolute; inset: 0; z-index: 60; background: #fafaff66; }
-.dock-drop-target { position: absolute; border: 2px dashed #a7a0eb; border-radius: 10px; background: #eeebffb8; display: grid; place-items: center; color: #5146ae; }
+.dock-drop-overlay { position: absolute; inset: 0; z-index: 60; background: color-mix(in srgb, var(--surface) 40%, transparent); }
+.dock-drop-target { position: absolute; border: 2px dashed var(--primary-border); border-radius: 10px; background: color-mix(in srgb, var(--primary-soft) 90%, transparent); display: grid; place-items: center; color: var(--primary-ink); }
 .dock-drop-target[data-position=left] { inset: 12px auto 12px 12px; width: 27%; }
 .dock-drop-target[data-position=right] { inset: 12px 12px 12px auto; width: 27%; }
 .dock-drop-target[data-position=bottom] { inset: auto 30% 12px; height: 28%; }
-.dock-drop-target[data-over=true] { border-style: solid; border-color: var(--primary); background: #d8d2ffd9; }
+.dock-drop-target[data-over=true] { border-style: solid; border-color: var(--primary); background: color-mix(in srgb, var(--primary-border) 85%, transparent); }
 .dock-drop-target span { display: flex; flex-direction: column; align-items: center; gap: 12px; font-weight: 600; font-size: 13px; }
 .dock-design { display: flex; flex-direction: column; min-height: 0; }
 .dock-design-header { display: flex; align-items: center; gap: 6px; padding: 10px 8px; border-bottom: 1px solid var(--line); flex-shrink: 0; }

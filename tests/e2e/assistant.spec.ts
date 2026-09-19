@@ -674,3 +674,95 @@ test('approved artwork opens a retained integration draft in existing chat histo
   expect(calls).toBe(1);
   expect((await assistant.conversation(conversation.id)).turns).toHaveLength(1);
 });
+
+test('drops and uploads chat images, rejects invalid files, and sends only on request', async ({ page }) => {
+  const project = await engine.projects.create({ name: 'Image Chat', slug: 'image-chat' });
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  const png = await sharp({ create: { width: 160, height: 100, channels: 4, background: '#cb9478' } }).png().toBuffer();
+  behavior = async (input, callbacks) => { expect(input.images).toHaveLength(2); callbacks.imageAccepted?.(); callbacks.text('Both uploaded images arrived.'); };
+  await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  await expect(panel.getByLabel('Message assistant')).toBeEditable();
+  await panel.getByLabel('Message assistant').fill('Use these references');
+  const drop = async (name: string, type: string) => {
+    const dataTransfer = await page.evaluateHandle(({ name, type, bytes }) => {
+      const transfer = new DataTransfer(); transfer.items.add(new File([new Uint8Array(bytes)], name, { type })); return transfer;
+    }, { name, type, bytes: [...png] });
+    await panel.dispatchEvent('dragenter', { dataTransfer });
+    await expect(panel.getByText('Drop images into your message')).toBeVisible();
+    await panel.dispatchEvent('drop', { dataTransfer }); await dataTransfer.dispose();
+  };
+  await drop('invalid.svg', 'image/svg+xml');
+  await expect(panel.getByRole('alert')).toContainText('Choose PNG, JPEG or WebP');
+  expect((await engine.assets.list(project.id)).assets).toHaveLength(0);
+  await drop('reference.png', 'image/png');
+  await expect(panel.getByAltText('Attached media')).toHaveCount(1);
+  await expect(panel.getByRole('button', { name: 'Upload images', exact: true })).toBeEnabled();
+  await panel.getByLabel('Upload chat images').setInputFiles({ name: 'second.png', mimeType: 'image/png', buffer: png });
+  await expect(panel.getByAltText('Attached media')).toHaveCount(2);
+  await expect(panel.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
+  expect((await engine.assets.list(project.id)).assets).toHaveLength(2); expect(calls).toBe(0);
+  await drop('third.png', 'image/png');
+  await expect(panel.getByRole('alert')).toContainText('up to two images');
+  expect((await engine.assets.list(project.id)).assets).toHaveLength(2);
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await expect(panel.getByRole('button', { name: 'Send message', exact: true })).toBeInViewport();
+    expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath(`image-upload-${width}.png`) });
+  }
+  await panel.getByRole('button', { name: 'Send message', exact: true }).click();
+  await expect(panel.getByText('Both uploaded images arrived.')).toBeVisible(); expect(calls).toBe(1);
+});
+
+test('keeps successful images after a partial upload failure and accepts a pasted retry', async ({ page }) => {
+  const project = await engine.projects.create({ name: 'Image Retry', slug: 'image-retry' });
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: '#ffffff' } }).png().toBuffer();
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  await expect(panel.getByLabel('Message assistant')).toBeEditable();
+  await panel.getByLabel('Message assistant').fill('Keep this draft');
+  await panel.getByLabel('Attachments', { exact: true }).click();
+  let uploads = 0;
+  await page.route('**/media/import', async route => { if (++uploads === 2) await route.fulfill({ status: 409, json: { error: { message: 'Library changed. Retry your image.' } } }); else await route.continue(); });
+  await panel.getByLabel('Upload chat images').setInputFiles([{ name: 'first.png', mimeType: 'image/png', buffer: png }, { name: 'retry.png', mimeType: 'image/png', buffer: png }]);
+  await expect(panel.getByRole('alert')).toContainText('Library changed');
+  await expect(panel.getByAltText('Attached media')).toHaveCount(1);
+  await expect(panel.getByLabel('Message assistant')).toHaveValue('Keep this draft');
+  await expect(panel.getByLabel('Message assistant')).toBeEditable();
+  await panel.getByLabel('Message assistant').evaluate((node, bytes) => {
+    const clipboardData = new DataTransfer(); clipboardData.items.add(new File([new Uint8Array(bytes)], 'pasted.png', { type: 'image/png' }));
+    node.dispatchEvent(new ClipboardEvent('paste', { bubbles: true, cancelable: true, clipboardData }));
+  }, [...png]);
+  await expect.poll(() => uploads).toBe(3);
+  await expect(panel.getByAltText('Attached media')).toHaveCount(2);
+  await expect(panel.getByRole('alert')).toHaveCount(0);
+  expect((await engine.assets.list(project.id)).assets).toHaveLength(2); expect(calls).toBe(0);
+});
+
+test('does not attach a late image upload to another project', async ({ page }) => {
+  const first = await engine.projects.create({ name: 'Upload Origin', slug: 'upload-origin' });
+  const second = await engine.projects.create({ name: 'Upload Destination', slug: 'upload-destination' });
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  const png = await sharp({ create: { width: 16, height: 16, channels: 4, background: '#ffffff' } }).png().toBuffer();
+  await page.goto(studio.launchUrl); await selectProject(page, first.id);
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  await expect(panel.getByLabel('Message assistant')).toBeEditable();
+  await panel.getByLabel('Attachments', { exact: true }).click();
+  let release!: () => void, arrived!: () => void;
+  const waiting = new Promise<void>(resolve => { release = resolve; }), started = new Promise<void>(resolve => { arrived = resolve; });
+  await page.route('**/media/import', async route => { const response = await route.fetch(); arrived(); await waiting; await route.fulfill({ response }); });
+  try {
+    await panel.getByLabel('Upload chat images').setInputFiles({ name: 'origin.png', mimeType: 'image/png', buffer: png });
+    await started;
+    await selectProject(page, second.id);
+    await expect(panel).toContainText('Upload Destination');
+  } finally { release(); }
+  await expect(panel.getByLabel('Message assistant')).toBeEditable();
+  await expect(panel.getByAltText('Attached media')).toHaveCount(0);
+  expect((await engine.assets.list(first.id)).assets).toHaveLength(1);
+  expect((await engine.assets.list(second.id)).assets).toHaveLength(0); expect(calls).toBe(0);
+});

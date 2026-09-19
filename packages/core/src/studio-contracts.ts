@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { createSchema, revisionSchema, routeSchema, viewportSchema } from './contracts.js';
+import { journeyPreferencesSchema } from './journey-contracts.js';
 
 export const workspaceSchema = z.enum(['preview', 'assets', 'icons', 'backend', 'activity', 'settings', 'plugins']);
 export const canvasModeSchema = z.enum(['overview', 'focus', 'compare']);
@@ -18,6 +19,7 @@ export const projectMetadataSchema = z.object({
   version: z.literal(1),
   project: z.object({ id: z.uuid(), name: createSchema.shape.name, slug: createSchema.shape.slug, recipe: z.literal('wellness'), createdAt: z.iso.datetime() }).strict(),
   studio: studioPreferencesSchema,
+  journey: journeyPreferencesSchema.optional(),
   recipeApplications: z.array(recipeApplicationSchema).max(30).optional(),
 }).strict();
 export const studioActionSchema = z.discriminatedUnion('type', [

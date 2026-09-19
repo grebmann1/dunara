@@ -51,8 +51,8 @@ export class BuiltinActions {
     const handles = new Map<string, ReturnType<McpServer['registerTool']>>();
     const proxy = new Proxy(server, { get: (target, key) => {
       if (key === 'registerTool') return (name: string, config: Definition['config']) => {
-        const handle = target.registerTool(name, config, async (args: Record<string, unknown>, extra: { signal: AbortSignal }) => {
-          try { return await this.invoke(name, args as Record<string, unknown>, extra.signal); }
+        const handle = target.registerTool(name, config, async (args: Record<string, unknown>, extra: { signal: AbortSignal; _meta?: { [key: string]: unknown } }) => {
+          try { return await this.engine.sourceChanges.withToken(extra._meta?.['dunara/source-turn'], () => this.invoke(name, args as Record<string, unknown>, extra.signal)); }
           catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : 'Action unavailable' }] }; }
         }); handles.set(name, handle); return handle;
       };

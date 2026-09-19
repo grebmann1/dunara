@@ -1,0 +1,57 @@
+/* Compact desktop chrome; touch layouts retain full-size controls. */
+:root { --control-size: 36px; }
+.studio .topbar { min-height: 48px; padding: 4px 16px; }
+.studio .header-project { font-size: 13px; }
+.studio .studio-brand img { width: 24px; height: 24px; }
+.studio .topbar .assistant-toggle { height: var(--control-size); min-height: var(--control-size); }
+.studio .sidebar { padding: 12px 10px; gap: 8px; }
+.studio .workspace-nav { margin-top: 8px; gap: 2px; }
+.studio .workspace-nav-item { font-size: 12px; border-radius: 7px; }
+.studio .project-picker-trigger { min-height: var(--control-size); font-size: 12px; padding-block: 6px; }
+.studio .new-project { font-size: 12px; }
+.studio .project-download-trigger { font-size: 11px; margin: 0; }
+.studio .workspace-label { font-size: 10px; padding-inline: 8px; }
+.studio .destination { padding: 24px; }
+.studio .destination > h1, .studio .backend-title h1 { font-size: 24px; }
+.studio .settings-workspace { gap: 16px; }
+.studio .settings-section { padding: 18px; }
+.studio .settings-section h2 { font-size: 15px; }
+.studio .settings-section > p { font-size: 12px; margin-block: 8px; }
+.studio .settings-section fieldset > p { margin: 0; font-size: 12px; }
+.studio .settings-section form { margin-top: 16px; }
+.studio .backend-workspace { gap: 16px; }
+.studio .backend-environments { gap: 12px; }
+.studio .backend-workspace > .backend-card, .studio .backend-inline-connection > .backend-connection, .studio .backend-environments > .backend-card { margin-block: 0; }
+/* Canvas cards keep a fixed world size when the surrounding window resizes. */
+.studio .screen-card button, .studio .screen-card input { min-height: 44px; }
+.studio .creative-generator { padding: 20px; gap: 18px; }
+.studio .creative-heading h2 { font-size: 22px; }
+.studio .creative-generator fieldset { gap: 16px; }
+.supabase-token-help { margin-block: 8px; font-size: 12px; }
+.supabase-token-help summary { min-height: 32px; padding-block: 6px; color: var(--muted-foreground); }
+@media (min-width: 761px) and (pointer: fine) {
+  button, input, select { min-height: 36px; }
+  button { min-width: 36px; padding: 7px 12px; font-size: 13px; }
+  input, select { padding-block: 7px; }
+  .studio .toolbar button, .studio .toolbar > details > summary, .studio .preview-tools > summary { height: 34px; min-height: 34px; width: 34px; min-width: 34px; padding: 7px; }
+  .studio .toolbar .labelled-action { width: auto; padding-inline: 10px; }
+  .studio .canvas-modes button { height: 32px; min-height: 32px; padding: 4px 10px; font-size: 11px; }
+  .studio .focus-screens button { min-height: 32px; padding: 5px 10px; font-size: 11px; }
+  .studio .board-view-tools .phone-sizes button { min-height: 32px; width: 76px; padding: 4px 8px; font-size: 11px; }
+  .studio .board-view-tools .phone-sizes small { display: none; }
+  .studio .board-subtoolbar, .studio .board-view-tools { gap: 8px; }
+  .studio .board-screen-toolbar { padding-block: 4px; }
+  .studio .canvas-controls button { min-height: 32px; min-width: 32px; padding: 5px 8px; }
+  .studio .backend-card { padding: 16px; }
+  .studio .backend-card h2 { font-size: 15px; }
+}
+@container studio (min-width: 761px) {
+  .workspace[data-sidebar-open=true] { grid-template-columns: 196px minmax(0, 1fr); }
+}
+@media (max-width: 760px), (pointer: coarse) {
+  :root { --control-size: 44px; }
+  .studio .topbar { min-height: 52px; padding: 3px 12px; }
+  .studio .destination { padding: 16px; }
+  .studio .settings-section, .studio .creative-generator { padding: 16px; }
+  .creation-folder summary, .supabase-token-help summary { min-height: 44px; }
+}

@@ -27,6 +27,7 @@ export const taskUpdateSchema = z.object({ tasks: assistantTasksSchema }).strict
 export type AssistantTask = z.infer<typeof assistantTasksSchema>[number];
 export const storedTurnSchema = z.object({
   id: z.uuid(), epoch: z.uuid(), state: turnStateSchema, model: z.string().max(100).optional(), mode: assistantModeSchema.optional(),
+  projectId: z.uuid().nullable().optional(),
   prompt: assistantText(ASSISTANT_LIMITS.promptBytes), response: assistantText(ASSISTANT_LIMITS.responseBytes),
   startedAt: z.iso.datetime(), endedAt: z.iso.datetime().optional(),
   tools: z.array(z.object({ name: z.string().max(160), state: z.enum(['completed', 'failed', 'cancelled']) }).strict()).max(ASSISTANT_LIMITS.tools),

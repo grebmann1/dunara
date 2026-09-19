@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '../ui/button';
-import mark from '../../../../../packages/catalog/assets/brand-mark.svg';
+import mark from '../../../../../packages/catalog/assets/brand-mark.svg?no-inline';
 import '../../header-polish.css';
 
 type Props = {

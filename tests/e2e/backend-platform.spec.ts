@@ -88,11 +88,7 @@ test('explains locked encrypted settings and keeps the existing ciphertext', asy
     await page.screenshot({ path: info.outputPath(`backend-encryption-${width}.png`) });
   }
   const oauth = page.getByRole('region', { name: 'Connect Supabase with OAuth' });
-  await expect(oauth).toContainText('hosted OAuth broker configured');
-  for (const [width, height] of [[375, 812], [430, 932]] as const) {
-    await page.setViewportSize({ width, height }); await oauth.evaluate(node => node.scrollIntoView({ block: 'start' }));
-    await page.screenshot({ path: info.outputPath(`backend-oauth-prerequisite-${width}.png`) });
-  }
+  await expect(oauth).toHaveCount(0);
   await expect(page.locator('body')).not.toContainText('saved-management-canary');
 });
 test.afterEach(async ({ page }) => { await page.close(); await studio?.close(); await engine?.close(); await rm(root, { recursive: true, force: true }); });
@@ -100,7 +96,7 @@ test.afterEach(async ({ page }) => { await page.close(); await studio?.close(); 
 test('connects a backend through review and keeps management credentials out of rendered state', async ({ page }, info) => {
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await expect(page.getByText('Connect Supabase to get started')).toBeVisible();
-  await page.getByRole('button', { name: 'Connect in Settings' }).click();
+  await page.getByRole('button', { name: 'Connection settings' }).click();
   const settings = page.getByRole('region', { name: 'Supabase connection' });
   await settings.getByLabel('Personal access token', { exact: true }).fill('fixture-management-canary');
   await settings.getByRole('button', { name: 'Save Supabase connection' }).click();
@@ -330,4 +326,53 @@ test('collects private SMTP input, reviews exact Auth changes, verifies readback
   }
   await activity.getByRole('button', { name: 'Open Backend reviews' }).click();
   await expect(page.getByRole('region', { name: 'Configure backend' })).toBeVisible();
+});
+
+test('guides creation stages and connects Supabase inline before an explicit project review', async ({ page }, info) => {
+  const guide = page.getByRole('dialog', { name: 'Your app journey', exact: true });
+  await expect.poll(() => page.getByAltText('Dunara', { exact: true }).evaluate(node => (node as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  await page.locator('.creation-guide-trigger').click();
+  await expect(page.locator('.creation-guide')).toContainText('Next: Ideate');
+  await guide.getByRole('button', { name: 'Save & continue', exact: true }).click();
+  await expect(page.locator('.creation-guide')).toContainText('Next: Connect Supabase');
+  await guide.getByRole('button', { name: /Add assets/ }).click();
+  await guide.getByRole('button', { name: 'Do this later', exact: true }).click();
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height }); await guide.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`creation-guide-${width}.png`) });
+  }
+  await guide.getByRole('button', { name: 'Set up Supabase', exact: true }).click();
+  const setup = page.getByRole('region', { name: 'Supabase setup guide', exact: true });
+  await expect(setup).toContainText('STEP 1 OF 3');
+  await expect(guide).toHaveCount(0);
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height }); await setup.evaluate(node => node.scrollIntoView({ block: 'start' }));
+    await page.screenshot({ path: info.outputPath(`supabase-guide-${width}.png`) });
+  }
+  await setup.getByRole('button', { name: 'Connect Supabase account', exact: true }).click();
+  const connection = page.getByRole('region', { name: 'Supabase connection', exact: true });
+  await expect(connection.getByLabel('Personal access token', { exact: true })).toBeEnabled();
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height }); await connection.evaluate(node => node.scrollIntoView({ block: 'start' }));
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`supabase-connect-${width}.png`) });
+  }
+  await connection.getByLabel('Personal access token', { exact: true }).fill('fixture-guided-management-token');
+  await connection.getByRole('button', { name: 'Save Supabase connection', exact: true }).click();
+  await expect(setup).toContainText('STEP 3 OF 3');
+  await expect(page.getByRole('combobox', { name: 'Organization', exact: true }).locator('option')).toHaveCount(2);
+  await page.getByRole('combobox', { name: 'Organization', exact: true }).selectOption('studio-test');
+  await page.getByRole('combobox', { name: 'Supabase project', exact: true }).selectOption(ref);
+  await page.getByRole('button', { name: 'Prepare for review', exact: true }).click();
+  expect((await engine.backends.inspect(projectId)).environments).toHaveLength(0);
+  await page.getByRole('button', { name: 'Approve connection', exact: true }).click();
+  await expect(setup).toContainText('PROJECT CONNECTED');
+  await expect(page.locator('.creation-guide')).toContainText('Next: Preview & test');
+  expect(await page.content()).not.toContain('fixture-guided-management-token');
+  await page.goto(studio.issueLaunchUrl());
+  await expect(page.locator('.creation-guide')).toContainText('Next: Preview & test');
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await page.locator('.creation-guide-trigger').click();
+  await expect(guide.getByRole('button', { name: 'I’ve tested my app', exact: true })).toBeDisabled();
 });

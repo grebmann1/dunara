@@ -11,6 +11,7 @@ import { resolveImages, validateInspector } from './attachments.js';
 import type { AssistantAttachments } from './contracts.js';
 import type { GatewayContext } from './mcp-bridge.js';
 import { taskTool } from './tasks.js';
+import type { SourceChanges } from '../../core/src/source-changes.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -21,6 +22,7 @@ type ActiveRun = {
   binding: RunBinding; conversation: Conversation; turn: StoredTurn; controller: AbortController; attachments?: AssistantAttachments;
   accountContext: string; key: string; raw: string; published: string; calls: number; dispatching: boolean;
   harness?: RunHarness; gateway?: AssistantGateway; finished?: Promise<void>; timer?: ReturnType<typeof setTimeout>;
+  sourceToken?: string;
 };
 type ServiceOptions = {
   home: string;
@@ -43,6 +45,9 @@ export class AssistantService {
   readonly epoch = randomUUID();
   private accountContext = () => '';
   private accountVersion = 0;
+  private sourceChanges?: SourceChanges;
+  private sourceSelection?: (projectId: string) => Promise<void>;
+  useSourceChanges(changes: SourceChanges, selection: (projectId: string) => Promise<void>) { this.idle(); this.sourceChanges = changes; this.sourceSelection = selection; }
   async interruptAccountWork() { this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
@@ -87,7 +92,7 @@ export class AssistantService {
     this.key = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
     this.source = saved ? 'saved' : this.key ? 'environment' : 'none';
   }
-  status() { return { accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.key ? this.shared?.providerCredential().source ?? this.source : 'none', environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: 'OpenAI', model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.key ? this.shared?.providerCredential().source ?? this.source : 'none', environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: 'OpenAI', model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
   async useOpenAI(shared: MediaJobs) {
     this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.localKey = '';
     this.unsubscribeCredential = shared.subscribeProvider(() => this.changed(), () => { if (!this.closed) this.idle(); });
@@ -138,12 +143,32 @@ export class AssistantService {
   async deleteConversation(id: string) {
     this.idle(); this.starting = true;
     try {
+      await this.conversation(id);
+      await this.sourceChanges?.removeConversation(id);
       await (await this.store()).remove(id);
       this.buffer = this.buffer.filter(event => event.conversationId !== id);
       this.bufferBytes = this.buffer.reduce((bytes, event) => bytes + Buffer.byteLength(JSON.stringify(event)), 0);
     } finally { this.starting = false; }
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  private async changeScope(conversationId: string, runId: string) {
+    if (!this.sourceChanges) throw new BuilderError('INVALID_INPUT', 'Source recovery is unavailable in this runtime');
+    const conversation = await this.conversation(conversationId);
+    const turn = conversation.turns.find(turn => turn.id === runId), projectId = turn?.projectId ?? conversation.projectId;
+    if (!projectId || !turn) throw new BuilderError('INVALID_INPUT', 'This source checkpoint does not belong to the conversation');
+    return { conversationId, runId, projectId };
+  }
+  async reviewChanges(conversationId: string, runId: string) { const scope = await this.changeScope(conversationId, runId); return this.sourceChanges!.inspect(scope); }
+  async changeDiff(conversationId: string, runId: string, file: string) { const scope = await this.changeScope(conversationId, runId); return this.sourceChanges!.diff(scope, file); }
+  async restoreChanges(conversationId: string, runId: string, expectedRevision: string) {
+    this.idle(); this.starting = true; this.changed();
+    const context = this.accountContext(), version = this.accountVersion;
+    const guard = () => { if (this.closed || context !== this.accountContext() || version !== this.accountVersion) throw new BuilderError('REVISION_CONFLICT', 'Account changed during source restore. Review the checkpoint again.'); };
+    try {
+      const scope = await this.changeScope(conversationId, runId);
+      return await this.sourceChanges!.restore(scope, expectedRevision, async () => { guard(); await this.sourceSelection?.(scope.projectId); guard(); });
+    } finally { this.starting = false; this.changed(); }
+  }
   events(after: number, epoch: string | null = this.epoch) {
     z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).parse(after);
     if (epoch !== null) z.uuid().parse(epoch);
@@ -181,6 +206,7 @@ export class AssistantService {
       if (this.closed) throw new BuilderError('PROCESS_FAILED', 'Assistant is closed');
       if (accountChanged()) throw new BuilderError('REVISION_CONFLICT', 'Account changed before the turn started. Review your draft before sending again.');
       const turn: StoredTurn = { id: value.runId, epoch: this.epoch, state: 'starting', model: this.model, mode: value.mode, prompt: value.prompt.replaceAll(this.key, '[redacted]'), response: '', startedAt: new Date().toISOString(), tools: [] };
+      turn.projectId = conversation.projectId;
       if (attachments?.inspector) turn.inspector = { projectId: attachments.inspector.projectId, viewId: attachments.inspector.viewId, route: attachments.inspector.selection.pathname, timestamp: attachments.inspector.selection.timestamp };
       conversation.turns.push(turn); conversation.updatedAt = turn.startedAt;
       if (conversation.turns.length === 1) conversation.title = turn.prompt.slice(0, 100);
@@ -224,14 +250,19 @@ export class AssistantService {
     try {
       const factory = this.options.createGateway;
       if (!factory) throw new Error('No assistant gateway');
+      if (run.turn.mode !== 'plan') run.sourceToken = this.sourceChanges?.begin(run.binding, run.controller.signal);
       const gateway = factory(run.binding, run.controller.signal, {
         approvals: this.approvals,
         mode: run.turn.mode ?? 'build',
+        sourceToken: run.sourceToken,
         bindProject: async projectId => {
           this.guard(run);
+          if (run.sourceToken) await this.sourceChanges?.bind(run.sourceToken, projectId);
           const updated = structuredClone(run.conversation); updated.projectId = projectId;
+          updated.turns.find(turn => turn.id === run.turn.id)!.projectId = projectId;
           await (await this.store()).save(updated, this.limits.responseBytes * 6 + this.limits.tools * 1024 + 4096);
           this.guard(run); run.conversation.projectId = projectId; run.binding.projectId = projectId;
+          run.turn.projectId = projectId;
           this.publish(run, { type: 'state', state: run.turn.state });
         },
       });
@@ -291,6 +322,10 @@ export class AssistantService {
         run.turn.notice = 'Assistant cleanup did not complete. Restart the backend before continuing.';
       }
       run.turn.endedAt = new Date().toISOString(); run.conversation.updatedAt = run.turn.endedAt;
+      if (run.sourceToken) {
+        try { await this.sourceChanges?.finish(run.sourceToken); }
+        catch { run.turn.notice = 'Source checkpoint finalization needs attention. Review source changes before continuing; no restore was run.'; }
+      }
       run.raw = ''; run.key = '';
       try { await (await this.store()).save(run.conversation); } catch { run.turn.state = 'failed'; run.turn.notice = 'The final response could not be saved. Delete history to free space before continuing.'; }
       this.publish(run, { type: 'state', state: run.turn.state });
