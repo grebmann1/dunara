@@ -82,7 +82,8 @@ test('keeps creation cancellable, supports no backend and catches a disconnected
   await expect(dialog).toHaveCount(0);
   const [project] = await engine.projects.list();
   const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
-  expect((await journey.read(project!.id)).preferences).toMatchObject({ idea: true, backendLater: true });
+  // The dialog closes once source exists; the busy workspace then persists setup.
+  await expect.poll(async () => (await journey.read(project!.id)).preferences).toMatchObject({ idea: true, backendLater: true });
   await expect(page.locator('#workspace-content')).toHaveAttribute('data-workspace', 'preview');
 });
 

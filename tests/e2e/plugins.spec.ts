@@ -15,23 +15,32 @@ test.beforeEach(async () => {
   await mkdir('.builder/plugin-review', { recursive: true });
 });
 test.afterEach(async ({ page }) => { if (process.env.VISUAL) return; await page.close(); await studio.close(); await engine.close(); await rm(root, { recursive: true, force: true }); });
-for (const [width, height] of [[375, 812], [430, 932]] as const) {
-  test(`guides, external panels and reviewed recipes at ${width}`, async ({ page }) => {
+for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
+  test(`guides, external panels and reviewed recipes at ${width}`, async ({ page }, info) => {
     await page.setViewportSize({ width, height }); await page.goto(studio.launchUrl);
     await page.getByRole('button', { name: 'Plugins', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`plugins-list-${width}.png`) });
     await page.getByRole('button', { name: /Plugin Guide.*Included with Dunara/ }).click();
     await expect(page.getByRole('heading', { name: 'Build a feature. Share a plugin.' })).toBeVisible();
     await page.getByRole('button', { name: 'For your assistant', exact: true }).click();
     await expect(page.locator('.plugin-guide')).toContainText('@mobile-builder/plugin-sdk');
+    await expect(page.locator('.plugin-guide').getByRole('list').first()).toBeVisible();
     await page.locator('#workspace-content').evaluate(element => { element.scrollTop = 0; }); await page.evaluate(() => window.scrollTo(0, 0)); await page.getByRole('heading', { name: 'Plugins', exact: true }).scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.builder/plugin-review/guide-${width}.png` });
     await page.getByRole('heading', { name: 'Build a feature. Share a plugin.' }).evaluate(element => element.scrollIntoView({ block: 'center' }));
     await page.screenshot({ path: `.builder/plugin-review/guide-panel-${width}.png` });
+    await page.screenshot({ path: info.outputPath(`plugins-guide-${width}.png`) });
     await page.getByRole('button', { name: 'Install plugin', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Install a local plugin' })).toBeVisible();
+    await page.screenshot({ path: info.outputPath(`plugin-install-${width}.png`) });
     await page.getByLabel('Package path').fill(path.join(root, 'sample'));
     await page.getByRole('button', { name: 'Inspect package', exact: true }).click();
     await expect(page.getByRole('button', { name: 'Install and enable' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Install and enable' }).scrollIntoViewIfNeeded();
+    await expect(page.getByRole('button', { name: 'Install and enable' })).toBeInViewport({ ratio: 1 });
+    expect(await page.getByRole('dialog', { name: 'Install a local plugin' }).evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: info.outputPath(`plugin-review-${width}.png`) });
     await page.getByLabel('I trust this plugin. Its code can access my computer and data.').check();
     await page.getByRole('button', { name: 'Install and enable' }).click();
     await expect(page.getByRole('heading', { name: 'My app notes', exact: true })).toBeVisible();
@@ -48,6 +57,7 @@ for (const [width, height] of [[375, 812], [430, 932]] as const) {
     await expect.poll(async () => await engine.files.read(projectId, 'APP-NOTES.md').then(file => file.content).catch(() => '')).toContain('My app');
     await page.getByRole('button', { name: 'Disable', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'My app notes', exact: true })).toHaveCount(0);
+    await page.getByText('Manage plugin', { exact: true }).click();
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
     await expect.poll(() => engine.plugins.snapshot().some(p => p.id === 'example.project-notes')).toBe(false);
     expect((await engine.files.read(projectId, 'APP-NOTES.md')).content).toContain('My app');
@@ -55,6 +65,7 @@ for (const [width, height] of [[375, 812], [430, 932]] as const) {
       await page.getByRole('button', { name: new RegExp(`${name}.*Included with Dunara`) }).click();
       await page.getByRole('button', { name: 'Disable', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
+      if (width < 1100) await page.getByRole('button', { name: 'All plugins', exact: true }).click();
     }
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Project details', exact: true })).toBeVisible();
