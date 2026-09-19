@@ -190,7 +190,8 @@ test('existing project: explicit setup, privacy, events, security, keyboard, res
     await openProjectRoutes(page); await page.getByLabel('Agent-added screen').fill('/inspection'); await page.getByLabel('Agent-added screen').press('Enter');
     const frame = page.frameLocator('iframe'), nested = frame.getByTestId('nested-title');
     await expect(nested).toBeVisible(); await expect(inspect).toBeEnabled();
-    await inspect.click(); await frame.getByRole('button', { name: 'Action 0' }).click();
+    await inspect.click(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(1);
+    await frame.getByRole('button', { name: 'Action 0' }).click();
     await expect(frame.getByRole('button', { name: 'Action 0' })).toBeVisible();
     await page.getByRole('button', { name: 'Preview context', exact: true }).click();
     await page.getByRole('button', { name: 'Select parent', exact: true }).click();
@@ -226,7 +227,8 @@ test('existing project: explicit setup, privacy, events, security, keyboard, res
     await child.evaluate(() => history.pushState({}, '', '/observed-path?QUERY_SECRET#HASH_SECRET'));
     await expect(textarea).toHaveValue(''); await frame.getByTestId('fixture-title').click();
     await expect(textarea).toContainText('/observed-path'); expect(await textarea.inputValue()).not.toMatch(/QUERY_SECRET|HASH_SECRET/);
-    await inspect.click(); await frame.getByRole('button', { name: 'Action 0' }).click(); await expect(frame.getByRole('button', { name: 'Action 1' })).toBeVisible();
+    await inspect.click(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(0);
+    await frame.getByRole('button', { name: 'Action 0' }).click(); await expect(frame.getByRole('button', { name: 'Action 1' })).toBeVisible();
     await frame.getByRole('textbox', { name: 'Public input' }).fill('Typed input stays private');
     await expect(frame.getByRole('textbox', { name: 'Public input' })).toHaveValue('Typed input stays private');
     await child.evaluate(() => window.addEventListener('contextmenu', event => { document.body.dataset.normalContext = String(!event.defaultPrevented); }, { once: true }));
@@ -237,10 +239,30 @@ test('existing project: explicit setup, privacy, events, security, keyboard, res
     await page.keyboard.press('Shift+F10'); await expect(page.getByRole('menu')).toBeVisible();
     await page.keyboard.press('Escape'); await expect(page.getByRole('menu')).toHaveCount(0); await expect(inspect).toHaveAttribute('aria-pressed', 'true');
     await page.keyboard.press('Escape'); await expect(inspect).toHaveAttribute('aria-pressed', 'false'); await expect(inspect).toBeFocused();
+    let releaseResize!: () => void, resizeRequested = false;
+    const resizePending = new Promise<void>(resolve => { releaseResize = resolve; });
+    await page.route('**/api/studio', async route => {
+      const action = route.request().method() === 'POST' ? route.request().postDataJSON()?.action : undefined;
+      if (action?.type === 'update' && action.patch?.viewport === 'large') { resizeRequested = true; await resizePending; }
+      await route.continue();
+    });
+    try {
+      await page.getByRole('button', { name: 'Large phone' }).click();
+      await expect.poll(() => resizeRequested).toBe(true);
+      await expect(inspect).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Capture', exact: true })).toBeDisabled();
+      await expect(page.getByRole('button', { name: 'Reload preview', exact: true })).toBeDisabled();
+      releaseResize();
+      await expect(page.getByRole('button', { name: 'Large phone' })).toHaveAttribute('aria-pressed', 'true');
+      await expect(inspect).toBeEnabled();
+    } finally { releaseResize(); await page.unrouteAll({ behavior: 'wait' }); }
     for (const width of [375, 768, 1440]) {
       await page.setViewportSize({ width, height: 1100 });
       for (const device of ['Compact phone', 'Large phone']) {
-        await page.getByRole('button', { name: device }).click(); await inspect.click();
+        const size = page.getByRole('button', { name: device });
+        await size.click(); await expect(size).toHaveAttribute('aria-pressed', 'true');
+        await expect.poll(() => child.evaluate(() => innerWidth)).toBe(device === 'Compact phone' ? 375 : 430);
+        await inspect.click(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(1);
         const title = frame.getByTestId('fixture-title'); await title.click({ button: 'right' });
         const menu = page.getByRole('menu'); await expect(menu).toBeVisible();
         const r = await menu.boundingBox(); expect(r!.x).toBeGreaterThanOrEqual(0); expect(r!.x + r!.width).toBeLessThanOrEqual(width); expect(r!.y + r!.height).toBeLessThanOrEqual(1100);
@@ -260,7 +282,8 @@ test('existing project: explicit setup, privacy, events, security, keyboard, res
     const zoomMenu = await page.getByRole('menu').boundingBox(); expect(zoomMenu!.x + zoomMenu!.width).toBeLessThanOrEqual(1440);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.keyboard.press('Escape'); await page.keyboard.press('Escape'); await page.evaluate(() => { document.body.style.zoom = ''; });
-    await inspect.click(); await frame.getByTestId('fixture-title').click();
+    await inspect.click(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(1);
+    await frame.getByTestId('fixture-title').click();
     await selectProject(page, second.id); await expect(textarea).toHaveCount(0);
     await selectProject(page, project.id); await expect(textarea).toHaveCount(0);
   } finally { await studio.close(); await engine.close(); await rm(dir, { recursive: true, force: true }); }

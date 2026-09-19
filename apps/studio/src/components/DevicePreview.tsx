@@ -114,7 +114,7 @@ export function DevicePreview({ preview, project, route, viewport, refresh, acti
     });
   }
   return <div className="preview-phone" data-view-id={viewId} data-view-label={label} data-active={active} aria-label={`${screenName ?? `View ${label}`} ${viewport} phone`}>
-    {active && controlsHost && source && createPortal(<div className="inspect-controls"><Button variant="ghost" ref={inspectButton} aria-label="Inspect" title="Inspect" aria-pressed={inspecting} disabled={!active || bridge !== 'ready'} onClick={() => {
+    {active && controlsHost && source && createPortal(<div className="inspect-controls"><Button variant="ghost" ref={inspectButton} aria-label="Inspect" title="Inspect" aria-pressed={inspecting} disabled={disabled || !active || bridge !== 'ready'} onClick={() => {
       if (inspecting) { exit(); return; }
       if (!session.current?.ready) return;
       session.current.enabled = true; setInspecting(true); setContextOpen(false); setSelection(null); send('enable'); iframe.current?.focus();

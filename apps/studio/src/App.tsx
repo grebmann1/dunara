@@ -42,6 +42,7 @@ export function App() {
   const [state, setState] = useState<StudioState>(), [error, setError] = useState('');
   const [busy, setBusy] = useState(''), [busyProject, setBusyProject] = useState('');
   const [boards, setBoards] = useState<Record<string, PreviewBoardState>>({});
+  const [controlBusy, setControlBusy] = useState(false);
   const board = boards[selected];
   const activeView = board?.views.find(view => view.id === board.activeId);
   const route = activeView?.route ?? '/', viewport = activeView?.viewport ?? 'compact';
@@ -93,12 +94,12 @@ export function App() {
   }, [selectProject]);
   function control(action: StudioAction): Promise<boolean> {
     const projectId = selection.current;
-    pendingControls.current++;
+    pendingControls.current++; setControlBusy(true);
     const pending = controlQueue.current.then(async () => {
       if (!session.current || (action.type !== 'select-project' && selection.current !== projectId)) throw new Error('Studio changed; try the action again in the selected project.');
       applySession(await api<StudioSession>('/studio', { expectedRevision: session.current.revision, action }));
       return true;
-    }).catch(e => { setError(e instanceof Error ? e.message : 'Studio action failed'); return false; }).finally(() => { pendingControls.current--; });
+    }).catch(e => { setError(e instanceof Error ? e.message : 'Studio action failed'); return false; }).finally(() => { pendingControls.current--; setControlBusy(pendingControls.current > 0); });
     controlQueue.current = pending;
     void pending.then(() => reconcile());
     return pending;
@@ -154,8 +155,8 @@ export function App() {
   const errorBanner = error && <div className="error-banner" role="alert"><span>{error}</span><Button variant="ghost" aria-label="Dismiss error" onClick={() => setError('')}><X aria-hidden /></Button></div>;
   const previewToolbar = (screenActions: ReactNode) => state && <div className="toolbar" data-canvas-mode={board?.mode}>
           <Button hidden={!pluginEnabled('builder.design')} ref={designButton} className="labelled-action" variant="ghost" aria-label="Design" title="Design" aria-expanded={designOpen && (dock.desktop ? dock.active[dock.layout.positions.design] === 'design' : !assistantOpen)} aria-controls="design-tools" onClick={() => { if (dock.desktop && designOpen && dock.active[dock.layout.positions.design] !== 'design') dock.activate('design', dock.layout.positions.design); else setDesignOpen(!designOpen || (!dock.desktop && assistantOpen)); }}><SlidersHorizontal aria-hidden /><span className="action-label">Design</span></Button>
-          <Button hidden={board?.mode === 'overview'} variant="ghost" aria-label="Reload preview" title="Reload active view" disabled={!usable || state?.preview.status !== 'ready' || !!busy} onClick={() => { if (activeView) changeBoard(selected, { type: 'reload', id: activeView.id }); }}><RotateCw aria-hidden /></Button>
-          <Button hidden={board?.mode === 'overview'} variant="ghost" className="labelled-action" aria-label="Capture" title="Capture requested route" disabled={!usable || !state || !!busy || state.preview.status !== 'ready'} onClick={() => void action('Capturing', 'capture', { route, viewport })}><Camera aria-hidden /><span className="action-label">Capture</span></Button>
+          <Button hidden={board?.mode === 'overview'} variant="ghost" aria-label="Reload preview" title="Reload active view" disabled={!usable || controlBusy || state?.preview.status !== 'ready' || !!busy} onClick={() => { if (activeView) changeBoard(selected, { type: 'reload', id: activeView.id }); }}><RotateCw aria-hidden /></Button>
+          <Button hidden={board?.mode === 'overview'} variant="ghost" className="labelled-action" aria-label="Capture" title="Capture requested route" disabled={!usable || controlBusy || !state || !!busy || state.preview.status !== 'ready'} onClick={() => void action('Capturing', 'capture', { route, viewport })}><Camera aria-hidden /><span className="action-label">Capture</span></Button>
           <Button variant="ghost" className="labelled-action preview-run" data-running={state.preview.status === 'ready'} aria-label={state.preview.status === 'ready' ? 'Stop preview' : 'Start preview'} title={state.preview.status === 'ready' ? 'Stop preview' : 'Start preview'} disabled={!usable || !state || !!busy || (!trusted && state.preview.status !== 'ready')} onClick={() => void action(state?.preview.status === 'ready' ? 'Stopping' : 'Starting', state?.preview.status === 'ready' ? 'stop' : 'start')}>{state?.preview.status === 'ready' ? <Square aria-hidden /> : <Play aria-hidden />}<span className="action-label">{state.preview.status === 'ready' ? 'Stop' : 'Start preview'}</span></Button>
           <PreviewTools key={`tools:${selected}`} state={state} route={route} viewport={viewport} screenActions={screenActions} onRoute={setRoute} onRefresh={() => { void reconcile(); }} onSettings={() => setWorkspace('settings')} onOpenDialog={closePanelsForDialog} />
         </div>;
@@ -190,7 +191,7 @@ export function App() {
             const images = (state.boardCaptures ?? []).filter(capture => screens.some(screen => screen.route === capture.route)).slice(0, 2).map(capture => ({ projectId: selected, kind: 'board' as const, id: capture.id }));
             assistant.setAttachments({ images });
             showAssistant();
-          } : undefined} onAskAssistant={assistant.status?.available ? attachment => { assistant.stageInspector(attachment); showAssistant(); } : undefined} key={`preview:${selected}`} suppressContext={assistantOpen} onRevealContext={() => setAssistantOpen(false)} preview={state.preview} project={state.project} board={board!} onChange={action => changeBoard(selected, action)} active={workspace === 'preview' && !creating} disabled={!usable || !!busy} perform={perform} /> : <div className="empty-workspace"><div className="empty-workspace-mark" aria-hidden><Layers3 /></div><h1>{authFailed ? 'Open a fresh Studio session.' : ready && !projects.length ? 'Create your first app' : 'Preparing your workspace…'}</h1><p>{authFailed ? 'Relaunch Studio from your Dunara runtime. Refresh cannot restore the lost authorization token.' : 'A little idea. A real app. Start with three working screens, then make every detail your own.'}</p><Button disabled={!usable || !!busy} onClick={() => setCreating(true)}>Create your first app</Button>{ready && !projects.length && <div className="empty-workspace-steps"><span><Smartphone aria-hidden />Live preview</span><span><SlidersHorizontal aria-hidden />Your design</span><span><Layers3 aria-hidden />Source you own</span></div>}</div>}</div>
+          } : undefined} onAskAssistant={assistant.status?.available ? attachment => { assistant.stageInspector(attachment); showAssistant(); } : undefined} key={`preview:${selected}`} suppressContext={assistantOpen} onRevealContext={() => setAssistantOpen(false)} preview={state.preview} project={state.project} board={board!} onChange={action => changeBoard(selected, action)} active={workspace === 'preview' && !creating} disabled={!usable || controlBusy || !!busy} perform={perform} /> : <div className="empty-workspace"><div className="empty-workspace-mark" aria-hidden><Layers3 /></div><h1>{authFailed ? 'Open a fresh Studio session.' : ready && !projects.length ? 'Create your first app' : 'Preparing your workspace…'}</h1><p>{authFailed ? 'Relaunch Studio from your Dunara runtime. Refresh cannot restore the lost authorization token.' : 'A little idea. A real app. Start with three working screens, then make every detail your own.'}</p><Button disabled={!usable || !!busy} onClick={() => setCreating(true)}>Create your first app</Button>{ready && !projects.length && <div className="empty-workspace-steps"><span><Smartphone aria-hidden />Live preview</span><span><SlidersHorizontal aria-hidden />Your design</span><span><Layers3 aria-hidden />Source you own</span></div>}</div>}</div>
           {state && pluginEnabled('builder.design') && <DesignPanel key={selected} design={state.design} savedDraft={designDrafts.current.get(selected)} onDraft={draft => designDrafts.current.set(selected, draft)} disabled={!usable || !!busy} onApply={update => action('Applying design', 'design', update)} open={designOpen && (dock.desktop || !assistantOpen) && workspace === 'preview' && !creating} onOpenChange={setDesignOpen} trigger={designButton} />}
         </div>
       </main>
