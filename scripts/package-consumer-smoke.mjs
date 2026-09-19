@@ -25,7 +25,7 @@ try {
   await writeFile(path.join(temp, 'package.json'), JSON.stringify({ name: 'dunara-consumer-fixture', private: true, type: 'module', dependencies }));
   await writeFile(path.join(temp, '.npmrc'), 'registry=https://registry.npmjs.org/\n');
   await writeFile(path.join(temp, 'pnpm-workspace.yaml'), `minimumReleaseAgeExclude:\n  - zod@4.6.4\noverrides:\n${overrides.join('\n')}\n`);
-  await run('pnpm', ['install', '--ignore-scripts'], { cwd: temp, maxBuffer: 4_000_000, env: { ...process.env, NPM_CONFIG_USERCONFIG: os.devNull } });
+  await run('pnpm', ['install', '--ignore-scripts', '--package-import-method=hardlink'], { cwd: temp, maxBuffer: 4_000_000, env: { ...process.env, NPM_CONFIG_USERCONFIG: os.devNull } });
   const runtimeRoot = await realpath(path.join(temp, 'node_modules/@mobile-builder/runtime'));
   for (const dependency of ['@earendil-works', 'typebox']) await rm(path.resolve(runtimeRoot, '../../', dependency), { recursive: true, force: true });
   await cp('tests/consumer/runtime.mjs', path.join(temp, 'runtime.mjs'));

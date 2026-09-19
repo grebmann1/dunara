@@ -21,7 +21,10 @@ function contents(files: Record<string, string>): PackageContents {
   return { package: pkg, digest, files };
 }
 /** A bounded, text-only archive avoids install scripts, native addons and tar traversal. */
-export async function inspectPackage(source: string): Promise<PackageContents> {
+export function inspectPackage(source: string): Promise<PackageContents> { return readPackage(source, false); }
+/** Distribution-owned defaults may be hard-linked by pnpm; materialization always writes private copies. */
+export function inspectBundledPackage(source: string): Promise<PackageContents> { return readPackage(source, true); }
+async function readPackage(source: string, bundled: boolean): Promise<PackageContents> {
   const input = path.resolve(source), stat = await lstat(input);
   if (stat.isSymbolicLink()) throw Error('Plugin source cannot be a symlink');
   if (stat.isFile()) return contents(archiveSchema.parse(JSON.parse(await readText(input, MAX_BYTES + 128_000))).files);
@@ -38,7 +41,7 @@ export async function inspectPackage(source: string): Promise<PackageContents> {
       else if (entry.isFile()) {
         if (!supportedTextFile(relative)) throw Error(`Unsupported package file: ${relative}`);
         await noSymlinks(root, file);
-        const stat = await lstat(file); if (stat.nlink !== 1) throw Error('Plugin files cannot be hard links');
+        const stat = await lstat(file); if (!bundled && stat.nlink !== 1) throw Error('Plugin files cannot be hard links');
         const value = await readText(file, 2 * 1024 * 1024); bytes += Buffer.byteLength(value);
         if (Object.keys(files).length >= 200 || bytes > MAX_BYTES) throw Error('Plugin package exceeds 200 files or 8 MiB');
         files[relative] = value;

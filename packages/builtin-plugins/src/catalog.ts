@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { inspectPackage } from '../../plugin-runtime/src/packages.js';
+import { inspectBundledPackage } from '../../plugin-runtime/src/packages.js';
 import { packageSchema } from '../../plugin-runtime/src/contracts.js';
 import type { BuiltinPlugin } from '../../plugin-runtime/src/runtime.js';
 import type { PluginFactory } from '../../plugin-sdk/src/server.js';
@@ -35,7 +35,7 @@ export async function bundledPlugins(activate?: PluginFactory): Promise<BuiltinP
   });
   const root = fileURLToPath(new URL('../../../plugins/', import.meta.url));
   const catalogue = z.object({ version: z.literal(1), plugins: z.array(z.object({ directory: z.string().regex(/^[a-z][a-z0-9-]{0,63}$/), autoInstall: z.boolean(), defaultEnabled: z.boolean() }).strict()).max(40) }).strict().parse(JSON.parse(await readFile(path.join(root, 'catalog.json'), 'utf8')));
-  const packaged = await Promise.all(catalogue.plugins.map(async entry => ({ contents: await inspectPackage(path.join(root, entry.directory)), autoInstall: entry.autoInstall, defaultEnabled: entry.defaultEnabled })));
+  const packaged = await Promise.all(catalogue.plugins.map(async entry => ({ contents: await inspectBundledPackage(path.join(root, entry.directory)), autoInstall: entry.autoInstall, defaultEnabled: entry.defaultEnabled })));
   return [...migrated, ...packaged];
 }
 export function actionOwner(name: string): string | null {
