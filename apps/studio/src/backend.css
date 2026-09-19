@@ -1,0 +1,59 @@
+.backend-workspace { max-width: 1200px; margin-inline: auto; padding-bottom: 64px; }
+.backend-title, .backend-heading, .backend-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.backend-title { justify-content: space-between; align-items: flex-start; }
+.backend-title h1 { margin: 0; } .backend-eyebrow { color: var(--muted-foreground); font-size: 11px; font-weight: 700; letter-spacing: .12em; }
+.backend-card { padding: 24px; margin-block: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--card); min-width: 0; }
+.backend-intro { display: flex; align-items: flex-start; gap: 18px; } .backend-intro > svg { flex-shrink: 0; margin-top: 4px; }
+.backend-card h2, .backend-card h3, .backend-heading h2 { margin: 0; font-size: 17px; } .backend-card p { overflow-wrap: anywhere; }
+.backend-environments { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 14px; }
+.backend-environments .backend-card { padding: 20px; display: flex; flex-direction: column; gap: 10px; }
+.backend-environments .backend-card[data-selected=true] { border-color: var(--primary); } .backend-environments h2 { text-transform: capitalize; }
+.backend-environments p { margin-block: 0; font-family: monospace; font-size: 12px; }
+.backend-environments button { margin-top: auto; } .backend-muted { color: var(--muted-foreground); font-size: 13px; }
+.backend-badge { display: inline-flex; background: var(--ui-muted); color: var(--foreground); border-radius: 20px; padding: 4px 9px; font-size: 11px; font-weight: 600; }
+.backend-form-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; margin-block: 16px; }
+.backend-workspace fieldset, .backend-connection fieldset { border: 0; padding: 0; min-width: 0; }
+.backend-workspace label, .backend-connection label { display: grid; gap: 8px; font-size: 13px; font-weight: 600; }
+.backend-workspace select { display: block; width: 100%; min-height: 40px; padding: 8px; border: 1px solid var(--border); border-radius: 7px; background: var(--background); color: var(--foreground); }
+.backend-workspace fieldset > button { margin-top: 12px; } .backend-alert { padding: 12px 16px; background: var(--ui-muted); border-left: 3px solid var(--primary); }
+.backend-workspace a, .backend-connection a { display: inline-flex; gap: 5px; align-items: center; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; }
+.backend-operation pre { max-height: 320px; overflow: auto; padding: 16px; border-radius: 8px; background: var(--ui-muted); font-size: 12px; white-space: pre; }
+.backend-operation summary { cursor: pointer; overflow-wrap: anywhere; } .backend-operation ul { padding-left: 20px; font-size: 13px; line-height: 1.7; }
+.backend-connection .backend-check, .backend-workspace .backend-check { display: flex; gap: 10px; align-items: center; min-height: 44px; cursor: pointer; } .backend-check input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; }
+.recipe-review { margin-top: 20px; } .recipe-review li { overflow-wrap: anywhere; }
+.recipe-files { margin-block: 20px; border-block: 1px solid var(--border); }
+.recipe-files > details { padding-block: 0; } .recipe-files > details + details { border-top: 1px solid var(--border); }
+.recipe-files summary { font-size: 13px; line-height: 1.7; }
+.recipe-files summary span { color: var(--muted-foreground); margin-right: 4px; }
+.recipe-versions { margin: 12px 0 0 12px; } .recipe-versions > details { padding-block: 4px; }
+.recipe-upgrade pre { max-width: 100%; } .recipe-upgrade .backend-actions { margin-top: 20px; }
+@media(max-width: 900px) { .backend-environments { grid-template-columns: 1fr; gap: 0; } .backend-form-grid { grid-template-columns: 1fr; } .backend-card { padding: 18px; } }
+/* Reviews and private inputs remain usable in the compact Studio workspace. */
+.backend-private-input { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border); }
+.backend-private-input legend { font-weight: 600; }
+.backend-private-input fieldset { min-width: 0; }
+.backend-workspace details { margin-block: 12px; min-width: 0; }
+.backend-workspace summary { cursor: pointer; min-height: 44px; padding-block: 12px; overflow-wrap: anywhere; }
+.backend-workspace pre { max-height: 420px; overflow: auto; max-width: 100%; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.backend-workspace .backend-actions { flex-wrap: wrap; }
+.backend-validation li { margin-block: 12px; }
+.backend-activity { overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.backend-activity > button { align-self: flex-start; }
+.backend-activity > h2, .backend-activity > p { margin: 0; }
+
+.backend-step-diff { padding-block: 12px; border-top: 1px solid var(--border); overflow-wrap: anywhere; }
+.backend-field-diff { display: grid; gap: 6px; padding-block: 10px; }
+.backend-field-diff pre { margin: 0; max-height: 220px; }
+.backend-field-diff span { font-size: 12px; }
+
+.settings-section.backend-connection .backend-check input[type="checkbox"] { width: 44px; height: 44px; min-height: 44px; flex-basis: 44px; }
+.backend-function-environment > ol { margin: 0; padding-left: 24px; display: grid; gap: 8px; line-height: 1.6; }
+.backend-function-environment > form { display: grid; gap: 12px; }
+.backend-function-environment > form p { font-size: 12px; }
+.backend-env-variable { min-width: 0; padding-top: 12px; border-top: 1px solid var(--border); }
+.backend-env-variable h3 { overflow-wrap: anywhere; }
+.backend-function-environment { display: grid; gap: 16px; }
+
+.settings-section .account-workspaces-title { margin-top: 24px; margin-bottom: 12px; }
+.account-workspaces-form { display: grid; gap: 8px; }
+.account-workspaces-form > button { justify-self: start; }

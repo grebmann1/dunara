@@ -1,0 +1,37 @@
+{
+  "name": "still",
+  "version": "1.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "start": "expo start",
+    "web": "expo start --web",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "expo": "57.0.22",
+    "expo-router": "57.0.21",
+    "expo-linking": "57.0.10",
+    "expo-constants": "57.0.18",
+    "@expo/metro-runtime": "57.0.15",
+    "@expo/log-box": "57.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-web": "0.21.2",
+    "react-native-safe-area-context": "5.7.0",
+    "react-native-screens": "4.26.0",
+    "react-native-worklets": "0.10.1",
+    "react-native-reanimated": "4.5.1",
+    "react-native-gesture-handler": "2.32.0",
+    "@supabase/supabase-js": "2.116.0",
+    "expo-secure-store": "57.0.3",
+    "expo-dev-client": "57.0.19"
+  },
+  "devDependencies": {
+    "typescript": "6.0.3",
+    "@types/react": "19.2.4"
+  }
+}

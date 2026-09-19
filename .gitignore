@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.expo/
+.builder/
+playwright-report/
+test-results/
+coverage/
+.env*
+*.log
+.DS_Store
+.mastracode/
+*.key
+*.pem
+credentials.json
+credentials/
+
+# Local agent state and package-manager cache
+.zcc/
+.pnpm-store/

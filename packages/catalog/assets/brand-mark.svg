@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Dunara mark</title>
+  <desc id="desc">An ivory D rises above a desert dune, with an amber navigation star on a charcoal tile.</desc>
+  <defs>
+    <linearGradient id="tile" x1="8" y1="4" x2="56" y2="64" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#4e4035"/>
+      <stop offset="1" stop-color="#29231e"/>
+    </linearGradient>
+    <linearGradient id="ivory" x1="20" y1="22" x2="44" y2="49" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fffaf0"/>
+      <stop offset="1" stop-color="#dfc6a4"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="2" width="60" height="60" rx="16" fill="url(#tile)" stroke="#7b6550"/>
+  <path d="M17 17h12c15 0 23 7 23 17S44 51 29 51H17Zm8 8v18h5c9 0 14-3 14-9s-5-9-14-9Z" fill="url(#ivory)" fill-rule="evenodd"/>
+  <path d="M10 49c11-9 22-9 33-3 5 3 8 3 11 2" fill="none" stroke="#caa16f" stroke-width="3" stroke-linecap="round"/>
+  <path d="m48 8 2.2 5.8L56 16l-5.8 2.2L48 24l-2.2-5.8L40 16l5.8-2.2Z" fill="#edc68c" stroke="#342d27" stroke-width="2" stroke-linejoin="round"/>
+</svg>

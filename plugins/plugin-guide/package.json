@@ -1,0 +1,18 @@
+{
+  "name": "@mobile-builder/plugin-guide",
+  "version": "0.1.0",
+  "type": "module",
+  "builder": {
+    "id": "builder.plugin-guide",
+    "name": "Plugin Guide",
+    "description": "Learn to extend Dunara and create your own plugin.",
+    "apiVersion": 1,
+    "app": "app.js",
+    "guides": [
+      "user.md",
+      "agent.md"
+    ],
+    "capabilities": [],
+    "requires": {}
+  }
+}

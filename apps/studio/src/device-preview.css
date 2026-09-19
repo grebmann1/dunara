@@ -1,0 +1,31 @@
+.device-preview { display: grid; gap: 18px; min-width: 0; }
+.device-preview p { margin: 0; line-height: 1.6; }
+.device-preview-app { display: flex; align-items: center; gap: 12px; }
+.device-preview-app > svg { width: 28px; height: 28px; color: var(--muted-foreground); }
+.device-preview-app > div { display: grid; gap: 4px; min-width: 0; }
+.device-preview-app strong { overflow-wrap: anywhere; font-size: 17px; }
+.device-preview-app span, .device-preview-note { color: var(--muted-foreground); font-size: 13px; }
+.device-preview-qr { display: grid; place-items: center; justify-self: center; width: min(256px, 100%); aspect-ratio: 1; background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
+.device-preview-qr canvas:not([hidden]) { display: block; width: 100%; height: auto; }
+.device-preview-details { margin: 0; display: grid; gap: 10px; padding: 16px; background: var(--ui-muted); border-radius: 12px; }
+.device-preview-details > div { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 12px; font-size: 13px; }
+.device-preview-details dt { color: var(--muted-foreground); }
+.device-preview-details dd { margin: 0; overflow-wrap: anywhere; }
+.device-preview-empty { padding: 18px; background: var(--ui-muted); border-radius: 12px; display: grid; gap: 10px; }
+.device-preview-empty h3 { margin: 0; font-size: 16px; }
+.device-preview code { white-space: normal; overflow-wrap: anywhere; }
+.device-preview details { font-size: 13px; }
+.device-preview details summary { cursor: pointer; padding: 8px 0; font-weight: 600; }
+.device-preview details p { margin-top: 10px; }
+.device-preview [role=status]:empty { display: none; }
+.device-preview-steps { display: grid; gap: 12px; margin: 0; padding-left: 24px; font-size: 14px; line-height: 1.6; }
+.device-preview-steps a { text-decoration: underline; }
+.device-phone-tests > label { display: grid; gap: 8px; margin-top: 14px; }
+.device-phone-tests select { min-height: 40px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); color: inherit; }
+.device-phone-tests fieldset { border: 0; padding: 0; margin: 16px 0; display: grid; gap: 8px; min-width: 0; }
+.device-phone-tests legend { font-weight: 600; margin-bottom: 8px; }
+.device-phone-check { display: flex; align-items: center; gap: 10px; min-height: 36px; cursor: pointer; }
+.device-phone-check input { width: 18px; height: 18px; flex-shrink: 0; accent-color: var(--primary); }
+
+.device-preview-open { display:flex; align-items:center; justify-content:center; min-height:44px; padding:10px 12px; border-radius:8px; background:var(--primary); color:var(--primary-foreground); text-decoration:none; font-size:13px; font-weight:600; }
+.device-preview-open:focus-visible { outline:2px solid var(--ring); outline-offset:3px; }

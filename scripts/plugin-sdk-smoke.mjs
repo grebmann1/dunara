@@ -1,0 +1,51 @@
+import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { cp, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import { build } from 'vite';
+import { Engine } from '../dist/packages/core/src/engine.js';
+import { Projects } from '../dist/packages/core/src/projects.js';
+import { inspectPackage } from '../dist/packages/plugin-runtime/src/packages.js';
+const run = promisify(execFile), root = process.cwd();
+const temp = await mkdtemp(path.join(os.tmpdir(), 'builder-public-sdk-'));
+try {
+  await run(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'packages/plugin-sdk/tsconfig.json'], { cwd: root });
+  const packed = await run('npm', ['pack', '--ignore-scripts', '--json', '--pack-destination', temp], { cwd: path.join(root, 'packages/plugin-sdk') });
+  const [{ filename, files }] = JSON.parse(packed.stdout);
+  assert(files.every(file => !file.path.startsWith('src/') && !file.path.includes('node_modules')));
+  const target = path.join(temp, 'node_modules/@mobile-builder/plugin-sdk'); await mkdir(target, { recursive: true });
+  await run('tar', ['-xzf', path.join(temp, filename), '--strip-components=1', '-C', target]);
+  const manifest = JSON.parse(await readFile(path.join(target, 'package.json'), 'utf8'));
+  assert.deepEqual(Object.keys(manifest.exports), ['.', './server', './app', './recipes', './testing', './execution']);
+  await writeFile(path.join(temp, 'consumer.mjs'), `import assert from 'node:assert/strict';
+import { definePlugin } from '@mobile-builder/plugin-sdk/server';
+import { definePluginApp } from '@mobile-builder/plugin-sdk/app';
+import { defineRecipe } from '@mobile-builder/plugin-sdk/recipes';
+import { testPlugin } from '@mobile-builder/plugin-sdk/testing';
+import { ExecutionProviders } from '@mobile-builder/plugin-sdk/execution';
+assert.deepEqual(new ExecutionProviders().list(), []);
+let disposed = false;
+const plugin = await testPlugin(definePlugin(api => { api.actions.register({id:'hello',title:'Hello',description:'External package',effect:'read',scope:'global',input:{},output:{type:'string'},run(){return 'hello'}}); api.recipes.register(defineRecipe({id:'readme',title:'Readme',version:'1.0.0',description:'Reviewed source',files:[{path:'README.md',content:'Hello'}]})); api.onDispose(() => {disposed=true}); }));
+assert.equal(await plugin.actions.get('hello').run({}, {}), 'hello');
+assert.equal(plugin.recipes.size, 1); assert.equal(definePluginApp({panels:[]}).apiVersion, 1);
+await plugin.close(); assert(disposed); console.log('External packed SDK imports and lifecycle passed');
+`);
+  await run(process.execPath, ['consumer.mjs'], { cwd: temp });
+  await writeFile(path.join(temp, 'consumer.mts'), `import { definePlugin } from '@mobile-builder/plugin-sdk/server';
+export default definePlugin(api => api.actions.register({ id:'hello',title:'Hello',description:'Typed consumer',effect:'read',scope:'global',input:{},output:{type:'string'},run:()=> 'hello' }));\n`);
+  await run(process.execPath, [path.join(root, 'node_modules/typescript/bin/tsc'), '--noEmit', '--module', 'NodeNext', '--moduleResolution', 'NodeNext', '--target', 'ES2023', '--strict', '--skipLibCheck', 'consumer.mts'], { cwd: temp });
+  const plugin = path.join(temp, 'plugin');
+  await build({ configFile: false, root: temp, logLevel: 'silent', build: { outDir: plugin, emptyOutDir: true, lib: { entry: path.join(temp, 'consumer.mts'), formats: ['es'], fileName: () => 'server.js' } } });
+  await writeFile(path.join(plugin, 'package.json'), JSON.stringify({ name: '@example/packed-sdk', version: '1.0.0', type: 'module', builder: { id: 'example.packed-sdk', name: 'Packed SDK fixture', description: 'Built outside Dunara using only its published package surface.', apiVersion: 1, server: 'server.js', capabilities: [] } }));
+  const engine = new Engine(await Projects.open(path.join(temp, 'apps'), path.join(temp, 'home')), false);
+  try {
+    await engine.plugins.ready; const pkg = await inspectPackage(plugin); await engine.plugins.install(plugin, pkg.digest, true);
+    assert.equal(await engine.plugins.invoke('example.packed-sdk', 'hello', {}, null), 'hello');
+    await engine.plugins.change('example.packed-sdk', 'disable'); assert.equal(engine.plugins.isEnabled('example.packed-sdk'), false);
+  } finally { await engine.close(); }
+  await mkdir(path.join(root, '.builder/qualification'), { recursive: true });
+  await cp(path.join(temp, filename), path.join(root, '.builder/qualification', filename));
+  console.log('Packed SDK: all public exports, independent TypeScript consumer, external bundle installed and executed, no private repository imports. Passed.');
+} finally { await rm(temp, { recursive: true, force: true }); }

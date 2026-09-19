@@ -1,0 +1,22 @@
+import { Engine } from '../../core/src/engine.js';
+import { Projects } from '../../core/src/projects.js';
+export { Engine, Projects };
+export { Diagnostics } from '../../core/src/diagnostics.js';
+export type { PreviewDriver } from '../../core/src/preview-driver.js';
+export type { AppEnvironment } from '../../core/src/runtime-environment.js';
+export type RuntimeHost = NonNullable<ConstructorParameters<typeof Engine>[8]>;
+export interface RuntimeOptions {
+  workspace: string;
+  home: string;
+  trustExecution?: boolean;
+  lan?: boolean;
+  services?: ConstructorParameters<typeof Engine>[7];
+  host?: RuntimeHost;
+}
+/** Construct one builder with a host-owned execution driver. Importing this module starts nothing. */
+export async function createBuilderRuntime(options: RuntimeOptions): Promise<Engine> {
+  const projects = await Projects.open(options.workspace, options.home);
+  const engine = new Engine(projects, options.trustExecution ?? false, options.lan ?? false, undefined, {}, {}, undefined, options.services, options.host);
+  try { await engine.plugins.ready; return engine; }
+  catch (error) { await engine.close(); throw error; }
+}

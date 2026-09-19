@@ -1,0 +1,44 @@
+.studio-console { flex-shrink: 0; min-width: 0; background: var(--surface); border-top: 1px solid var(--line); z-index: 7; }
+.console-bar { display: flex; align-items: center; gap: 8px; padding: 0 16px; height: 44px; }
+.console-bar .console-toggle { padding: 8px 10px; min-height: 36px; height: 36px; border-radius: 5px; font-size: 12px; gap: 8px; }
+.console-toggle[aria-expanded=true] { background: #eeedf9; color: #514bad; }
+.console-health, .console-count { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.console-health[data-error=true] { color: #b42318; background: #fff0ed; border-radius: 4px; padding: 1px 5px; }
+.console-bar .console-close { margin-left: auto; width: 36px; min-width: 36px; min-height: 36px; height: 36px; padding: 8px; }
+.console-panel { height: clamp(220px, 34dvh, 360px); display: flex; min-height: 0; border-top: 1px solid var(--line); }
+.console-panel .activity-filterbar { flex-shrink: 0; padding: 8px 24px; gap: 8px 12px; }
+.console-panel .activity-filterbar h2 { display: none; }
+.console-panel .activity-filterbar > input { max-width: 360px; }
+.console-panel .activity-filterbar .field-select { flex-basis: 180px; }
+.console-panel .activity-scroll { padding: 0 24px 16px; }
+.console-panel .activity-retention { padding-bottom: 8px; }
+.console-panel .activity-empty { padding: 12px 0; font-size: 12px; }
+.console-panel .diagnostic-row summary { min-height: 36px; cursor: pointer; }
+.console-panel .capture-grid { grid-template-columns: repeat(auto-fill,minmax(130px,1fr)); }
+.console-panel .capture-grid .capture-thumbnail { height: 140px; }
+.console-panel .media-workspace-footer { padding-block: 6px; }
+.console-panel .media-workspace-footer button { min-height: 36px; padding: 6px 10px; }
+@container studio (max-width: 760px) {
+  .studio:has(> .studio-console) { padding-bottom: 44px; }
+  .studio:has(> .studio-console[data-open=true]) { padding-bottom: calc(44px + clamp(220px, 34dvh, 360px)); }
+  .studio-console { position: fixed; inset: auto 0 0; }
+  .console-bar { padding-inline: 8px; gap: 2px; }
+  .console-bar .console-toggle { gap: 6px; padding-inline: 6px; }
+  .console-panel .activity-filterbar { padding-inline: 12px; flex-wrap: nowrap; }
+  .console-panel .activity-filterbar .field-select { flex: 0 1 150px; min-width: 0; }
+  .console-panel .activity-filterbar > input { min-width: 0; }
+  .console-panel .activity-scroll { padding-inline: 12px; }
+  .console-panel .diagnostic-row summary { grid-template-columns: 44px minmax(0,1fr) 44px; gap: 8px; }
+  .console-panel .diagnostic-row time { display: none; }
+  .console-panel .media-workspace-footer > span { display: none; }
+  .console-panel .media-workspace-footer { justify-content: flex-end; }
+}
+@container studio (max-width: 360px) {
+  .console-toggle .console-health:not([data-error=true]) { display: none; }
+}
+
+@container studio (max-width: 280px) {
+  .console-bar .console-toggle { width: 44px; min-width: 44px; padding: 10px; }
+  .console-toggle > span, .console-toggle > svg:last-child:not(:first-child) { display: none; }
+  .console-toggle:has(.console-health[data-error=true]) { color: #b42318; }
+}

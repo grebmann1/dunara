@@ -1,0 +1,25 @@
+.native-build-setup { display: grid; gap: 22px; min-width: 0; font-size: 14px; line-height: 1.6; }
+.native-build-setup p, .native-build-setup h3, .native-build-setup h4 { margin: 0; }
+.native-build-setup h3, .native-build-setup legend { font-size: 16px; font-weight: 600; }
+.native-build-setup fieldset { display: grid; gap: 16px; border: 0; padding: 0; margin: 0; min-width: 0; }
+.native-build-setup legend { margin-bottom: 10px; }
+.native-build-setup label, .native-build-field { display: grid; gap: 6px; font-weight: 500; min-width: 0; }
+.native-build-field > span, .native-build-profiles > p { font-size: 12px; font-weight: 400; color: var(--muted-foreground); }
+.native-build-setup details > summary { cursor: pointer; font-weight: 600; padding: 10px 0; }
+.native-build-expo[open] { display: grid; gap: 14px; }
+.native-build-setup ul, .native-build-setup ol { margin: 0; padding-left: 21px; display: grid; gap: 10px; }
+.native-build-review, .native-build-note, .native-build-profiles { display: grid; gap: 14px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--ui-muted); min-width: 0; }
+.native-build-review:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.native-build-setup pre { font-size: 11px; padding: 10px; overflow: auto; max-height: 230px; white-space: pre-wrap; overflow-wrap: anywhere; background: var(--background); border-radius: 8px; }
+.native-build-files, .native-build-guide { min-width: 0; }
+.native-build-profiles dl { display: grid; gap: 12px; margin: 0; }
+.native-build-profiles dt { font-weight: 600; }
+.native-build-profiles dd { margin: 2px 0 0; }
+.native-build-guide[open] > :not(summary) { margin-top: 14px; }
+.native-build-setup [role=alert] { color: var(--destructive); overflow-wrap: anywhere; }
+.native-build-setup [role=status] { padding: 12px; border-radius: 8px; background: var(--ui-muted); }
+.native-workspaces, .native-workspace-jobs, .native-workspace-remove { display: grid; gap: 14px; min-width: 0; }
+.native-workspaces { border-top: 1px solid var(--border); padding-top: 22px; }
+.native-workspace-files { max-height: 200px; overflow: auto; font-size: 12px; }
+.native-workspace-files code, .native-workspace-target { overflow-wrap: anywhere; }
+.native-workspaces button { white-space: normal; height: auto; min-height: 36px; }

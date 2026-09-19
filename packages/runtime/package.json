@@ -1,0 +1,116 @@
+{
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grebmann1/dunara.git"
+  },
+  "name": "@mobile-builder/runtime",
+  "description": "Dunara builder runtime, CLI, MCP and host interfaces",
+  "bin": {
+    "mobile-builder": "dist/packages/cli/src/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/packages/runtime/src/index.d.ts",
+      "import": "./dist/packages/runtime/src/index.js"
+    },
+    "./resources": {
+      "types": "./dist/packages/runtime/src/resources.d.ts",
+      "import": "./dist/packages/runtime/src/resources.js"
+    },
+    "./preview": {
+      "types": "./dist/packages/runtime/src/preview.d.ts",
+      "import": "./dist/packages/runtime/src/preview.js"
+    },
+    "./testing": {
+      "types": "./dist/packages/runtime/src/testing.d.ts",
+      "import": "./dist/packages/runtime/src/testing.js"
+    },
+    "./assistant": {
+      "types": "./dist/packages/runtime/src/assistant.d.ts",
+      "import": "./dist/packages/runtime/src/assistant.js"
+    },
+    "./mcp": {
+      "types": "./dist/packages/runtime/src/mcp.d.ts",
+      "import": "./dist/packages/runtime/src/mcp.js"
+    },
+    "./client": {
+      "types": "./dist/packages/runtime/src/client.d.ts",
+      "import": "./dist/packages/runtime/src/client.js"
+    },
+    "./http": {
+      "types": "./dist/packages/cli/src/studio-server.d.ts",
+      "import": "./dist/packages/cli/src/studio-server.js"
+    },
+    "./source": {
+      "types": "./dist/packages/core/src/source.d.ts",
+      "import": "./dist/packages/core/src/source.js"
+    },
+    "./contracts": {
+      "types": "./dist/packages/core/src/contracts.d.ts",
+      "import": "./dist/packages/core/src/contracts.js"
+    },
+    "./accounts": {
+      "types": "./dist/packages/platform/src/accounts.d.ts",
+      "import": "./dist/packages/platform/src/accounts.js"
+    },
+    "./secrets": {
+      "types": "./dist/packages/platform/src/crypto.d.ts",
+      "import": "./dist/packages/platform/src/crypto.js"
+    },
+    "./ledger": {
+      "types": "./dist/packages/platform/src/store.d.ts",
+      "import": "./dist/packages/platform/src/store.js"
+    },
+    "./supabase": {
+      "types": "./dist/packages/platform/src/supabase.d.ts",
+      "import": "./dist/packages/platform/src/supabase.js"
+    },
+    "./backend-contracts": {
+      "types": "./dist/packages/platform/src/contracts.d.ts",
+      "import": "./dist/packages/platform/src/contracts.js"
+    },
+    "./backend-configuration": {
+      "types": "./dist/packages/platform/src/configuration.d.ts",
+      "import": "./dist/packages/platform/src/configuration.js"
+    },
+    "./oauth-contracts": {
+      "types": "./dist/packages/platform/src/oauth-contracts.d.ts",
+      "import": "./dist/packages/platform/src/oauth-contracts.js"
+    },
+    "./storage-api": {
+      "types": "./dist/packages/platform/src/storage-api.d.ts",
+      "import": "./dist/packages/platform/src/storage-api.js"
+    },
+    "./backend-oauth": {
+      "types": "./dist/packages/core/src/backend-oauth.d.ts",
+      "import": "./dist/packages/core/src/backend-oauth.js"
+    }
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "openai": "7.15.0",
+    "playwright": "1.63.0",
+    "sharp": "0.35.4",
+    "typescript": "6.0.3",
+    "ws": "8.21.3",
+    "zod": "4.6.4",
+    "@mobile-builder/plugin-sdk": "workspace:*",
+    "@mobile-builder/catalog": "workspace:*"
+  },
+  "optionalDependencies": {
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-coding-agent": "0.85.1",
+    "typebox": "1.3.7"
+  }
+}

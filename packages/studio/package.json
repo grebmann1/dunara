@@ -1,0 +1,36 @@
+{
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grebmann1/dunara.git"
+  },
+  "name": "@mobile-builder/studio",
+  "description": "Embeddable Dunara Studio with instance-scoped host transport",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/studio.js"
+    },
+    "./styles.css": {
+      "types": "./dist/styles.d.ts",
+      "default": "./dist/studio.css"
+    }
+  },
+  "peerDependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "sideEffects": [
+    "**/*.css"
+  ]
+}

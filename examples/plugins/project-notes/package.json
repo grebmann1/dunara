@@ -1,0 +1,22 @@
+{
+  "name": "@example/project-notes",
+  "version": "1.0.0",
+  "type": "module",
+  "builder": {
+    "id": "example.project-notes",
+    "name": "Project Notes",
+    "description": "An independent panel, source action and reviewed app recipe.",
+    "apiVersion": 1,
+    "server": "server.js",
+    "app": "app.js",
+    "capabilities": [
+      "project.read",
+      "project.write",
+      "storage"
+    ],
+    "guides": [
+      "user.md",
+      "agent.md"
+    ]
+  }
+}

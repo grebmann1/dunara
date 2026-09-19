@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "directory": "plugin-guide",
+      "autoInstall": true,
+      "defaultEnabled": true
+    }
+  ]
+}

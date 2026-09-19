@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "auth": {
+    "settings": { "external_email_enabled": true, "disable_signup": false, "mailer_autoconfirm": false },
+    "templates": [
+      { "field": "mailer_templates_confirmation_content", "path": "backend/templates/confirmation.html" },
+      { "field": "mailer_templates_magic_link_content", "path": "backend/templates/sign-in.html" }
+    ]
+  },
+  "functions": [],
+  "requirements": []
+}

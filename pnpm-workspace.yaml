@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - apps/*
+allowBuilds:
+  esbuild: true
+  electron: true
+  '@google/genai': false
+  protobufjs: false
+minimumReleaseAgeExclude:
+  - zod@4.6.4
+  - electron@44.4.0

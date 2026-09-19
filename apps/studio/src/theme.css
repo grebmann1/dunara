@@ -1,0 +1,53 @@
+@layer theme, legacy, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "./styles.css" layer(legacy);
+@import "./polish.css" layer(legacy);
+@import "./assistant.css" layer(legacy);
+@import "./creative.css" layer(legacy);
+@import "./media-workspace.css";
+/* No global Preflight: unmigrated creative workflows retain their reset. */
+@import "tailwindcss/utilities.css" layer(utilities) source(".");
+
+@theme inline {
+  --text-sm: 13px;
+  --text-base: 14px;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-muted: var(--ui-muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+}
+
+:root {
+  --background: #f7f8fa;
+  --foreground: #242630;
+  --card: #ffffff;
+  --ui-muted: #eceef3;
+  --muted-foreground: #646978;
+  --primary: #5e5bd6;
+  --primary-foreground: #ffffff;
+  --border: #e2e5eb;
+  --input: #969cab;
+  --ring: #6563df;
+  --destructive: #a32d35;
+}
+
+@layer components {
+  /* Give the positioner a scaled containing block so root CSS zoom is measured once. */
+  .select-layer { position: fixed; inset: 0; z-index: 50; transform: translateZ(0); pointer-events: none; }
+  .design-sheet .inspector { height: auto; border: 0; }
+  .settings-workspace { width: 100%; max-width: 880px; gap: 24px; }
+  .settings-workspace header p, .settings-section p { color: var(--muted-foreground); line-height: 1.65; margin: 12px 0; }
+  .settings-section { min-width: 0; background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: clamp(16px, 3vw, 24px); }
+  .settings-section h2 { font-size: 16px; }
+  .settings-section form { margin-top: 24px; }
+  .settings-section strong, .settings-section code { overflow-wrap: anywhere; }
+  .settings-section .settings-error { color: var(--destructive); }
+  .settings-section [role=status]:empty { display: none; }
+}

@@ -1,0 +1,38 @@
+{
+  "version": "0.1.0",
+  "type": "module",
+  "license": "Apache-2.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/grebmann1/dunara.git"
+  },
+  "name": "@mobile-builder/execution",
+  "description": "Reusable Dunara execution provider adapters",
+  "exports": {
+    "./vercel": {
+      "types": "./dist/vercel.d.ts",
+      "import": "./dist/vercel.js"
+    },
+    "./e2b": {
+      "types": "./dist/e2b.d.ts",
+      "import": "./dist/e2b.js"
+    },
+    "./docker": {
+      "types": "./dist/docker.d.ts",
+      "import": "./dist/docker.js"
+    }
+  },
+  "dependencies": {
+    "@mobile-builder/plugin-sdk": "workspace:*",
+    "@vercel/sandbox": "3.3.0",
+    "e2b": "2.49.0"
+  }
+}
