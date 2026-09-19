@@ -1,6 +1,7 @@
 import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: './tests/e2e', workers: 1, fullyParallel: false,
+  forbidOnly: !!process.env.CI, maxFailures: process.env.CI ? 1 : 0,
   timeout: 300_000, expect: { timeout: 20_000 },
   reporter: [['list']], outputDir: 'test-results',
   snapshotPathTemplate: '{testDir}/../visual/{arg}{ext}',

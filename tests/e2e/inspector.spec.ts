@@ -302,11 +302,19 @@ test.describe('touch inspection', () => {
       const x = rect!.x + rect!.width / 2, y = Math.max(0, rect!.y) + (Math.min(1000, rect!.y + rect!.height) - Math.max(0, rect!.y)) * .65;
       await expect.poll(() => page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName, { x, y })).toBe('IFRAME');
       const cdp = await context.newCDPSession(page);
+      await child.evaluate(() => {
+        document.body.dataset.testScroll = 'pending';
+        document.addEventListener('scrollend', () => { document.body.dataset.testScroll = 'settled'; }, { once: true });
+      });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
       for (let distance = 20; distance <= 180; distance += 20) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - distance }] });
       await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-      await expect.poll(() => child.evaluate(() => scrollY)).toBeGreaterThan(0); await cdp.detach();
-      await inspect.tap(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(0);
+      await expect.poll(() => child.evaluate(() => scrollY)).toBeGreaterThan(0);
+      // Test the next control tap after native scrolling has settled.
+      await expect.poll(() => child.evaluate(() => document.body.dataset.testScroll)).toBe('settled');
+      await cdp.detach();
+      await inspect.tap(); await expect(inspect).toHaveAttribute('aria-pressed', 'false');
+      await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(0);
       await frame.getByRole('button', { name: 'Action 0' }).tap(); await expect(frame.getByRole('button', { name: 'Action 1' })).toBeVisible();
       await expect(textarea).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);

@@ -21,11 +21,20 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   const dock = useDock(), narrow = !dock.desktop;
   const [deleting, setDeleting] = useState(false), [showHistory, setShowHistory] = useState(false), [count, setCount] = useState(40), [atBottom, setAtBottom] = useState(true);
   const title = useRef<HTMLHeadingElement>(null), scroll = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null), following = useRef(true), earlierHeight = useRef<number | null>(null);
-  useLayoutEffect(() => { setDeleting(false); setCount(40); following.current = true; earlierHeight.current = null; setAtBottom(true); }, [a.conversation?.id]);
+  const lastScroll = useRef<{ element: HTMLDivElement; top: number } | null>(null);
+  const followLatest = () => { following.current = true; lastScroll.current = null; };
+  useLayoutEffect(() => { setDeleting(false); setCount(40); followLatest(); earlierHeight.current = null; setAtBottom(true); }, [a.conversation?.id]);
   useLayoutEffect(() => {
     const element = scroll.current; if (!element) return;
+    // Native scroll events can follow a React layout commit. Respect an upward
+    // move already present in the DOM before following newly rendered content.
+    const previous = lastScroll.current;
+    if (following.current && previous?.element === element && element.scrollTop < previous.top - 1 && element.scrollHeight - element.scrollTop - element.clientHeight >= 60) {
+      following.current = false; setAtBottom(false);
+    }
     if (earlierHeight.current !== null) { element.scrollTop += element.scrollHeight - earlierHeight.current; earlierHeight.current = null; }
     else if (following.current) element.scrollTop = element.scrollHeight;
+    lastScroll.current = { element, top: element.scrollTop };
   }, [a.conversation?.turns, a.approvals, a.working, a.error, a.connectionError, deleting, showHistory, count, open, narrow]);
   useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open]);
   const active = a.status?.active, here = !!active && active.conversationId === a.conversation?.id;
@@ -36,7 +45,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   const promptBytes = new TextEncoder().encode(a.draft).length, maxBytes = a.status?.limits?.promptBytes ?? 16384;
   const canSend = !a.working && !a.loading && !a.persistence.loading && !a.historyError && !!a.status?.epoch && a.status.configured && a.status.available && !a.status.busy && !!a.draft.trim() && promptBytes <= maxBytes;
   const progress = reviews.length ? 'Waiting for your review' : runningTool ? `Working · ${toolLabel(runningTool)}` : active?.state === 'starting' ? 'Getting started…' : lastTurn?.response ? 'Writing…' : 'Thinking…';
-  const send = () => { if (canSend) { following.current = true; setAtBottom(true); input.current?.focus(); void a.send(); } };
+  const send = () => { if (canSend) { followLatest(); setAtBottom(true); input.current?.focus(); void a.send(); } };
   return <Dialog.Root open={open} onOpenChange={onOpenChange} modal={narrow}>
     <Dialog.Portal container={dock.desktop ? dock.hosts.assistant : undefined}>
       {narrow && <Dialog.Overlay className="assistant-scrim" />}
@@ -56,9 +65,9 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
             <Dialog.Close asChild><Button variant="ghost" aria-label="Close assistant" title="Close assistant"><X aria-hidden /></Button></Dialog.Close>
           </div>
         </header>
-        {showHistory && <AssistantHistory key={a.projectId ?? 'new'} controller={a} onSelect={() => setShowHistory(false)} onDelete={() => { setDeleting(true); setShowHistory(false); following.current = true; }} />}
+        {showHistory && <AssistantHistory key={a.projectId ?? 'new'} controller={a} onSelect={() => setShowHistory(false)} onDelete={() => { setDeleting(true); setShowHistory(false); followLatest(); }} />}
         <div className="assistant-conversation">
-          <div className="assistant-transcript" ref={scroll} aria-label="Conversation" onScroll={() => { if (scroll.current) { const near = scroll.current.scrollHeight - scroll.current.scrollTop - scroll.current.clientHeight < 60; following.current = near; setAtBottom(near); } }}>
+          <div className="assistant-transcript" ref={scroll} aria-label="Conversation" onScroll={() => { if (scroll.current) { const near = scroll.current.scrollHeight - scroll.current.scrollTop - scroll.current.clientHeight < 60; following.current = near; lastScroll.current = { element: scroll.current, top: scroll.current.scrollTop }; setAtBottom(near); } }}>
             {!a.status || (a.status.configured && a.loading) ? <div className="assistant-loading" role="status"><LoaderCircle className="assistant-spinner" size={18} aria-hidden />Loading conversation…</div> : !a.status.configured ? <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>A little help. A lot of possibility.</h3><p>Build an app, refine a screen, or work through an idea, right beside your preview.</p><Button onClick={() => { onOpenChange(false); onSettings(); }}>Connect assistant<ChevronRight size={16} aria-hidden /></Button><small>Connect your OpenAI key in Settings to get started.</small></section> : !a.conversation?.turns.length && !a.historyError && !a.error && <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>What would you like to build?</h3><p>A fresh idea or a finishing touch.<br />Let’s make your app feel right.</p><div className="assistant-starters">{starters.map(({ title, detail, prompt }) => <button key={title} onClick={() => { a.setDraft(prompt); input.current?.focus(); }} disabled={a.working}><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={16} aria-hidden /></button>)}</div></section>}
             {a.conversation && a.conversation.turns.length > count && <Button variant="ghost" onClick={() => { following.current = false; earlierHeight.current = scroll.current?.scrollHeight ?? null; setCount(value => value + 40); }}>Show earlier messages</Button>}
             {a.conversation?.turns.slice(-count).map(turn => <article key={turn.id} className="assistant-turn">
@@ -81,7 +90,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
             {a.error && <div className="assistant-error" role="alert"><strong>Something went wrong</strong><p>{a.error}</p><small>Your draft is kept. Check the conversation before sending again.</small><Button variant="outline" onClick={() => void a.refresh()}>Refresh conversation</Button></div>}
             {a.connectionError && <div role="status" className="assistant-turn-notice"><p>{a.connectionError}</p><Button variant="ghost" onClick={() => void a.refresh()}>Refresh conversation</Button></div>}
           </div>
-          {!atBottom && !reviews.length && !!a.conversation?.turns.length && <Button className="assistant-jump" variant="outline" onClick={() => { following.current = true; setAtBottom(true); scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: 'smooth' }); }}><ArrowDown size={14} aria-hidden />Latest message</Button>}
+          {!atBottom && !reviews.length && !!a.conversation?.turns.length && <Button className="assistant-jump" variant="outline" onClick={() => { followLatest(); setAtBottom(true); scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: 'smooth' }); }}><ArrowDown size={14} aria-hidden />Latest message</Button>}
         </div>
         <footer className="assistant-composer">
           <form className="assistant-input-box" onSubmit={event => { event.preventDefault(); send(); }}>

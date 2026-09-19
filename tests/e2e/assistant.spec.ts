@@ -540,8 +540,13 @@ test('reading earlier messages stays put during streaming and Latest message ret
   await message.fill('Walk me through the design.'); await message.press('Enter');
   await expect(panel.getByText(/Paragraph 35/)).toBeVisible();
   const transcript = panel.locator('.assistant-transcript');
-  await transcript.evaluate(element => { element.scrollTop = 100; });
+  await transcript.evaluate(element => {
+    element.scrollTop = 100;
+    // A layout update can arrive before the browser dispatches its scroll event.
+    document.querySelector<HTMLButtonElement>('button[aria-label="Conversation history"]')!.click();
+  });
   await expect(panel.getByRole('button', { name: 'Latest message' })).toBeVisible();
+  await panel.getByRole('button', { name: 'Conversation history' }).click();
   append(); await expect(panel.getByText('The newest streamed detail.')).toBeAttached();
   await expect.poll(() => transcript.evaluate(element => element.scrollTop)).toBe(100);
   await panel.getByRole('button', { name: 'Latest message' }).click(); await expect(panel.getByText('The newest streamed detail.')).toBeInViewport();
