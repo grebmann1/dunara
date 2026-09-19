@@ -33,6 +33,6 @@
   "dependencies": {
     "@mobile-builder/plugin-sdk": "workspace:*",
     "@vercel/sandbox": "3.3.0",
-    "e2b": "2.49.0"
+    "e2b": "2.49.1"
   }
 }

@@ -30,8 +30,8 @@ importers:
         specifier: 2.1.1
         version: 2.1.1
       e2b:
-        specifier: 2.49.0
-        version: 2.49.0
+        specifier: 2.49.1
+        version: 2.49.1
       lucide-react:
         specifier: 1.45.0
         version: 1.45.0(react@19.3.0)
@@ -139,8 +139,8 @@ importers:
         specifier: 3.3.0
         version: 3.3.0
       e2b:
-        specifier: 2.49.0
-        version: 2.49.0
+        specifier: 2.49.1
+        version: 2.49.1
 
   packages/mcp: {}
 
@@ -1935,8 +1935,8 @@ packages:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
 
-  e2b@2.49.0:
-    resolution: {integrity: sha512-uWgm0YstW802RCFOWXteI9zALLPnA6VEOqgWCJZCf11nBJfCsUhwQsQODvBwfLSFZgw5mMjzC4DENvHdp5+ibA==}
+  e2b@2.49.1:
+    resolution: {integrity: sha512-alHohyLEls8Mb2lO++k3UXlOfGbg+Py1UEaxBqK8YJzWKOtXYtCXVPnHmgYiWg5u3MYuejCJxb+aObTYXlET1A==}
     engines: {node: '>=20.18.1 <21 || >=22'}
 
   ecdsa-sig-formatter@1.0.11:
@@ -4887,7 +4887,7 @@ snapshots:
       es-errors: 1.3.0
       gopd: 1.2.0
 
-  e2b@2.49.0:
+  e2b@2.49.1:
     dependencies:
       '@bufbuild/protobuf': 2.15.0
       '@connectrpc/connect': 2.2.0(@bufbuild/protobuf@2.15.0)
