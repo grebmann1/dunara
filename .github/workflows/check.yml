@@ -25,12 +25,12 @@ jobs:
           package-manager-cache: false
       - run: npm install --global --ignore-scripts pnpm@11.13.1
       - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm typecheck
       - run: pnpm lint
       - run: pnpm build:packages
       - run: pnpm test
       - run: pnpm source:check
-      - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:packages
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
