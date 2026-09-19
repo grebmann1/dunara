@@ -42,3 +42,12 @@ jobs:
       - run: pnpm source:check
       - run: pnpm test:packages
       - run: pnpm test:e2e
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: failure()
+        with:
+          name: browser-failures-${{ github.sha }}
+          path: |
+            test-results/**/*.png
+            test-results/**/error-context.md
+          retention-days: 7
+          if-no-files-found: ignore

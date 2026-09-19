@@ -583,6 +583,54 @@ test('failed turns can be edited without resubmitting automatically', async ({ p
   await message.press('Enter'); await expect(panel.getByText('The explicit retry completed.')).toBeVisible(); expect(calls).toBe(2);
 });
 
+test('a delayed busy status cannot overwrite a completed turn event', async ({ page }) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  let finish!: () => void, releaseStatus!: () => void, held = false;
+  const running = new Promise<void>(resolve => { finish = resolve; });
+  const pendingStatus = new Promise<void>(resolve => { releaseStatus = resolve; });
+  behavior = async (_, callbacks) => { await running; callbacks.text('The turn has finished.'); };
+  await page.route('**/api/assistant/status', async route => {
+    const response = await route.fetch();
+    if ((await response.json()).busy) { held = true; await pendingStatus; }
+    await route.fulfill({ response });
+  });
+  try {
+    await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+    const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
+    await message.fill('Finish one turn'); await message.press('Enter');
+    await expect.poll(() => held).toBe(true);
+    finish(); await expect(panel.getByText('The turn has finished.')).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Stop turn' })).toHaveCount(0);
+    releaseStatus(); await expect(message).toBeEditable();
+    await expect(panel.getByRole('button', { name: 'Send message' })).toBeVisible();
+    expect(calls).toBe(1);
+  } finally { finish(); releaseStatus(); await page.unrouteAll({ behavior: 'wait' }); }
+});
+
+test('creating a conversation keeps the composer locked until its history is selected', async ({ page }) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
+  await message.fill('First conversation'); await message.press('Enter');
+  await expect(panel.getByText('A local fixture answer.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'New conversation' })).toBeEnabled();
+  let release!: () => void, held = false;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route('**/api/assistant/conversations/read', async route => { held = true; await pending; await route.continue(); });
+  try {
+    await panel.getByRole('button', { name: 'New conversation' }).click();
+    await expect.poll(() => held).toBe(true);
+    await expect(message).toHaveAttribute('readonly', '');
+    release(); await expect(panel.getByText('What would you like to build?')).toBeVisible();
+    await message.fill('Second conversation'); await message.press('Enter');
+    await expect(panel.getByText('A local fixture answer.')).toBeVisible();
+    expect(calls).toBe(2);
+    const records = await assistant.conversations(null);
+    expect(records).toHaveLength(2);
+    expect((await Promise.all(records.map(record => assistant.conversation(record.id)))).map(record => record.turns[0]?.prompt).sort()).toEqual(['First conversation', 'Second conversation']);
+  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+});
+
 test('approved artwork opens a retained integration draft in existing chat history without sending', async ({ page }) => {
   const project = await engine.projects.create({ name: 'Artwork Handoff', slug: 'artwork-handoff' });
   const png = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#416a57' } }).png().toBuffer();

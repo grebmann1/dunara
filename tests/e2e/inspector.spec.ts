@@ -297,9 +297,14 @@ test.describe('touch inspection', () => {
       const child = page.frames().find(item => item.url().includes('/inspection'))!;
       await child.evaluate(() => { document.body.style.height = '2400px'; document.body.style.overflow = 'auto'; });
       await page.locator('iframe').scrollIntoViewIfNeeded();
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       const rect = await page.locator('iframe').boundingBox();
+      const x = rect!.x + rect!.width / 2, y = Math.max(0, rect!.y) + (Math.min(1000, rect!.y + rect!.height) - Math.max(0, rect!.y)) * .65;
+      await expect.poll(() => page.evaluate(({ x, y }) => document.elementFromPoint(x, y)?.tagName, { x, y })).toBe('IFRAME');
       const cdp = await context.newCDPSession(page);
-      await cdp.send('Input.synthesizeScrollGesture', { x: rect!.x + rect!.width / 2, y: Math.min(950, rect!.y + rect!.height / 2), yDistance: -180, gestureSourceType: 'touch' });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+      for (let distance = 20; distance <= 180; distance += 20) await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - distance }] });
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
       await expect.poll(() => child.evaluate(() => scrollY)).toBeGreaterThan(0); await cdp.detach();
       await inspect.tap(); await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(0);
       await frame.getByRole('button', { name: 'Action 0' }).tap(); await expect(frame.getByRole('button', { name: 'Action 1' })).toBeVisible();

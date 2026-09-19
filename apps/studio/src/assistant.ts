@@ -126,14 +126,20 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
     operating.current = true; setWorking(true); setError(''); const origin = current.current;
     try { await action(); }
     catch (cause) { if (mounted.current && origin === current.current) setError(cause instanceof Error ? cause.message : 'Assistant action failed.'); }
-    finally { operating.current = false; if (mounted.current) { setWorking(false); await refreshSafely(); } }
+    finally {
+      // Keep the composer locked until the operation's selected history arrives.
+      // In particular, a new conversation must not accept text into the old draft.
+      if (mounted.current) await refreshSafely();
+      operating.current = false;
+      if (mounted.current) setWorking(false);
+    }
   }
   async function create() {
     await operate(async () => {
       const origin = current.current;
       const value = await api<AssistantConversation>('/assistant/conversations/create', { projectId: origin === 'new' ? null : origin });
       chosen.current.set(origin, value.id);
-      if (current.current === origin) { desired.current = value.id; drafts.current.set(value.id, ''); }
+      if (current.current === origin) { desired.current = value.id; drafts.current.set(value.id, ''); setLoading(true); }
     });
   }
   function select(id: string) { generation.current++; desired.current = id; chosen.current.set(current.current, id); setConversation(undefined); setDraftState(drafts.current.get(id) ?? ''); setLoading(true); setError(''); void refreshSafely(); }
@@ -160,8 +166,10 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
       await cleared;
       // Synchronize busy state even when the event stream is using polling fallback.
       try {
+        const statusCursor = cursor.current;
         const next = await api<AssistantStatus>('/assistant/status');
-        if (mounted.current) { snapshot.current = next; setStatus(next); }
+        // An event received during this request is newer than its HTTP snapshot.
+        if (mounted.current && identity === accountVersion.current && cursor.current === statusCursor) { snapshot.current = next; setStatus(next); }
       } catch { if (mounted.current) setConnectionError('Message sent. Reconnecting to check its progress…'); }
     });
   }

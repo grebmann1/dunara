@@ -14,14 +14,17 @@ test.beforeEach(async ({ page }) => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'studio-canvas-'));
   engine = new Engine(await Projects.open(path.join(dir, 'apps'), path.join(dir, 'home')), true);
   studio = await startStudio(engine, path.resolve('dist/studio'));
-  const project = await engine.projects.create({ name: 'Canvas Alpha', slug: 'canvas-alpha' });
+  await engine.projects.create({ name: 'Canvas Alpha', slug: 'canvas-alpha' });
   await page.route('**/*', route => route.request().isNavigationRequest() && route.request().frame().parentFrame()
     ? route.fulfill({ contentType: 'text/html', body: '<!doctype html><body style="margin:0"><h1>Live canvas fixture</h1><input aria-label="App draft"><div style="height:1800px">Scrollable app content</div><button id="bottom" style="position:fixed;bottom:0;height:56px;width:100%" onclick="this.textContent=\'Bottom action worked\'">Bottom action</button></body>' })
     : route.continue());
-  await page.route(`**/api/projects/${project.id}`, async route => {
-    const response = await route.fetch(), state = await response.json();
-    await route.fulfill({ response, json: { ...state, preview: { status: 'ready', url: studio.origin.replace('127.0.0.1', 'localhost') } } });
-  });
+  // Keep authenticated API requests on the real server; a cancelled refresh
+  // must not leave a fetch/fulfill interceptor racing the next navigation.
+  const inspect = engine.inspect.bind(engine);
+  engine.inspect = async (...args) => {
+    const state = await inspect(...args);
+    return { ...state, preview: { ...state.preview, status: 'ready', url: studio.origin.replace('127.0.0.1', 'localhost') } };
+  };
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(studio.launchUrl);
   await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Live canvas fixture' })).toBeVisible();

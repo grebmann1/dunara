@@ -104,7 +104,9 @@ test('one Engine: real MCP edits, Studio preview/design/captures and shared stop
     const syntaxDiagnostic = page.locator('.studio-console .diagnostic-row').filter({ hasText: 'const broken = ;' }).first();
     await syntaxDiagnostic.locator('summary').click();
     await expect(syntaxDiagnostic).toBeVisible();
-    await expect(syntaxDiagnostic).toContainText(/SyntaxError: .*app\/survey\.tsx: Unexpected token \(3:15\)/);
+    // Metro stderr and its browser TransformError wrapper may arrive in either
+    // order. Both must retain the same actionable file, line and error text.
+    await expect(syntaxDiagnostic).toContainText(/app\/survey\.tsx: Unexpected token \(3:15\)/);
     await page.getByRole('button', { name: 'Collapse console', exact: true }).click();
     const broken = await engine.files.read(first.id, survey.path);
     expect((await client.callTool({ name: 'project_write_files', arguments: { projectId: first.id, writes: [{ path: survey.path, content: survey.content, expectedRevision: broken.revision }] } })).isError).not.toBe(true);

@@ -74,10 +74,15 @@ test('desktop Preview and Settings scrolling stays within the workspace', async 
       }
       const before = await scrollPosition(page);
       await scrollEvidence(page, `${destination.replace(' ', '-')}-${viewport.width}`, { before });
+      await expect(page.locator('.workspace-content')).toHaveAttribute('data-workspace', 'settings');
+      await expect.poll(async () => { const value = await scrollPosition(page); return value.workspaceScrollHeight - value.workspaceHeight; }).toBeGreaterThan(0);
+      await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       const bounds = await page.locator('.workspace-content').boundingBox();
-      await page.mouse.move(bounds!.x + 8, Math.min(bounds!.y + 140, viewport.height - 30));
+      const point = { x: bounds!.x + bounds!.width / 2, y: Math.min(bounds!.y + 140, viewport.height - 30) };
+      await expect.poll(() => page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('.workspace-content'), point)).toBe(true);
+      await page.mouse.move(point.x, point.y);
       await page.mouse.wheel(0, 440);
-      await expect.soft.poll(async () => (await scrollPosition(page)).workspaceTop, { timeout: 1500 }).toBeGreaterThan(0);
+      await expect.poll(async () => (await scrollPosition(page)).workspaceTop).toBeGreaterThan(0);
       const after = await scrollPosition(page);
       await scrollEvidence(page, `wheel-${destination.replace(' ', '-')}-${viewport.width}`, { before, after });
       expect.soft(after.documentTop).toBe(0);
