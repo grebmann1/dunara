@@ -62,7 +62,7 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.2.3",
     "@types/ws": "8.18.1",
-    "electron": "44.4.0",
+    "electron": "44.4.1",
     "eslint": "10.10.0",
     "tailwindcss": "4.3.3",
     "tsx": "4.23.13",
