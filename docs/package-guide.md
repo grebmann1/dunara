@@ -6,17 +6,25 @@ The first distribution uses versioned GitHub release archives, with SHA-256/SRI 
 
 ## Install the release
 
-Use Node 24 and pin the coordinated 0.1.0 set in an independent project:
+Use Node 24 and pnpm 11.13.1, and pin the coordinated 0.1.0 set in an independent project. pnpm 11 blocks nested archive dependencies by default. For this reviewed release, first resolve the lockfile without installing packages or running scripts:
 
 ```sh
-pnpm add \
+pnpm add --lockfile-only --ignore-scripts --config.blockExoticSubdeps=false \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-plugin-sdk-0.1.0.tgz \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-catalog-0.1.0.tgz \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-runtime-0.1.0.tgz \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-studio-0.1.0.tgz \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-execution-0.1.0.tgz
+```
+
+Check that the generated lockfile has only those five archive URLs and that their integrity values match the release receipt. Then install with pnpm’s default policy restored:
+
+```sh
+pnpm install --frozen-lockfile
 pnpm exec mobile-builder --help
 ```
+
+Do not persist `blockExoticSubdeps: false` in project or global configuration. Existing source checkouts and downstream applications already commit their reviewed lockfiles and use the ordinary frozen install command. See pnpm’s [dependency source protection](https://pnpm.io/supply-chain-security) for the archive restriction.
 
 Commit the resulting lockfile. The [release receipt](https://github.com/grebmann1/dunara/releases/download/v0.1.0/release.json) records source identity and archive hashes. A website can consume only the catalogue; embedded Studio also needs its React peers.
 
