@@ -17,10 +17,10 @@ pnpm add --lockfile-only --ignore-scripts --config.blockExoticSubdeps=false \
   https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-execution-0.1.0.tgz
 ```
 
-Check that the generated lockfile has only those five archive URLs and that their integrity values match the release receipt. Then install with pnpm’s default policy restored:
+Check that the generated lockfile has only those five archive URLs and that their integrity values match the release receipt. Then install with pnpm’s default dependency-source policy restored. This bootstrap uses the prebuilt platform packages and does not need dependency install scripts:
 
 ```sh
-pnpm install --frozen-lockfile
+pnpm install --frozen-lockfile --ignore-scripts
 pnpm exec mobile-builder --help
 ```
 
