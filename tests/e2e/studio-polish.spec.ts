@@ -70,7 +70,7 @@ test('Studio polish remains usable across desktop and phone layouts', async ({ p
   const [project] = await engine.projects.list();
   expect(project?.slug).toBe('bonsai-studio');
   expect((await engine.studio.snapshot()).projectId).toBe(project!.id);
-  const nav = page.getByRole('navigation', { name: 'Workspace', exact: true });
+  const nav = page.locator('#studio-sidebar');
   const navigate = async (label: string, heading = label) => {
     const destination = nav.getByRole('button', { name: label, exact: true });
     await destination.scrollIntoViewIfNeeded();

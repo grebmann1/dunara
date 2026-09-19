@@ -60,7 +60,7 @@ test('desktop Preview and Settings scrolling stays within the workspace', async 
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 768, height: 800 }]) {
     await page.setViewportSize(viewport);
     for (const destination of ['Preview', 'Settings']) {
-      await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+      await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       if (destination === 'Preview') {
         const canvas = page.getByRole('region', { name: 'Phone preview canvas' });
@@ -104,7 +104,7 @@ test('phone and 200 percent Preview and Settings layouts keep reachable final co
     await page.setViewportSize(viewport);
     await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, viewport.width === 1440 ? 2 : 1);
     for (const destination of ['Preview', 'Settings']) {
-      await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+      await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       await scrollEvidence(page, `${destination.replace(' ', '-')}-${viewport.width === 1440 ? 'zoom' : viewport.width}`, await scrollPosition(page));
       // The edge-to-edge Preview canvas owns wheel zoom; document scroll starts outside it.
@@ -152,7 +152,7 @@ test('scroll ownership preserves keyboard focus, polling, banners and short-heig
   expect((await scrollPosition(page)).workspaceTop).toBe(0);
 
   for (const destination of ['Assets', 'Activity', 'Settings', 'Preview']) {
-    await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+    await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
     await expect.poll(async () => (await scrollPosition(page)).workspaceTop).toBe(0);
     await expect(destination === 'Preview' ? page.locator('.topbar h1') : content.locator('h1:visible')).toBeInViewport();
     if (destination === 'Preview') await expect(page.locator('.toolbar')).toBeInViewport();

@@ -212,14 +212,14 @@ test('header icon collapses and restores the sidebar without remounting the work
   expect(errors).toEqual([]);
 });
 
-test('sidebar omits the removed footer across widths and zoom', async ({ page }) => {
+test('sidebar footer keeps Settings without promotional copy across widths and zoom', async ({ page }) => {
   await page.goto(studio.launchUrl);
   for (const zoom of [1, 2]) {
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
     for (const width of [375, 768, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator('#studio-sidebar')).toBeVisible();
-      await expect(page.locator('.sidebar-footer')).toHaveCount(0);
+      await expect(page.locator('.sidebar-footer').getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
       await expect(page.getByText('Local, shared workspace.', { exact: true })).toHaveCount(0);
       await expect(page.getByText('Build with your agent. Review here.', { exact: true })).toHaveCount(0);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);

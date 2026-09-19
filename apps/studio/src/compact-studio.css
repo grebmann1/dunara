@@ -45,9 +45,6 @@
   .studio .backend-card { padding: 16px; }
   .studio .backend-card h2 { font-size: 15px; }
 }
-@container studio (min-width: 761px) {
-  .workspace[data-sidebar-open=true] { grid-template-columns: 196px minmax(0, 1fr); }
-}
 @media (max-width: 760px), (pointer: coarse) {
   :root { --control-size: 44px; }
   .studio .topbar { min-height: 52px; padding: 3px 12px; }

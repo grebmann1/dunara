@@ -183,9 +183,6 @@
   .studio:has(.media-workbench:not([hidden])) { height: 100dvh; min-height: 0; }
   .studio:has(.media-workbench:not([hidden])) > .workspace { flex: 1; min-height: 0; }
   .studio:has(.media-workbench:not([hidden])) .workspace-content { flex: 1; min-height: 0; }
-  .studio:has(.media-workbench:not([hidden])) .sidebar { flex-shrink: 0; padding: 8px 12px; gap: 6px; }
-  .studio:has(.media-workbench:not([hidden])) .workspace-nav { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 3px; padding-bottom: 4px; }
-  .studio:has(.media-workbench:not([hidden])) .workspace-nav button { flex-shrink: 0; }
   .media-workbench > header { padding: 16px; gap: 10px; }
   .media-workbench > header h1 { font-size: 22px; }
   .media-workbench > header p { display: none; }
@@ -208,7 +205,6 @@
   .studio:has(.media-workbench:not([hidden])) { height: auto; min-height: 100dvh; }
   .studio:has(.media-workbench:not([hidden])) > .workspace { flex: none; }
   .studio:has(.media-workbench:not([hidden])) .workspace-content { overflow: visible; }
-  .studio:has(.media-workbench:not([hidden])) .workspace-nav { grid-template-columns: minmax(0, 1fr); }
   .media-workbench { height: auto; min-height: 100dvh; }
   .media-workbench .launch-kit-scroll { overflow: visible; flex: none; }
 }

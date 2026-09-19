@@ -6,6 +6,7 @@
 @import "./creative.css" layer(legacy);
 @import "./media-workspace.css";
 @import "./compact-studio.css";
+@import "./sidebar.css";
 /* No global Preflight: unmigrated creative workflows retain their reset. */
 @import "tailwindcss/utilities.css" layer(utilities) source(".");
 

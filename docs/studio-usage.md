@@ -32,7 +32,7 @@ On the original local checkout, Outpost is registered using `.builder/apps` and 
 
 ## Download the full project
 
-Choose **Download project** below the project picker, then **Download ZIP**. The archive includes source, assets, app configuration, dependency lockfiles, backend code, documentation, and a guide for running the app independently. Private environment/credential files, Git history, Dunara metadata, installed dependencies and build output are excluded; the guide lists omissions. Export does not change the app or require Preview. See [Project download](project-export.md) for setup, limits and recovery.
+Choose **Download project** at the bottom of the sidebar (the download icon on phones), then **Download ZIP**. The archive includes source, assets, app configuration, dependency lockfiles, backend code, documentation, and a guide for running the app independently. Private environment/credential files, Git history, Dunara metadata, installed dependencies and build output are excluded; the guide lists omissions. Export does not change the app or require Preview. See [Project download](project-export.md) for setup, limits and recovery.
 
 ## Project recovery and the app journey
 
@@ -166,3 +166,9 @@ pnpm start --workspace "$PWD/.builder/review/apps" --home "$PWD/.builder/review/
 Use the authenticated launch window and stop its runtime with Ctrl+C when finished. Test fixtures and captured artifacts are not included in a clone. See [verification](verification.md) for current evidence and the distinction between browser tests and physical-device qualification.
 
 Prepare an installable app from **Preview tools → Build setup**: review app identifiers, an optional existing Expo project link and development/preview profiles. See the [native build setup guide](native-build-setup.md) for user and agent steps, recovery and remaining signing/build prerequisites.
+
+## Sidebar and projects
+
+The sidebar groups builder destinations at the top, a filterable **Projects** list below, and **Settings** at the bottom. Select a project by name; matching names show their directory slugs. Filtering searches both. Arrow keys move focus through a list and Enter or Space selects. Collapse the Projects section to keep only the navigation.
+
+Drag the sidebar edge to resize it between 200 and 360 px; double-click resets its width. The focused divider also supports arrow keys, Home and End. Long project lists scroll independently so Settings stays reachable. The header project menu remains available when the sidebar is collapsed and on phones, where navigation uses compact rows.
