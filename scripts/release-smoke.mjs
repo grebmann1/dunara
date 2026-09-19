@@ -9,7 +9,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { chromium } from 'playwright';
 import { expect } from '@playwright/test';
 import sharp from 'sharp';
-import { checkEnvironment } from './release-check.mjs';
+import { checkEnvironment } from './check-environment.mjs';
 
 // Test-only local assets/approvals, no provider requests or real credentials.
 if (process.platform === 'win32') throw new Error('This private-candidate smoke is currently qualified on macOS only');
