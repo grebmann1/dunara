@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { access, readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -27,11 +28,20 @@ export async function bundleNotices(output, extraDependencies = ['react', 'react
       await add(path.resolve(path.dirname(reactManifest), '../scheduler/package.json'));
     } else await add(manifest);
   }
-  const sections = [];
+  const sections = [], missing = [];
   for (const [name, directory] of [...roots].sort(([a], [b]) => a.localeCompare(b))) {
     const notices = (await readdir(directory)).filter(file => /^(?:licen[cs]e|copying|notice)(?:[.-]|$)/i.test(file));
-    if (!notices.length) throw new Error(`Review missing bundled license text: ${name}`);
+    if (!notices.length) {
+      const sources = JSON.parse(await readFile('docs/bundled-licenses/sources.json', 'utf8').catch(() => '{}'));
+      const record = sources[name];
+      if (!record) { missing.push(name); continue; }
+      const text = await readFile(path.join('docs/bundled-licenses', record.file), 'utf8');
+      if (createHash('sha256').update(text).digest('hex') !== record.sha256) throw new Error(`Bundled license hash mismatch: ${name}`);
+      sections.push(`## ${name}\n\nSource: ${record.source}\n\n${text}`);
+      continue;
+    }
     sections.push(`## ${name}\n\n` + (await Promise.all(notices.map(file => readFile(path.join(directory, file), 'utf8')))).join('\n\n'));
   }
+  if (missing.length) throw new Error(`Review missing bundled license text: ${missing.join(', ')}`);
   return '# Bundled third-party notices\n\nThese upstream notices apply to redistributed browser code and CSS. External dependencies retain their own package notices.\n\n' + sections.join('\n\n');
 }

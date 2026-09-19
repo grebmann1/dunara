@@ -43,3 +43,7 @@ https://www.apache.org/licenses/LICENSE-2.0.txt
 ## Cloud execution adapters
 
 The server pins `@vercel/sandbox` 3.3.0 and `e2b` 2.49.0. They are control-server dependencies and are not added to generated apps. The installed dependency license inventory has been regenerated; preserve the packages’ upstream license notices when distributing the hosted image.
+
+## Browser distribution notices
+
+Package builds collect the license texts of actual bundled modules and ship THIRD_PARTY_NOTICES.txt with Studio and the runtime’s local UI. Missing texts fail the build. A pinned, hash-checked upstream license copy for react-remove-scroll-bar is recorded in docs/bundled-licenses/sources.json because its npm archive omits the text. Dependencies retain their original licenses.

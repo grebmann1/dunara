@@ -34,7 +34,7 @@ await writeFile('packages/studio/dist/THIRD_PARTY_NOTICES.txt', notices);
 await writeFile('dist/studio/THIRD_PARTY_NOTICES.txt', notices);
 await cp('packages/studio/src/public.d.ts', 'packages/studio/dist/index.d.ts');
 await cp('packages/studio/src/styles.d.ts', 'packages/studio/dist/styles.d.ts');
-const receipt = { version, sdkApi: 1, studioProtocol: 1, source: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), packages: [] };
+const receipt = { version, sdkApi: 1, studioProtocol: 1, source: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), sourceDirty: !!execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim(), packages: [] };
 for (const name of ['plugin-sdk', 'catalog', 'runtime', 'studio', 'execution']) {
   const source = `packages/${name}`, stage = path.join(output, name);
   await rm(stage, { recursive: true, force: true }); await mkdir(stage, { recursive: true });

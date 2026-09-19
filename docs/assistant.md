@@ -114,7 +114,7 @@ Desktop smoke uses a deterministic numeric-loopback provider, a public test sent
 
 The Assistant exposes the same project-scoped `backend_catalog`, `backend_capabilities` and `backend_select_environment` tools as external MCP (51 canonical tools total). Catalogs disclose pagination and require explicit organization/project choices. Capability checks return only redacted prerequisites and read-permission evidence; they do not infer write access or execute configuration changes. Environment switching uses `backend_inspect.environmentRevision`, stops the old preview and requires the conversation app still selected in Studio. A changed Studio selection retains the existing human scope-review gate; the canonical Engine also refuses an unselected target.
 
-Existing link/create/migration plans still wait for human approval in Backend after the Assistant stages them. Credentials belong in Settings, never chat/tool arguments. Auth/SMTP/storage/functions configuration and hosted management OAuth are later work in [the focused plan](supabase-agent-configuration-plan.md); see [setup](backend-setup.md) for the currently supported workflow.
+Existing link/create/migration plans still wait for human approval in Backend after the Assistant stages them. Credentials belong in Settings, never chat/tool arguments. Auth/SMTP/storage/functions configuration and hosted management OAuth are later work in [the focused plan](backend-setup.md); see [setup](backend-setup.md) for the currently supported workflow.
 
 ### Configuring Supabase app services
 

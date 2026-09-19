@@ -32,4 +32,4 @@ Resolve Expo and native packages together. Update the starter's `package-lock.js
 
 ## Submissions and licensing
 
-Explain the user-visible problem, the change, and the exact tests performed. Include screenshots for visible changes and disclose unperformed native checks. Keep changes focused. Contributions to original project code use Apache-2.0; preserve third-party licenses and attribution. No CLA process or public issue tracker is configured in this local source tree. Use the repository's actual collaboration channel if/when one is established; do not send reports to invented contacts.
+Explain the user-visible problem, the change, and the exact tests performed. Include screenshots for visible changes and disclose unperformed native checks. Keep changes focused. Contributions to original project code use Apache-2.0; preserve third-party licenses and attribution. Use this repository’s issues and pull requests for shared builder work. Website and cloud changes belong to their separate repositories. No CLA process is configured.

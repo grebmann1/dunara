@@ -50,6 +50,4 @@ Copying requires a direct Studio user gesture, never an iframe message. Frame/pr
 
 ## Reporting
 
-There is no public repository, security email, or private advisory channel configured yet. Report a suspected issue privately to the person or organization that supplied this source, using an existing verified contact. Do not publish secrets, real project content, authorization tokens, or weaponized exploit details. Include a minimal temporary-workspace reproduction, platform/version, expected boundary, and observed behavior.
-
-A public release should establish a maintained private reporting channel and complete the outstanding checks in `docs/verification.md`. No security audit certification or response SLA is claimed.
+Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/grebmann1/dunara/security/advisories/new). Do not publish secrets, real project content, authorization tokens or weaponized exploit details in issues. Include a minimal temporary-workspace reproduction, platform/version, expected boundary and observed behavior. No response SLA or security audit certification is claimed.

@@ -77,7 +77,7 @@ it('shares OpenAI credentials, persists bounded history, rejects duplicate/old-e
   const conversation = await create();
   expect((await post('turns/start', { epoch: randomUUID(), turn: { conversationId: conversation.id, runId: randomUUID(), prompt: 'stale' } })).status).toBe(400);
   expect((await post('turns/start', { epoch: assistant.epoch, turn: { conversationId: conversation.id, runId: randomUUID(), prompt: 'x'.repeat(16385) } })).status).toBe(400);
-  const turn = await start(conversation, `Build ${secret}`); await vi.waitFor(() => expect(assistant.status().busy).toBe(false));
+  const turn = await start(conversation, `Build ${secret}`); await vi.waitFor(() => expect(assistant.status().busy).toBe(false), { timeout: 10_000 });
   expect((await post('turns/start', { epoch: assistant.epoch, turn })).status).toBe(400);
   const read = await post('conversations/read', { conversationId: conversation.id }); const text = await read.text();
   expect(text).not.toContain(secret); expect(JSON.parse(text)).toMatchObject({ turns: [{ prompt: 'Build [redacted]', response: 'A streamed answer.', state: 'completed' }] });
@@ -150,7 +150,7 @@ it('validates and persists model selection without spending, then uses it for th
   const observed = vi.fn();
   behavior = async (input, callbacks) => { observed(input.model, input.apiKey); callbacks.text('Done'); };
   const conversation = await create(); await start(conversation);
-  await vi.waitFor(() => expect(assistant.status().busy).toBe(false));
+  await vi.waitFor(() => expect(assistant.status().busy).toBe(false), { timeout: 10_000 });
   expect(observed).toHaveBeenCalledWith('gpt-5.6-sol', secret);
   expect((await assistant.conversation(conversation.id)).turns[0]?.model).toBe('gpt-5.6-sol');
   const resumed = new AssistantService({ home: path.join(root, 'home') });

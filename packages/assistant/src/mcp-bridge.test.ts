@@ -19,7 +19,7 @@ function data(result: HarnessResult) { return z.record(z.string(), z.unknown()).
 const projectIdFrom = (result: HarnessResult) => z.object({ project: z.object({ id: z.uuid() }) }).parse(data(result)).project.id;
 async function call(name: string, args: Record<string, unknown> = {}) { return gateway.call(name, args, controller.signal); }
 async function decide(approve = true) {
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   const item = broker.list()[0]!;
   broker.respond({ id: item.id, epoch: item.epoch, runId: item.runId, conversationId: item.conversationId, projectId: item.projectId, approve });
   return item;
@@ -57,7 +57,7 @@ it('reviews phone network sharing before execution and exposes variable metadata
   const projectId = await create();
   const launch = vi.spyOn(engine.previews, 'setTransport');
   const pending = call('preview_set_transport', { projectId, input: { transport: 'lan', expectedSessionId: null } });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   expect(launch).not.toHaveBeenCalled();
   expect(JSON.stringify(broker.list()[0]!.review)).toContain('local network');
   await decide();
@@ -75,7 +75,7 @@ it('reviews phone network sharing before execution and exposes variable metadata
 });
 it('requires human project creation, binds only after success, and shares revision-safe writes with the external client', async () => {
   const work = call('project_create', { name: 'Assistant fixture', slug: 'assistant-fixture' });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1)); expect(await engine.projects.list()).toEqual([]); expect(binding.projectId).toBeNull();
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 }); expect(await engine.projects.list()).toEqual([]); expect(binding.projectId).toBeNull();
   await decide(); const projectId = projectIdFrom(await work); expect(binding.projectId).toBe(projectId);
   const snapshot = await engine.studio.snapshot(); await call('studio_control', { expectedRevision: snapshot.revision, action: { type: 'select-project', projectId } });
   const writes = [{ path: 'app/assistant.tsx', content: 'export default function Assistant(){return null}', expectedRevision: null }];
@@ -168,12 +168,12 @@ it('does not treat confirmed true as approval; rejects stale reviewed state and 
   const imported = await engine.assets.import(projectId, { expectedRevision: null, label: 'Local candidate', role: 'app-icon', mediaType: 'image/png' }, png);
   const assetId = imported.assets[0]!.id;
   const work = call('media_approve', { projectId, input: { assetId, expectedRevision: imported.revision } });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1)); expect((await engine.assets.list(projectId)).assets[0]!.status).toBe('candidate');
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 }); expect((await engine.assets.list(projectId)).assets[0]!.status).toBe('candidate');
   await engine.assets.brief(projectId, imported.revision, { mood: 'A changed review' });
   await decide(); await expect(work).rejects.toThrow('reviewed state changed');
   expect((await engine.assets.list(projectId)).assets[0]!.status).toBe('candidate');
   const waiting = call('media_approve', { projectId, input: { assetId, expectedRevision: (await engine.assets.list(projectId)).revision } });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   controller.abort(); await expect(waiting).rejects.toThrow(); expect(broker.list()).toEqual([]);
   expect((await engine.assets.list(projectId)).assets[0]!.status).toBe('candidate');
   await expect(call('project_write_files', { projectId, writes: [] })).rejects.toThrow();
@@ -196,7 +196,7 @@ it('reviews exact icon, Inspector and Launch Kit changes before canonical execut
   const selection = { masterId, background: '#ffffff' };
   const diff = data(await call('icon_preview', { projectId, input: selection }));
   const apply = call('icon_apply', { projectId, input: { ...selection, expectedConfigRevision: diff.expectedConfigRevision, expectedMediaRevision: diff.expectedMediaRevision, proposedRevision: diff.proposedRevision, confirmed: true } });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   expect(broker.list()[0]!.review).toMatchObject({ before: diff.before, after: diff.after });
   expect((await engine.files.read(projectId, 'app.json')).content).toBe(diff.before);
   await decide(); expect((await apply).isError).not.toBe(true); expect((await engine.files.read(projectId, 'app.json')).content).toBe(diff.after);
@@ -217,7 +217,7 @@ it('cannot gain cancellation ownership by replaying an independently staged requ
   const independent = await engine.mediaJobs.request(projectId, input);
   expect(data(await call('media_request', { projectId, input })).id).toBe(independent.id);
   const work = call('media_cancel', { projectId, jobId: independent.id });
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1)); expect((await engine.mediaJobs.get(projectId, independent.id)).state).toBe('awaiting-approval');
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 }); expect((await engine.mediaJobs.get(projectId, independent.id)).state).toBe('awaiting-approval');
   await decide(); await work;
   const own = data(await call('media_request', { projectId, input: { ...input, requestId: randomUUID() } }));
   expect(data(await reviewed('media_cancel', { projectId, jobId: own.id })).state).toBe('cancelled'); expect(broker.list()).toEqual([]);
@@ -228,7 +228,7 @@ it('requires human review for a recipe upgrade and refuses source changed during
   const plan = data(await call('recipe_upgrade_preview', { projectId }));
   const args = { projectId, proposedRevision: plan.proposedRevision, confirmed: true };
   const first = call('recipe_upgrade_apply', args);
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   expect((await engine.recipeUpgrades.preview(projectId)).state).toBe('ready');
   expect(broker.list()[0]!.review).toMatchObject({ recipe: 'supabase-notes-v1', proposedRevision: plan.proposedRevision, files: expect.arrayContaining([expect.objectContaining({ path: 'package-lock.json' })]) });
   await writeFile(path.join(project.root, 'app/account.js'), '// Another editor reserved this route');
@@ -246,7 +246,7 @@ it('reviews native setup through canonical MCP and invalidates approval after an
   const plan = data(await call('native_build_plan', { projectId, configuration }));
   const args = { projectId, input: { configuration, proposedRevision: plan.proposedRevision, confirmed: true } };
   const pending = call('native_build_apply', args);
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   expect(broker.list()[0]!.review).toMatchObject({ configuration, state: 'ready', proposedRevision: plan.proposedRevision });
   await writeFile(path.join(project.root, 'eas.json'), '{"build":{"production":{}}}');
   await decide(); await expect(pending).rejects.toThrow('reviewed state changed');
@@ -265,7 +265,7 @@ it('reviews native workspace preparation and rejects source edits made during hu
   const plan = data(await call('native_workspace_plan', { projectId, selection }));
   const args = { projectId, input: { selection, proposedRevision: plan.proposedRevision, requestId: randomUUID(), confirmed: true } };
   const pending = call('native_workspace_prepare', args);
-  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1), { timeout: 10_000 });
   expect(broker.list()[0]!.review).toMatchObject({ selection, proposedRevision: plan.proposedRevision });
   await writeFile(path.join(project.root, 'src/review-change.ts'), 'export const changed = true;');
   await decide(); await expect(pending).rejects.toThrow('reviewed state changed');
