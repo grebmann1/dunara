@@ -49,7 +49,7 @@ const client = createStudioClient({ auth: { kind: 'launch-ticket' } });
 export function Workspace() { return <Studio client={client} />; }
 ```
 
-Create one stable client for each authenticated workspace. For hosted composition, provide `{ kind: 'token', token }`, a same-origin gateway, and explicit capabilities. On account/token replacement, unmount the old Studio, dispose its client, and mount a new one. Do not mutate or reuse credentials across users. Hosts may put their account bar or navigation around Studio. Keep each mounted client stable across ordinary renders.
+Create one stable client for each authenticated workspace. Token-authenticated clients default to restricted hosted capabilities; local-only controls require an explicit host capability. For hosted composition, provide `{ kind: 'token', token }`, a same-origin gateway, and explicit capabilities. On account/token replacement, unmount the old Studio, dispose its client, and mount a new one. Do not mutate or reuse credentials across users. Hosts may put their account bar or navigation around Studio. Keep each mounted client stable across ordinary renders.
 
 `authenticate()` verifies Studio protocol 1 before any operation. A mismatched version fails before mutation. Credentials, cancellation, event reconnection and capabilities are instance-scoped. `dispose()` aborts active requests and sockets. Capabilities govern plugin management, local paths, account settings, OAuth setup, phone-preview presentation, connection labels and credential-storage wording. They do not grant backend authority.
 

@@ -10,7 +10,7 @@ describe('Studio host isolation', () => {
       calls.push({ url: String(input), authorization: new Headers(init?.headers).get('Authorization') });
       return Response.json(String(input).endsWith('/protocol') ? { version: 1 } : { ok: true });
     };
-    const a = createStudioClient({ origin: 'https://one.example', auth: { kind: 'token', token: 'one' }, fetch: transport });
+    const a = createStudioClient({ origin: 'https://one.example', auth: { kind: 'token', token: 'one' }, capabilities: localCapabilities, fetch: transport });
     const b = createStudioClient({ origin: 'https://two.example', auth: { kind: 'token', token: 'two' }, capabilities: { ...localCapabilities, managePlugins: false }, fetch: transport });
     await Promise.all([a.authenticate(), b.authenticate()]);
     await Promise.all([a.api('/projects'), b.api('/projects')]);
@@ -25,6 +25,13 @@ describe('Studio host isolation', () => {
     await expect(a.api('/projects', {})).rejects.toThrow('Authenticate');
     await expect(b.api('/projects')).resolves.toEqual({ ok: true });
     b.dispose();
+  });
+  it('defaults token hosts to restricted capabilities while retaining local launch behavior', () => {
+    const hosted = createStudioClient({ origin: 'https://builder.example', auth: { kind: 'token', token: 'fixture' } });
+    const local = createStudioClient({ origin: 'http://127.0.0.1:1234', auth: { kind: 'launch-ticket' } });
+    expect(hosted.capabilities).toMatchObject({ managePlugins: false, localPaths: false, accountSettings: false, backendOAuth: false, privatePreview: true, credentialLocation: 'workspace' });
+    expect(local.capabilities).toEqual(localCapabilities);
+    hosted.dispose(); local.dispose();
   });
   it('rejects incompatible runtime versions before mutations or subscriptions', async () => {
     let calls = 0;

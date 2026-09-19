@@ -40,7 +40,8 @@ export function createStudioClient(options: StudioClientOptions) {
   const transport = options.fetch ?? fetch;
   const Socket = options.webSocket ?? globalThis.WebSocket;
   const controller = new AbortController();
-  const capabilities = Object.freeze({ ...localCapabilities, ...options.capabilities });
+  const defaults: Readonly<StudioCapabilities> = options.auth.kind === 'launch-ticket' ? localCapabilities : { managePlugins: false, localPaths: false, accountSettings: false, backendOAuth: false, privatePreview: true, connectionLabel: 'Cloud workspace', credentialLocation: 'workspace' };
+  const capabilities = Object.freeze({ ...defaults, ...options.capabilities });
   let token = options.auth.kind === 'token' ? options.auth.token : '';
   let compatible = false;
 const sessionMessage = options.auth.kind === 'token' ? 'Your workspace session ended. Sign in again.' : 'Session unavailable. Relaunch mobile-builder --studio and open its fresh authorized launch window. Reloading or retrying this page cannot restore the lost session.';
