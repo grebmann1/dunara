@@ -13,7 +13,7 @@ import { projectSchema, revisionSchema, previewSchema } from '../../packages/cor
 import { createMcpServer } from '../../packages/mcp/src/server.js';
 import { startStudio } from '../../packages/cli/src/studio-server.js';
 
-test.use({ trace: 'off' });
+test.use({ trace: 'off', actionTimeout: 20_000 });
 const filesSchema = z.object({ project: projectSchema, files: z.array(z.object({ path: z.string(), content: z.string(), revision: revisionSchema })) });
 test('one Engine: real MCP edits, Studio preview/design/captures and shared stop', async ({ page }) => {
   test.skip(!!process.env.VISUAL, 'Visual suite only');
@@ -85,14 +85,22 @@ test('one Engine: real MCP edits, Studio preview/design/captures and shared stop
     await openProjectRoutes(page);
     await page.getByLabel('Agent-added screen').fill('/survey'); await page.getByLabel('Agent-added screen').press('Enter');
     await expect(frame.getByText('Survey station', { exact: true })).toBeVisible();
-    await expect.poll(() => metroSession?.registered && !metroSession.closed).toBe(true);
+    // Bind the error-injection check to a newly registered HMR connection,
+    // rather than a connection from the preceding route navigation.
+    const precedingSession = metroSession;
+    await page.getByRole('button', { name: 'Reload preview', exact: true }).click();
+    await expect.poll(() => metroSession !== precedingSession && metroSession?.registered && !metroSession.closed).toBe(true);
+    await expect(frame.getByText('Survey station', { exact: true })).toBeVisible();
     const survey = filesSchema.parse((await client.callTool({ name: 'project_inspect', arguments: { projectId: first.id, paths: ['app/survey.tsx'] } })).structuredContent).files[0]!;
     expect((await client.callTool({ name: 'project_write_files', arguments: { projectId: first.id, writes: [{ path: survey.path, content: survey.content + '\nconst broken = ;', expectedRevision: survey.revision }] } })).isError).not.toBe(true);
+    expect(await readFile(path.join(first.root, survey.path), 'utf8')).toBe(survey.content + '\nconst broken = ;');
     await expect.poll(() => metroErrors, { timeout: 30_000 }).toContainEqual(expect.objectContaining({ filename: survey.path, name: 'SyntaxError', message: expect.stringContaining('Unexpected token (3:15)') }));
     // Expo 57 can label a real compilation failure "Unknown": its log parser drops an unchanged originalMessage.
     // Require both the actual Metro syntax error and a visible error overlay, plus actionable Studio diagnostics.
     await expect(frame.getByRole('button', { name: 'Reload application', exact: true })).toBeVisible({ timeout: 30_000 });
     await page.locator('.studio-console').getByRole('button', { name: 'Diagnostics', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Diagnostic level', exact: true }).click();
+    await page.getByRole('option', { name: /^All output/ }).click();
     const syntaxDiagnostic = page.locator('.studio-console .diagnostic-row').filter({ hasText: 'const broken = ;' }).first();
     await syntaxDiagnostic.locator('summary').click();
     await expect(syntaxDiagnostic).toBeVisible();

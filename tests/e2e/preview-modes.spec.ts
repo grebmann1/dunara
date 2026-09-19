@@ -1,7 +1,7 @@
 import { openPreviewTools } from './preview-actions.js';
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Engine } from '../../packages/core/src/engine.js';
@@ -15,7 +15,8 @@ test.beforeEach(async ({ page }) => {
   dir = await mkdtemp(path.join(os.tmpdir(), 'builder-modes-'));
   engine = new Engine(await Projects.open(path.join(dir, 'apps'), path.join(dir, 'home')), true);
   const project = await engine.projects.create({ name: 'Lune Review', slug: 'lune-review' }); projectId = project.id;
-  await Promise.all(['habit', 'progress', 'account'].map(name => rm(path.join(project.root, 'app', `${name}.tsx`))));
+  // This fixture owns exactly four routes, regardless of added starter examples.
+  await Promise.all((await readdir(path.join(project.root, 'app'))).filter(name => !['index.tsx', '_layout.tsx'].includes(name)).map(name => rm(path.join(project.root, 'app', name), { recursive: true, force: true })));
   const layout = await engine.files.read(projectId, 'app/_layout.tsx');
   await engine.files.write(projectId, [{ path: layout.path, expectedRevision: layout.revision, content: `<Tabs>${[['index', 'Tonight'], ['schedule', 'Schedule'], ['ritual', 'Ritual'], ['journal', 'Journal']].map(([name, title]) => `<Tabs.Screen name="${name}" options={{ title: '${title}' }} />`).join('')}</Tabs>` }, ...['schedule', 'ritual', 'journal'].map(name => ({ path: `app/${name}.tsx`, expectedRevision: null, content: 'export default function Screen() { return null; }' }))]);
   app = createServer((req, res) => { res.setHeader('Content-Type', 'text/html; charset=utf-8'); res.end(`<!doctype html><html><head><style>body{margin:0;padding:28px;background:#151429;color:#ede9ff;font:16px system-ui}h1{font:38px Georgia}input,button{padding:12px;max-width:100%;box-sizing:border-box}nav{position:fixed;bottom:0;left:0;right:0;padding:24px;background:#201e37}a{color:#c5bbfa}</style></head><body><p>☾ lune</p><h1>${req.url === '/' ? 'Tonight' : req.url?.slice(1)}</h1><p>A little room for rest.</p><input aria-label="App draft" placeholder="Your note"><div style="height:900px"></div><button onclick="this.textContent='Done'">Bottom action</button><nav><a href="/schedule">Schedule</a> · <a href="/journal">Journal</a></nav></body></html>`); });

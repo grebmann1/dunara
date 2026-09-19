@@ -589,7 +589,9 @@ test('approved artwork opens a retained integration draft in existing chat histo
     return !!workspace && !!chat && workspace.x + workspace.width <= chat.x;
   }).toBe(true);
   expect(calls).toBe(0);
-  await page.keyboard.press('Escape');
+  // Desktop Escape belongs to the focused panel after the responsive portal moves.
+  await message.press('Escape');
+  await expect(panel).toBeHidden();
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   await expect(message).toHaveValue(new RegExp(asset.id));
   await message.press('Enter');

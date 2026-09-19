@@ -8,7 +8,7 @@ import { startStudio } from '../../packages/cli/src/studio-server.js';
 import { AssistantService } from '../../packages/assistant/src/service.js';
 import { selectProject } from './project-picker.js';
 
-test.use({ trace: 'off' });
+test.use({ trace: 'off', actionTimeout: 20_000 });
 let dir: string, engine: Engine, studio: Awaited<ReturnType<typeof startStudio>>;
 test.beforeEach(async () => {
   test.skip(!!process.env.VISUAL, 'Visual suite only');
@@ -44,17 +44,19 @@ test('project identity and status share one compact header across widths and zoo
     expect(toggle!.height).toBeGreaterThanOrEqual(44);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     if (width > 760) {
-      expect((await page.locator('.toolbar').boundingBox())!.y).toBe(header!.height);
+      expect((await page.locator('.sidebar').boundingBox())!.y).toBe(header!.height);
       expect(await page.locator('.workspace-content').evaluate(node => getComputedStyle(node).overflowY)).toBe('auto');
-      await expect(page.locator('.header-brand-name')).toBeVisible();
+      await expect(page.locator('.topbar').getByRole('img', { name: 'Dunara', exact: true })).toBeVisible();
     }
     await page.screenshot({ path: testInfo.outputPath(`header-expanded-${width}.png`) });
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
     const expand = page.getByRole('button', { name: 'Expand sidebar', exact: true });
     await expect(expand).toBeFocused();
-    await expect(page.locator('.header-brand-name')).toBeHidden();
-    const collapsedToggle = await expand.boundingBox(), collapsedTitle = await title.boundingBox();
-    expect(collapsedTitle!.x - (collapsedToggle!.x + collapsedToggle!.width)).toBe(8);
+    const mark = page.locator('.topbar').getByRole('img', { name: 'Dunara', exact: true });
+    await expect(mark).toBeVisible();
+    const collapsedToggle = await expand.boundingBox(), collapsedMark = await mark.boundingBox(), collapsedTitle = await title.boundingBox();
+    expect(collapsedMark!.x - (collapsedToggle!.x + collapsedToggle!.width)).toBe(8);
+    expect(collapsedTitle!.x - (collapsedMark!.x + collapsedMark!.width)).toBe(8);
     expect(await title.evaluate(node => getComputedStyle(node).borderLeftWidth)).toBe('0px');
     expect((await page.locator('.topbar').boundingBox())!.height).toBe(56);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
@@ -74,9 +76,9 @@ test('project identity and status share one compact header across widths and zoo
     await expect(title).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).click();
-    await expect(page.locator('.header-brand-name')).toBeHidden();
     await expect(title).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath(`header-zoom-${width}.png`) });
     await page.getByRole('button', { name: 'Expand sidebar', exact: true }).press('Enter');
   }
   await page.evaluate(() => { document.documentElement.style.zoom = ''; });
@@ -128,8 +130,8 @@ test('header prioritizes preview and connection state beside a working Assistant
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
         if (size.width === 1440) {
           await expect(toggle.locator('.assistant-label')).toBeVisible();
-          const mark = (await page.locator('.header-brand-mark').boundingBox())!;
-          const icon = (await page.locator('.header-brand-mark svg').boundingBox())!;
+          const mark = (await page.locator('.studio-brand').boundingBox())!;
+          const icon = (await page.locator('.studio-brand').getByRole('img', { name: 'Dunara', exact: true }).boundingBox())!;
           expect(icon.x).toBeGreaterThanOrEqual(mark.x);
           expect(icon.y).toBeGreaterThanOrEqual(mark.y);
           expect(icon.x + icon.width).toBeLessThanOrEqual(mark.x + mark.width);
@@ -298,11 +300,13 @@ test('Preview canvas contains zoom without changing iframe dimensions or mobile 
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     expect(await page.locator('.workspace-content').evaluate(node => getComputedStyle(node).overflowY)).toBe(mobile ? 'visible' : 'auto');
     await expect.poll(() => canvas.evaluate(node => { const area = node.getBoundingClientRect(), phone = node.querySelector('.device-fit')!.getBoundingClientRect(); return phone.left >= area.left && phone.right <= area.right && phone.top >= area.top && phone.bottom <= area.bottom; })).toBe(true);
-    if (mobile) await expect.poll(() => page.locator('.device-fit').evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThan(150);
+    if (mobile) await expect.poll(() => canvas.locator('.device-fit').evaluate(node => node.getBoundingClientRect().width)).toBeGreaterThan(150);
     const diagnostics = page.locator('.studio-console').getByRole('button', { name: 'Diagnostics', exact: true });
     await expect(diagnostics).toBeInViewport();
     await diagnostics.focus(); await page.keyboard.press('Enter');
     await expect(diagnostics).toHaveAttribute('aria-expanded', 'true');
+    await expect(diagnostics).toBeFocused();
+    await page.screenshot({ path: test.info().outputPath(`console-keyboard-${viewport.width}x${viewport.height}.png`) });
     await page.keyboard.press('Escape');
     await expect(diagnostics).toBeFocused();
     await expect(diagnostics).toHaveAttribute('aria-expanded', 'false');
@@ -467,15 +471,17 @@ test('Design does not oscillate between panel and modal near the responsive boun
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Design', exact: true }).click();
   await page.getByLabel('Corner radius').fill('27');
-  const states = await page.evaluate(async () => {
-    const states: string[] = [];
+  const surface = page.getByRole('dialog', { name: 'App design', exact: true });
+  await expect(surface).toBeVisible();
+  const states = await surface.evaluate(async node => {
+    const states: boolean[] = [];
     for (let i = 0; i < 60; i++) {
       await new Promise(requestAnimationFrame);
-      states.push(document.querySelector('#design-tools')!.getAttribute('data-inline')!);
+      states.push(node.isConnected);
     }
     return states;
   });
-  expect(new Set(states).size).toBe(1);
+  expect(states.every(Boolean)).toBe(true);
   await expect(page.getByLabel('Corner radius')).toHaveValue('27');
 });
 

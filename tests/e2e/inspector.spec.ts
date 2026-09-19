@@ -14,7 +14,7 @@ import { createMcpServer } from '../../packages/mcp/src/server.js';
 import { startStudio } from '../../packages/cli/src/studio-server.js';
 import { selectionSchema } from '../../apps/studio/src/preview-context.js';
 
-test.use({ trace: 'off' });
+test.use({ trace: 'off', actionTimeout: 20_000 });
 test.beforeEach(() => test.skip(!!process.env.VISUAL, 'Visual suite only'));
 const contextSchema = z.object({ project: z.object({ id: z.string(), name: z.string(), root: z.string() }), observed: selectionSchema });
 const parse = (text: string) => contextSchema.parse(JSON.parse(text.split('```json\n')[1]!.split('\n```')[0]!));
@@ -52,11 +52,11 @@ test('real starter: inspect, right-click clipboard, revision-edit via MCP and Fa
       await page.setViewportSize({ width, height: 900 });
       await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, browserZoom);
       await page.getByRole('button', { name: 'Fit', exact: true }).click();
-      const dimensions = () => page.locator('.device-area').evaluate(node => ({ width: node.clientWidth, height: node.clientHeight, scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight }));
-      const before = await dimensions(), zoomBefore = await page.getByLabel('Canvas zoom level').textContent();
+      const dimensions = () => page.getByRole('region', { name: 'Phone preview canvas' }).evaluate(node => ({ width: node.clientWidth, height: node.clientHeight, scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight }));
+      const before = await dimensions(), zoomBefore = await page.getByRole('status', { name: 'Canvas zoom level', exact: true }).textContent();
       await contextToggle.click(); await expect(panel).toBeVisible();
       await expect.poll(dimensions).toEqual(before);
-      await expect(page.getByLabel('Canvas zoom level')).toHaveText(zoomBefore!);
+      await expect(page.getByRole('status', { name: 'Canvas zoom level', exact: true })).toHaveText(zoomBefore!);
       expect(await panel.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
       expect(await panel.evaluate(node => { const panel = node.getBoundingClientRect(), canvas = node.closest('.canvas-viewport')!.getBoundingClientRect(); return panel.left >= canvas.left && panel.right <= canvas.right && panel.top >= canvas.top && panel.bottom <= canvas.bottom; })).toBe(true);
       await panel.getByLabel('Copyable context').scrollIntoViewIfNeeded();
@@ -74,7 +74,7 @@ test('real starter: inspect, right-click clipboard, revision-edit via MCP and Fa
     await page.getByRole('button', { name: '100%', exact: true }).click();
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
     await page.getByRole('button', { name: 'Zoom in', exact: true }).click();
-    await expect(page.getByLabel('Canvas zoom level')).toHaveText('120%');
+    await expect(page.getByRole('status', { name: 'Canvas zoom level', exact: true })).toHaveText('120%');
     const canvas = page.getByRole('region', { name: 'Phone preview canvas' });
     await canvas.focus(); await canvas.press('Home'); await canvas.press('ArrowDown');
     await expect.poll(() => canvas.evaluate(node => node.scrollTop)).toBeGreaterThan(0);
@@ -89,10 +89,11 @@ test('real starter: inspect, right-click clipboard, revision-edit via MCP and Fa
     await expect(page.locator('iframe')).toBeFocused();
     expect(parse(copied).observed.bounds).toEqual(payload.observed.bounds);
     expect(parse(copied).observed.viewport).toEqual({ width: 375, height: 812 });
-    await page.getByRole('button', { name: 'Pan canvas', exact: true }).click();
-    await expect(inspect).toHaveAttribute('aria-pressed', 'false');
     await inspect.click();
-    await expect(page.getByRole('button', { name: 'Pan canvas', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    await expect(inspect).toHaveAttribute('aria-pressed', 'false');
+    await expect(frame.locator('[data-builder-inspector-overlay]')).toHaveCount(0);
+    await inspect.click();
+    await expect(inspect).toHaveAttribute('aria-pressed', 'true');
     await page.getByRole('button', { name: 'Fit', exact: true }).click();
     await heading.click();
     const source = filesSchema.parse((await client.callTool({ name: 'project_inspect', arguments: { projectId: parse(copied).project.id, paths: ['app/index.tsx'] } })).structuredContent).files[0]!;

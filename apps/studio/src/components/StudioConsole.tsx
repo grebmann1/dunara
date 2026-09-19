@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react';
+import { useId, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, ChevronDown, ChevronUp, Terminal, X } from 'lucide-react';
 import type { StudioState } from '../api';
@@ -11,8 +11,14 @@ type Panel = 'diagnostics' | 'captures';
 export function StudioConsole({ state, panel, onPanel: setPanel, onLaunchKit, onCaptureOpen }: { state: StudioState; panel: Panel | null; onPanel(panel: Panel | null): void; onLaunchKit(): void; onCaptureOpen(): void }) {
   const dock = useDock();
   const diagnosticsButton = useRef<HTMLButtonElement>(null), capturesButton = useRef<HTMLButtonElement>(null);
+  const focusAfterOpen = useRef<Panel | null>(null);
   const id = useId(), errors = state.diagnostics.entries.filter(entry => entry.level === 'error').length;
-  const toggle = (next: Panel) => { if (panel === next) collapse(); else setPanel(next); };
+  const toggle = (next: Panel) => { if (panel === next) collapse(); else { focusAfterOpen.current = next; setPanel(next); } };
+  useLayoutEffect(() => {
+    if (!panel || focusAfterOpen.current !== panel) return;
+    const trigger = panel === 'diagnostics' ? diagnosticsButton : capturesButton;
+    if (trigger.current?.isConnected) { trigger.current.focus({ preventScroll: true }); focusAfterOpen.current = null; }
+  }, [panel, dock.desktop, dock.hosts.console]);
   function collapse() { const trigger = panel === 'captures' ? capturesButton : diagnosticsButton; setPanel(null); requestAnimationFrame(() => trigger.current?.focus({ preventScroll: true })); }
   const content = <footer className="studio-console" aria-label="Workspace console" data-open={!!panel} onKeyDown={event => {
     if (event.key !== 'Escape' || (event.target instanceof Element && event.target.closest('[role="dialog"], [role="listbox"]'))) return;

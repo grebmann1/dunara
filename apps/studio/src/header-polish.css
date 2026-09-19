@@ -23,5 +23,6 @@
 }
 
 @container studio (max-width: 319px) {
+  .topbar[data-project="true"] .studio-brand { display: none; }
   .topbar .header-status { max-width: 55%; flex-wrap: wrap; gap: 0 8px; }
 }

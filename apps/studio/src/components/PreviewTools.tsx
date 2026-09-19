@@ -8,12 +8,13 @@ import { DeviceConnection } from './DeviceConnection';
 import { NativeBuildPanel } from './NativeBuildPanel';
 
 type Tool = 'routes' | 'help' | 'device' | 'build';
-export function PreviewTools({ state, route, viewport, screenActions, onRoute, onRefresh, onSettings }: { state: StudioState; route: string; viewport: 'compact' | 'large'; screenActions: ReactNode; onRoute(route: string): void; onRefresh(): void; onSettings(): void }) {
+export function PreviewTools({ state, route, viewport, screenActions, onRoute, onRefresh, onSettings, onOpenDialog }: { state: StudioState; route: string; viewport: 'compact' | 'large'; screenActions: ReactNode; onRoute(route: string): void; onRefresh(): void; onSettings(): void; onOpenDialog(): void }) {
   const menu = useRef<HTMLDetailsElement>(null), deviceButton = useRef<HTMLButtonElement>(null), trigger = useRef<HTMLElement | null>(null), title = useRef<HTMLHeadingElement>(null);
   const [tool, setTool] = useState<Tool | null>(null), [manualPath, setManualPath] = useState('');
   function open(next: Tool) {
     trigger.current = next === 'device' ? deviceButton.current : menu.current?.querySelector('summary') ?? null;
     if (menu.current) menu.current.open = false;
+    onOpenDialog();
     setTool(next);
   }
   useEffect(() => {

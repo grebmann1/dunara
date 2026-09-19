@@ -103,6 +103,7 @@ test('Studio polish remains usable across desktop and phone layouts', async ({ p
     await page.getByRole('button', { name: 'Close import', exact: true }).click();
 
     await navigate('App Icons');
+    if (await page.getByRole('button', { name: 'Choose existing image', exact: true }).isVisible()) await page.getByRole('button', { name: 'Choose existing image', exact: true }).click();
     await expect(page.getByRole('combobox', { name: 'Icon source', exact: true })).toContainText('Choose an image');
     await capture('icons-empty');
     await page.getByRole('button', { name: 'Open asset library', exact: true }).click();
@@ -114,7 +115,7 @@ test('Studio polish remains usable across desktop and phone layouts', async ({ p
     await page.getByRole('button', { name: 'Open asset library', exact: true }).click();
     await expect(page.getByRole('heading', { level: 1, name: 'Assets', exact: true })).toBeVisible();
 
-    await navigate('Settings', 'OpenAI setup');
+    await navigate('Settings');
     await expect(page.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
     await capture('settings');
     const cancelKey = page.getByRole('button', { name: 'Cancel key entry', exact: true });

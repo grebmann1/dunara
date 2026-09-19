@@ -1,7 +1,9 @@
 import { test, expect } from '@playwright/test';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
-import { cp, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
+import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import os from 'node:os';
 import { createHash } from 'node:crypto';
 import { Processes, freePort } from '../../packages/core/src/processes.js';
@@ -12,16 +14,18 @@ let origin: string, fixtureRoot: string;
 const backend = 'https://abcdefghijklmnopqrst.supabase.co';
 test.use({ trace: 'off', actionTimeout: 20_000 });
 test.beforeAll(async () => {
-  test.setTimeout(120_000);
+  test.setTimeout(240_000);
   fixtureRoot = await mkdtemp(path.join(os.tmpdir(), 'builder-services-browser-'));
   await cp(templateRoot, fixtureRoot, { recursive: true, filter: source => !['node_modules', '.expo', 'dist'].includes(path.basename(source)) });
-  await symlink(path.join(templateRoot, 'node_modules'), path.join(fixtureRoot, 'node_modules'));
+  // A fresh OSS checkout has no dependencies installed inside the template.
+  // Exercise the generated app's own public lockfile in the disposable fixture.
+  await promisify(execFile)('npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund', '--registry=https://registry.npmjs.org'], { cwd: fixtureRoot, timeout: 120_000, env: { ...process.env, NPM_CONFIG_USERCONFIG: os.devNull } });
   const configPath = path.join(fixtureRoot, 'backend/configuration.json'), config = JSON.parse(await readFile(configPath, 'utf8'));
   config.auth.settings.external_google_enabled = true;
   await writeFile(configPath, JSON.stringify(config));
   const port = await freePort(); origin = `http://localhost:${port}`;
   let log = '';
-  processes.spawn(process.execPath, [path.join(templateRoot, 'node_modules/expo/bin/cli'), 'start', '--clear', '--web', '--go', '--localhost', '--port', String(port)], fixtureRoot, line => { log = (log + line).slice(-8000); }, { EXPO_PUBLIC_SUPABASE_URL: backend, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_browser_fixture', EXPO_PUBLIC_BUILDER_ENVIRONMENT: 'development' });
+  processes.spawn(process.execPath, [path.join(fixtureRoot, 'node_modules/expo/bin/cli'), 'start', '--clear', '--web', '--go', '--localhost', '--port', String(port)], fixtureRoot, line => { log = (log + line).slice(-8000); }, { EXPO_PUBLIC_SUPABASE_URL: backend, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_browser_fixture', EXPO_PUBLIC_BUILDER_ENVIRONMENT: 'development' });
   const deadline = Date.now() + 90_000;
   while (Date.now() < deadline) {
     try { if ((await fetch(origin, { signal: AbortSignal.timeout(3000) })).ok) return; } catch { /* Wait for the owned Metro server. */ }

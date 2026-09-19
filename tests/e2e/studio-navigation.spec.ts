@@ -59,6 +59,7 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   const preview = nav.getByRole('button', { name: 'Preview', exact: true });
   const assets = nav.getByRole('button', { name: 'Assets', exact: true });
   const settings = nav.getByRole('button', { name: 'Settings', exact: true });
+  const plugins = nav.getByRole('button', { name: 'Plugins', exact: true });
   await expect(preview).toBeEnabled();
   await expect(assets).toBeEnabled();
   await preview.focus();
@@ -73,6 +74,8 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
 
   await assets.focus();
   await page.keyboard.press('End');
+  await expect(plugins).toBeFocused();
+  await page.keyboard.press('ArrowUp');
   await expect(settings).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: 'OpenAI setup', exact: true })).toBeVisible();
@@ -81,7 +84,7 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   await page.keyboard.press('Home');
   await expect(preview).toBeFocused();
   await page.keyboard.press('ArrowUp');
-  await expect(settings).toBeFocused();
+  await expect(plugins).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(preview).toBeFocused();
   await page.keyboard.press('Space');

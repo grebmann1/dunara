@@ -110,7 +110,7 @@ export default function AccessibilityCheck() {
 
     const transport = new StdioClientTransport({ command: process.execPath, args: ['dist/packages/cli/src/index.js', '--workspace', projects.workspace, '--home', projects.home, '--trust-execution'], stderr: 'pipe' });
     client = new Client({ name: 'builder-e2e-client', version: '1' }); await client.connect(transport);
-    expect((await client.listTools()).tools).toHaveLength(46);
+    expect((await client.listTools()).tools).toHaveLength(65);
     const started = await client.callTool({ name: 'preview_start', arguments: { projectId: first.id } }, undefined, { timeout: 180_000 });
     const mcpPreview = previewSchema.parse(started.structuredContent); urls.push(mcpPreview.url!);
     const result = await client.callTool({ name: 'preview_capture', arguments: { projectId: first.id, route: '/progress', viewport: 'large' } });

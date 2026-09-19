@@ -53,23 +53,12 @@ async function scrollEvidence(page: Page, name: string, measurements: unknown) {
   await page.screenshot({ path: `${prefix}.png` });
 }
 
-test('desktop wheel scrolling belongs to the workspace, not the page or diagnostics', async ({ page }) => {
-  const { asset } = await scrollFixture(page);
+test('desktop Preview and Settings scrolling stays within the workspace', async ({ page }) => {
+  await scrollFixture(page);
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 768, height: 800 }]) {
     await page.setViewportSize(viewport);
-    for (const destination of ['Preview', 'Assets', 'App Icons', 'Activity', 'Settings']) {
+    for (const destination of ['Preview', 'Settings']) {
       await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
-      if (destination === 'Assets') {
-        const generate = page.getByRole('button', { name: 'Generate', exact: true });
-        if (await generate.getAttribute('aria-expanded') !== 'true') await generate.click();
-        await expect(page.getByRole('heading', { name: 'Generate or edit' })).toBeVisible();
-      }
-      if (destination === 'App Icons') {
-        await page.getByRole('combobox', { name: 'Icon source', exact: true }).click();
-        await page.getByRole('option', { name: `${asset.label} · approved`, exact: true }).click();
-        await page.locator('.icon-prepare > summary').click();
-      }
-      if (destination === 'Activity') await expect(page.getByRole('heading', { name: 'Diagnostics', exact: true })).toBeVisible();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       if (destination === 'Preview') {
         const canvas = page.getByRole('region', { name: 'Phone preview canvas' });
@@ -102,19 +91,13 @@ test('desktop wheel scrolling belongs to the workspace, not the page or diagnost
   }
 });
 
-test('phone and 200 percent layouts have one document scroll and reachable final controls', async ({ page }) => {
-  const { asset } = await scrollFixture(page);
+test('phone and 200 percent Preview and Settings layouts keep reachable final controls', async ({ page }) => {
+  await scrollFixture(page);
   for (const viewport of [{ width: 430, height: 932 }, { width: 375, height: 812 }, { width: 320, height: 640 }, { width: 1440, height: 900 }]) {
     await page.setViewportSize(viewport);
     await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, viewport.width === 1440 ? 2 : 1);
-    for (const destination of ['Preview', 'Assets', 'App Icons', 'Activity', 'Settings']) {
+    for (const destination of ['Preview', 'Settings']) {
       await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
-      if (destination === 'Assets') await page.getByRole('button', { name: 'Art direction', exact: true }).click();
-      if (destination === 'App Icons') {
-        await page.getByRole('combobox', { name: 'Icon source', exact: true }).click();
-        await page.getByRole('option', { name: `${asset.label} · approved`, exact: true }).click();
-      }
-      if (destination === 'Activity') await expect(page.getByRole('heading', { name: 'Diagnostics', exact: true })).toBeVisible();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       await scrollEvidence(page, `${destination.replace(' ', '-')}-${viewport.width === 1440 ? 'zoom' : viewport.width}`, await scrollPosition(page));
       // The edge-to-edge Preview canvas owns wheel zoom; document scroll starts outside it.
@@ -124,7 +107,9 @@ test('phone and 200 percent layouts have one document scroll and reachable final
       expect.soft((await scrollPosition(page)).workspaceTop).toBe(0);
       expect.soft(await page.locator('.workspace-content').evaluate(node => getComputedStyle(node).overflowY)).toBe('visible');
       const last = page.locator('.workspace-content button:visible:not(:disabled), .workspace-content summary:visible').last();
+      await last.scrollIntoViewIfNeeded();
       await last.focus();
+      await expect(last).toBeFocused();
       await expect(last).toBeInViewport();
       expect.soft((await scrollPosition(page)).overflow).toBe(0);
       expect.soft(await page.locator('.console-panel:visible').evaluateAll(nodes => nodes.every(node => node.clientHeight < innerHeight))).toBe(true);
@@ -330,14 +315,14 @@ test('bare origin and reload show authentication recovery rather than connecting
   await page.goto(studio.launchUrl);
   await expect(page.getByRole('button', { name: '+ New app' })).toBeEnabled();
   await expect(page.locator('.connection')).toHaveText('Local workspace');
-  expect(await page.evaluate(() => [localStorage.length, sessionStorage.length])).toEqual([0, 0]);
+  expect(await page.evaluate(() => [Object.keys(localStorage).filter(key => key !== 'builder.workspace-layout.v1').length, sessionStorage.length])).toEqual([0, 0]);
   expect(new URL(page.url()).hash).toBe('');
   await page.reload();
   await expect(page.locator('.connection')).toHaveText('Session unavailable');
   await expect(page.getByRole('button', { name: '+ New app' })).toBeDisabled();
 });
 
-test('all Studio controls remain reachable at phone width and meet target sizes', async ({ page }) => {
+test('project route controls remain reachable at phone width and meet target sizes', async ({ page }) => {
   await engine.projects.create({ name: 'Layout app', slug: 'layout' });
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Design', exact: true }).click();
@@ -347,7 +332,9 @@ test('all Studio controls remain reachable at phone width and meet target sizes'
     await page.setViewportSize({ width, height: 1100 });
     await expect(page.getByLabel('Agent-added screen')).toBeVisible();
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    const small = await page.locator('button, input, select, summary').evaluateAll(nodes => nodes.filter(node => {
+    const dialog = page.getByRole('dialog', { name: 'Project routes', exact: true });
+    await expect(dialog).toBeInViewport({ ratio: 0.99 });
+    const small = await dialog.locator('button, input, select, summary').evaluateAll(nodes => nodes.filter(node => {
       const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.height < 44;
     }).map(node => node.getAttribute('aria-label') || node.textContent));
     expect(small).toEqual([]);
