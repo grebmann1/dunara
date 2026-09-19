@@ -30,7 +30,7 @@ If a local write fails, Dunara restores its exact writes where possible. If inte
 
 ## Configure Dunara accounts
 
-Use a **different Supabase project** for Dunara accounts. Apply both files in `supabase/platform/migrations/` in filename order. Configure email-code delivery (`{{ .Token }}` in the Magic Link template), then set these variables for Dunara:
+Dunara account connectivity is optional. The account service and its tenant SQL are maintained in the separate cloud repository. Obtain the configured service’s public Supabase URL and publishable key from its operator, then set these variables locally:
 
 ```text
 BUILDER_ACCOUNT_SUPABASE_URL=https://YOUR_PLATFORM_REF.supabase.co
@@ -41,11 +41,9 @@ Settings → Dunara account sends and verifies the email code. Sign-in ensures o
 
 For an isolated local account service, `BUILDER_ACCOUNT_ALLOW_LOCAL=1` permits localhost Supabase. Do not use the app backend as the account service.
 
-The standalone metadata API runs with `node dist/packages/platform/src/main.js` after `npm run build`. It binds to `127.0.0.1:8788` by default; `HOST`, `PORT` and a comma-separated `BUILDER_PLATFORM_ORIGINS` configure deployment. Deploy behind HTTPS with an explicit origin allowlist. `/health` is public; `/v1/me`, `/v1/workspaces` and `/v1/workspaces/:id/apps` verify the platform account JWT and enforce membership through database policies. It never accepts local filesystem paths or executes generated code.
+The metadata API and platform SQL checks belong to the cloud repository. They are not started or deployed by this OSS checkout. Account sign-in does not upload application source or authorize backend mutations.
 
 ## Verification
-
-`npm run test:platform:sql` launches a disposable PostgreSQL 16 container, applies the platform migrations, tests tenant boundaries and idempotent imports, and tests the generated notes policies in a separate database. The container is removed after the run. These are real Postgres policy tests with a minimal Auth fixture, not hosted Supabase or physical-device evidence.
 
 Use `npm test` for contracts/services and `playwright test tests/e2e/backend-platform.spec.ts` after building for Studio integration. Provider responses in those suites are controlled fixtures. Live verification needs an allocated development project, configured email delivery and physical iOS/Android devices. No real provider project has been created by these tests.
 
@@ -57,7 +55,7 @@ All three operations require the conversation's local `projectId`:
 - `backend_capabilities({ projectId, environment? })`: reads prerequisites and timestamped read-permission evidence, defaulting to the active environment. Unknown grants remain unknown. It never probes writes or returns Auth/key values.
 - `backend_select_environment({ projectId, input: { environment, expectedRevision } })`: pass `environmentRevision` from `backend_inspect`. The app must still be selected in Studio. It stops the old preview; start again to load the chosen public settings. A stale request fails before changing the binding.
 
-`backend_inspect` also reports encrypted-storage state, local binding readiness and missing prerequisites. `credential_present` means only that a credential is loaded, not that Supabase accepted it. Linking, project creation and migrations still use `backend_plan` → `backend_apply` → human approval in Backend → `backend_operation`. No agent tool accepts raw management/SMTP secrets or approves remote execution. Auth/SMTP, private Storage, immutable Edge Functions, private inputs and reviewed development checks are implemented. See the [configuration workflow](supabase-configuration.md). Live provider and device acceptance remains in S9.
+`backend_inspect` also reports encrypted-storage state, local binding readiness and missing prerequisites. `credential_present` means only that a credential is loaded, not that Supabase accepted it. Linking, project creation and migrations still use `backend_plan` → `backend_apply` → human approval in Backend → `backend_operation`. No agent tool accepts raw management/SMTP secrets or approves remote execution. Auth/SMTP, private Storage, immutable Edge Functions, private inputs and reviewed development checks are implemented. See the [configuration workflow](supabase-configuration.md). Live provider and device acceptance remains separate from repository qualification.
 
 ## App services and hosted OAuth
 

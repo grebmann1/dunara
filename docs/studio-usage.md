@@ -143,19 +143,12 @@ Open **Connect a device → Start phone preview** for a local-network QR and a s
 
 ## Retained acceptance review and evidence
 
-The isolated local review project is `.builder/acceptance/apps/acceptance-review`, ID `15a6db34-9d2e-4641-bfb5-80a3ed2456c3`, with registry `.builder/acceptance/home`. It is separate from Outpost and not included in a clone. The existing authenticated review window may be used while its runtime lives. `.builder/acceptance/live-review.json` records non-secret origins/identity; its bare Studio origin cannot log you in.
-
-To stop the retained helper, read its PID from `live-review.json` and verify with `ps -p <pid> -o command=` that it still belongs to `.builder/acceptance/serve-review.mjs`. Then `kill -TERM <verified-pid>` gracefully closes its browser, Studio and owned Expo process. Do not kill unrelated Node/Expo processes. If you launched the regular CLI yourself, use Ctrl+C in its terminal instead.
-
-After stopping the retained review runtime, relaunch securely from the builder repository:
+For a fresh disposable review workspace, build the repository and run:
 
 ```sh
-node dist/packages/cli/src/index.js \
-  --workspace "$PWD/.builder/acceptance/apps" \
-  --home "$PWD/.builder/acceptance/home" \
-  --studio-only --trust-execution
+pnpm start --workspace "$PWD/.builder/review/apps" --home "$PWD/.builder/review/home" --studio-only --trust-execution
 ```
 
-See `docs/studio-acceptance.md` for each check's result and `docs/verification.md` for the dated evidence and remaining native, harness and qualitative-visual blockers. Passing web automation is not a production-readiness certification for every app or platform.
+Use the authenticated launch window and stop its runtime with Ctrl+C when finished. Test fixtures and captured artifacts are not included in a clone. See [verification](verification.md) for current evidence and the distinction between browser tests and physical-device qualification.
 
 Prepare an installable app from **Preview tools → Build setup**: review app identifiers, an optional existing Expo project link and development/preview profiles. See the [native build setup guide](native-build-setup.md) for user and agent steps, recovery and remaining signing/build prerequisites.

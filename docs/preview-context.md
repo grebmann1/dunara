@@ -68,7 +68,7 @@ These controls do not turn executable app content into a trusted authority. A ma
 
 ## Evidence and limits
 
-See the dated entry in `docs/verification.md`. Focused tests live in `apps/studio/src/preview-context.test.ts`, `packages/core/src/preview-bridge.test.ts`, `packages/core/src/preview-inspector.test.ts`, `packages/cli/src/preview-inspector.test.ts` and `tests/e2e/inspector.spec.ts`.
+See [verification](verification.md) for the qualification scope. Focused tests live in `apps/studio/src/preview-context.test.ts`, `packages/core/src/preview-bridge.test.ts`, `packages/core/src/preview-inspector.test.ts`, `packages/cli/src/preview-inspector.test.ts` and `tests/e2e/inspector.spec.ts`.
 
 The real Expo E2E reads the actual clipboard, inspects the copied project's current source through a real MCP client, revision-edits disposable source and observes Fast Refresh. That is protocol-level proof, **not a live Claude/Codex model trial**. Export checks cover web/iOS/Android bundles and production web inactivity, not native interaction or installed app appearance.
 

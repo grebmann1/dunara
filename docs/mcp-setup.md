@@ -44,7 +44,7 @@ claude mcp add --scope local --transport stdio mobile-builder -- \
 claude mcp list
 ```
 
-Check the server in the client's MCP UI before requesting an app. Claude Code 2.1.270 passed registration/health and a bounded, real model-driven trial: project creation, revision-checked source editing, design changes, preview, two visible image responses, a screenshot-driven refinement, diagnostics, and stop. The trial used the operator's existing Bedrock authentication, strict MCP configuration, an explicit builder-tool allowlist, and a separate workspace/home. It was one wellness customization, not a general app-quality certification. See `docs/verification.md` for evidence and a visual-comparison limitation caught during independent review.
+Check the server in the client's MCP UI before requesting an app. Canonical tool discovery and shared CLI/MCP behavior are covered by the fixture tests. A real agent session depends on that client's configured model and permissions. See [verification](verification.md) for current scope.
 
 ## Codex CLI
 
