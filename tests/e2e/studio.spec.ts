@@ -18,8 +18,10 @@ test.beforeEach(async () => {
   engine = new Engine(await Projects.open(path.join(dir, 'apps'), path.join(dir, 'home')), false);
   studio = await startStudio(engine, path.resolve('dist/studio'));
 });
-test.afterEach(async () => {
+test.afterEach(async ({ page }) => {
   if (process.env.VISUAL) return;
+  await page.unrouteAll({ behavior: 'wait' });
+  await page.close();
   await studio.close(); await engine.close(); await rm(dir, { recursive: true, force: true });
 });
 
@@ -417,6 +419,7 @@ test('capture retrieval distinguishes expired artifacts from retryable failures'
   await page.route('**/artifacts/expired', route => route.fulfill({ status: 404, json: { error: { message: 'Expired' } } }));
   await page.route('**/artifacts/retryable', route => failure === 'server' ? route.fulfill({ status: 500, body: 'Unavailable' }) : route.fulfill({ status: 200, contentType: 'image/png', body: failure === 'decode' ? 'Invalid PNG bytes' : png }));
   await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Design', exact: true }).click();
   await page.locator('.studio-console').getByRole('button', { name: 'Captures', exact: true }).click();
   await expect(page.locator('.studio-console').getByText('Screenshot expired', { exact: true })).toBeVisible();
   await expect(page.locator('.studio-console').getByText('Screenshot unavailable', { exact: true })).toBeVisible();
@@ -431,6 +434,16 @@ test('capture retrieval distinguishes expired artifacts from retryable failures'
   await thumbnail.click();
   const viewer = page.getByRole('dialog', { name: 'Capture · /habit · large', exact: true });
   await expect(viewer.getByRole('img', { name: 'Full capture of /habit · large' })).toHaveJSProperty('naturalWidth', 1);
+  for (const viewport of [{ width: 375, height: 812 }, { width: 430, height: 932 }, { width: 1440, height: 1100 }]) {
+    await page.setViewportSize(viewport);
+    // Allow the container's ResizeObserver and portal relocation to commit.
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(viewer).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'App design', exact: true })).toHaveCount(0);
+    await expect(viewer.getByRole('button', { name: 'Close dialog', exact: true })).toBeInViewport();
+    await page.screenshot({ path: test.info().outputPath(`capture-viewer-${viewport.width}.png`) });
+  }
+  await expect(viewer.getByRole('button', { name: 'Close dialog', exact: true })).toBeFocused();
   expect(page.context().pages()).toHaveLength(1);
   await page.keyboard.press('Escape');
   await expect(viewer).toBeHidden();

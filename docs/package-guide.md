@@ -4,6 +4,22 @@ Dunara keeps five public artifacts in the OSS repository: `@mobile-builder/plugi
 
 The first distribution uses versioned GitHub release archives, with SHA-256/SRI receipts and GitHub immutable releases. Public npm publishing is not configured. Package names and plugin API 1 are unchanged; installing an archive retains its package name. Candidate consumers install all five local archives together. Released consumers pin the exact release URLs and commit their lockfiles. Never use a branch or `latest` for production.
 
+## Install the release
+
+Use Node 24 and pin the coordinated 0.1.0 set in an independent project:
+
+```sh
+pnpm add \
+  https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-plugin-sdk-0.1.0.tgz \
+  https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-catalog-0.1.0.tgz \
+  https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-runtime-0.1.0.tgz \
+  https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-studio-0.1.0.tgz \
+  https://github.com/grebmann1/dunara/releases/download/v0.1.0/mobile-builder-execution-0.1.0.tgz
+pnpm exec mobile-builder --help
+```
+
+Commit the resulting lockfile. The [release receipt](https://github.com/grebmann1/dunara/releases/download/v0.1.0/release.json) records source identity and archive hashes. A website can consume only the catalogue; embedded Studio also needs its React peers.
+
 ## Runtime
 
 ```ts

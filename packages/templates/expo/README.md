@@ -23,4 +23,6 @@ Web screenshots and successful native exports do not replace testing on iOS and 
 
 Review code and dependencies before executing this project; development is not sandboxed. Pin dependency changes in `package-lock.json`. Dunara-managed previews support only the curated starter manifest/lock; changed stacks can still be developed independently.
 
+`metro.config.js` preserves Expo's defaults and excludes Dunara's `.mobile-builder.json` preferences and temporary write files from Metro. Changing a Studio route or phone size should not rebuild the app. Keep those exclusions when extending the Metro configuration.
+
 Original starter code is Apache-2.0; see LICENSE. Dependencies keep their own licenses and notices. Review their redistribution requirements before distributing your app.

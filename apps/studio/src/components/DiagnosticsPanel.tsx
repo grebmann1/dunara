@@ -22,15 +22,15 @@ export function DiagnosticLog({ state }: { state: StudioState }) {
     </div></section>;
 }
 
-export function CaptureHistory({ state, onLaunchKit, onCaptureOpen }: { state: StudioState; onLaunchKit(): void; onCaptureOpen?(): void }) {
+export function CaptureHistory({ state, onLaunchKit, onCaptureOpen, viewer }: { state: StudioState; onLaunchKit(): void; onCaptureOpen?(): void; viewer?: { id: string | null; onChange(id: string | null): void } }) {
   const [route, setRoute] = useState('all'), [size, setSize] = useState('all');
   const captures = state.captures.filter(capture => (route === 'all' || capture.route === route) && (size === 'all' || capture.viewport === size));
   return <section className="activity-detail-view" aria-label="Screenshot history"><div className="activity-filterbar"><h2>Screenshot history</h2><FieldSelect label="Capture route" value={route} onValueChange={setRoute} options={[{ value: 'all', label: 'All routes' }, ...[...new Set(state.captures.map(capture => capture.route))].map(value => ({ value, label: value }))]} /><FieldSelect label="Capture size" value={size} onValueChange={setSize} options={[{ value: 'all', label: 'All sizes' }, { value: 'compact', label: 'Compact' }, { value: 'large', label: 'Large' }]} /></div>
-    <div className="activity-scroll">{captures.length ? <div className="capture-grid">{captures.map(capture => <Thumbnail onOpen={onCaptureOpen} projectId={state.project.id} key={capture.id} id={capture.id} label={`${capture.route} · ${capture.viewport}`} />)}</div> : <div className="activity-empty"><strong>{state.captures.length ? 'No matching captures' : 'No captures yet'}</strong><p>Capture a route in Preview to see it here.</p>{!!state.captures.length && <Button variant="outline" onClick={() => { setRoute('all'); setSize('all'); }}>Clear filters</Button>}</div>}</div>
+    <div className="activity-scroll">{captures.length ? <div className="capture-grid">{captures.map(capture => <Thumbnail onOpen={onCaptureOpen} open={viewer ? viewer.id === capture.id : undefined} onOpenChange={viewer ? open => viewer.onChange(open ? capture.id : null) : undefined} projectId={state.project.id} key={capture.id} id={capture.id} label={`${capture.route} · ${capture.viewport}`} />)}</div> : <div className="activity-empty"><strong>{state.captures.length ? 'No matching captures' : 'No captures yet'}</strong><p>Capture a route in Preview to see it here.</p>{!!state.captures.length && <Button variant="outline" onClick={() => { setRoute('all'); setSize('all'); }}>Clear filters</Button>}</div>}</div>
     <footer className="media-workspace-footer"><span>Web renders, retained for one hour. Native review is still needed.</span><Button variant="outline" onClick={onLaunchKit}>Prepare Launch Kit</Button></footer>
   </section>;
 }
-export function Thumbnail({ projectId, id, label, onOpen }: { projectId: string; id: string; label: string; onOpen?: () => void }) {
+export function Thumbnail({ projectId, id, label, onOpen, open, onOpenChange }: { projectId: string; id: string; label: string; onOpen?: () => void; open?: boolean; onOpenChange?(open: boolean): void }) {
   const { image } = useStudioClient();
   const [src, setSrc] = useState(''); const [error, setError] = useState(''); const [attempt, setAttempt] = useState(0);
   useEffect(() => {
@@ -39,7 +39,7 @@ export function Thumbnail({ projectId, id, label, onOpen }: { projectId: string;
     void image(projectId, id).then(value => { url = value; if (disposed) URL.revokeObjectURL(value); else setSrc(value); }).catch(e => { if (!disposed) setError(e instanceof Error && e.message === 'Screenshot expired' ? e.message : 'Screenshot unavailable'); });
     return () => { disposed = true; URL.revokeObjectURL(url); };
   }, [projectId, id, attempt]);
-  return <figure>{src ? <Dialog onOpenChange={open => { if (open) onOpen?.(); }}>
+  return <figure>{src ? <Dialog open={open} onOpenChange={next => { onOpenChange?.(next); if (next) onOpen?.(); }}>
     <DialogTrigger asChild><Button variant="ghost" className="capture-thumbnail" aria-label={`Open capture of ${label}`}><img src={src} alt={`Capture of ${label}`} onError={() => { setSrc(''); setError('Screenshot unavailable'); }} /></Button></DialogTrigger>
     <DialogContent className="capture-viewer" data-capture-viewer>
       <DialogTitle>Capture · {label}</DialogTitle>

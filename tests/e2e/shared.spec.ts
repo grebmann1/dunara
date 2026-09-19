@@ -162,7 +162,7 @@ test('one Engine: real MCP edits, Studio preview/design/captures and shared stop
     await expect(frame.getByText('Unmatched Route', { exact: false })).toBeVisible();
     await selectProject(page, second.id);
     await expect(page.locator('.preview-caption')).toHaveCount(1);
-    await expect(page.locator('.preview-caption')).toContainText('· /');
+    await expect(page.locator('.preview-caption')).toHaveText('Home · Stopped · 375 × 812 · Opens /');
     await expect(page.getByRole('button', { name: 'Start preview' })).toBeVisible();
     await openProjectRoutes(page);
     await expect(page.getByLabel('Agent-added screen')).toHaveValue('');

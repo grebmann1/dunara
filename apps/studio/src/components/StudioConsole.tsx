@@ -1,4 +1,4 @@
-import { useId, useLayoutEffect, useRef } from 'react';
+import { useId, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Camera, ChevronDown, ChevronUp, Terminal, X } from 'lucide-react';
 import type { StudioState } from '../api';
@@ -12,6 +12,9 @@ export function StudioConsole({ state, panel, onPanel: setPanel, onLaunchKit, on
   const dock = useDock();
   const diagnosticsButton = useRef<HTMLButtonElement>(null), capturesButton = useRef<HTMLButtonElement>(null);
   const focusAfterOpen = useRef<Panel | null>(null);
+  // The console changes portal hosts at phone widths. Keep the viewer selection
+  // outside that remounted subtree so resizing does not dismiss an open capture.
+  const [captureId, setCaptureId] = useState<string | null>(null);
   const id = useId(), errors = state.diagnostics.entries.filter(entry => entry.level === 'error').length;
   const toggle = (next: Panel) => { if (panel === next) collapse(); else { focusAfterOpen.current = next; setPanel(next); } };
   useLayoutEffect(() => {
@@ -31,7 +34,7 @@ export function StudioConsole({ state, panel, onPanel: setPanel, onLaunchKit, on
       {panel && <><DockMenu id="console" /><Button variant="ghost" className="console-close" aria-label="Collapse console" title="Collapse console" onClick={collapse}><X aria-hidden /></Button></>}
     </div>
     <div id={`${id}-diagnostics`} className="console-panel" hidden={panel !== 'diagnostics'}>{panel === 'diagnostics' && <DiagnosticLog state={state} />}</div>
-    <div id={`${id}-captures`} className="console-panel" hidden={panel !== 'captures'}>{panel === 'captures' && <CaptureHistory state={state} onCaptureOpen={onCaptureOpen} onLaunchKit={() => { setPanel(null); onLaunchKit(); }} />}</div>
+    <div id={`${id}-captures`} className="console-panel" hidden={panel !== 'captures'}>{panel === 'captures' && <CaptureHistory state={state} viewer={{ id: captureId, onChange: setCaptureId }} onCaptureOpen={onCaptureOpen} onLaunchKit={() => { setPanel(null); onLaunchKit(); }} />}</div>
   </footer>;
   return dock.desktop && panel && dock.hosts.console ? createPortal(content, dock.hosts.console) : content;
 }

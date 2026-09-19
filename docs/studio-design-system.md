@@ -89,6 +89,6 @@ Review and cancellation links open and focus the exact request disclosure in Ass
 
 ## Verification
 
-Run `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm test:visual`, and `pnpm test:website`. Never update screenshots blindly. `tests/e2e/studio-design-system.spec.ts` supplements existing Studio, Settings, Inspector and shared-runtime regressions with responsive draft, creation focus, long-list/touch popup and project-free Settings checks.
+Run `pnpm lint`, `pnpm typecheck`, `pnpm build`, `pnpm test`, `pnpm test:e2e`, `pnpm test:visual`. The separate website repository owns its own `pnpm test` gate. Never update screenshots blindly. `tests/e2e/studio-design-system.spec.ts` supplements existing Studio, Settings, Inspector and shared-runtime regressions with responsive draft, creation focus, long-list/touch popup and project-free Settings checks.
 
-All fixtures use disposable projects; no real provider credential or paid call is needed. Preserve the 64-file Outpost/website/artwork/Bonsai manifest before and after. Leave the user's live shared runtime alone. Human VoiceOver, physical trackpad behavior and aesthetic approval must be reported separately from automated browser checks.
+All fixtures use disposable projects; no real provider credential or paid call is needed. Preserve unrelated artwork and generated app content. Leave the user's live shared runtime alone. Human VoiceOver, physical trackpad behavior and aesthetic approval must be reported separately from automated browser checks.

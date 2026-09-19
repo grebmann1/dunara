@@ -96,6 +96,8 @@ The payload describes rendered web elements, not verified React component owners
 - Diagnostics contain bounded process/capture logs, not continuous logs from every visible iframe interaction. Registry, source and design survive restart; previews, capture history and diagnostics are runtime-scoped. The starter's habit state is intentionally in memory. Outpost has separate web-origin persistence, not guaranteed native persistence.
 - Managed previews reject changed dependency manifests/lockfiles. Work independently if your app needs new dependencies; manually installing them does not bypass this check.
 
+New starters include a Metro configuration that excludes `.mobile-builder.json` and Dunara's temporary writes. Older apps may rebuild when Studio saves route or phone preferences; with Expo 57, a queued update during iframe navigation can interrupt Fast Refresh. Stop and restart the preview to recover. For a lasting fix, review [the starter Metro configuration](../packages/templates/expo/metro.config.js) and merge its two `resolver.blockList` entries into the app's existing configuration, preserving its other options. An agent should inspect the existing file and propose a revision-checked edit. Do not overwrite a customized Metro configuration or move the app's metadata.
+
 ## Independent app and native use
 
 ### Open an existing managed preview in the iOS Simulator
