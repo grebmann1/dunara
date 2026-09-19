@@ -445,6 +445,8 @@ test('task checklists update live, survive stopping and reload, and Continue sta
   await panel.getByRole('button', { name: 'Build this plan' }).click(); await message.press('Enter');
   await expect(panel.locator('.assistant-tasks').last()).toContainText('1 of 3 complete');
   await expect(panel.locator('.assistant-tasks').last().getByText('In progress', { exact: true })).toBeVisible();
+  // Task events may render before the fixture's awaited tool call returns.
+  await expect.poll(() => typeof advance).toBe('function');
   await advance(); await expect(panel.locator('.assistant-tasks').last()).toContainText('2 of 3 complete');
   await page.screenshot({ path: test.info().outputPath('tasks-live-1440.png') });
   await panel.getByRole('button', { name: 'Stop turn' }).click();
