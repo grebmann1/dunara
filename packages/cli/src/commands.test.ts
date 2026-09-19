@@ -64,7 +64,9 @@ it('runs JSON CLI commands against the same authenticated Studio and Engine', as
   expect((await command('call', 'activity_list', '--input', JSON.stringify({ projectId: project.id }))).structuredContent.captures).toEqual([]);
   expect((await command('resource', 'builder://projects')).contents).toHaveLength(1);
   expect(engine.previews.status(project.id).status).toBe('stopped'); expect(engine.mediaJobs.providerStatus().configured).toBe(false);
-}, 30_000);
+// Seven independent CLI processes share this test budget on slower CI runners.
+// Each command still has its own 15-second deadline.
+}, 60_000);
 it('returns nonzero JSON errors for conflicts and prevents competing runtimes or approval bypasses', async () => {
   await engine.projects.create({ name: 'Errors', slug: 'errors' });
   const state = await engine.studio.snapshot(); await engine.studio.control({ expectedRevision: state.revision, action: { type: 'navigate', workspace: 'activity' } });
