@@ -55,6 +55,7 @@ Explicit subpaths:
 | `/resources` | Installed Studio, template and bundled-plugin paths |
 | `/preview` | Execution-driver types, dependency preflight and source revision helper |
 | `/source` | Bounded source snapshots, checkpoints and portable lockfiles |
+| `/durable-projects` | Project persistence contract, bounded snapshot validation and empty-cache hydration |
 | `/accounts`, `/backend-oauth` | Generic account and OAuth clients |
 | `/backend-contracts`, `/backend-configuration`, `/oauth-contracts` | Backend schemas and protocol validators |
 | `/supabase`, `/storage-api` | Provider clients |
@@ -62,6 +63,8 @@ Explicit subpaths:
 | `/testing` | Port allocation for disposable fixtures |
 
 The runtime includes the complete curated templates and bundled plugins. Generated Expo projects contain neither runtime imports nor a requirement to sign into Dunara. Optional Assistant harness packages may be absent; ordinary local building and previewing remain usable. Sharp’s platform binaries are required for media operations; do not disable all optional npm dependencies globally.
+
+An optional `projectPersistence` adapter on `createBuilderRuntime` (or the third argument to `Projects.open`) makes the project mutation queue await an external durable commit before returning success. The adapter is bound by the host to one authorized owner and implements `load` and revision-checked, idempotent `commit`. Source bytes, assets and project metadata restore into **empty disposable** workspace/home directories; existing directories are never overwritten. Failed or ambiguous commits invalidate that cache until the host reopens it from saved state. This project contract does not persist Assistant history, credentials, operation ledgers or other home-directory state; hosts must supply those durability boundaries before claiming complete workspace recovery.
 
 ## Studio
 

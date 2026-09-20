@@ -1,5 +1,7 @@
 import { Engine } from '../../core/src/engine.js';
 import { Projects } from '../../core/src/projects.js';
+import type { ProjectWorkspacePersistence } from '../../core/src/durable-projects.js';
+export type { ProjectWorkspacePersistence, ProjectWorkspaceSnapshot, ProjectWorkspaceHead, DurableProject } from '../../core/src/durable-projects.js';
 export { Engine, Projects };
 export { Diagnostics } from '../../core/src/diagnostics.js';
 export type { PreviewDriver } from '../../core/src/preview-driver.js';
@@ -12,10 +14,11 @@ export interface RuntimeOptions {
   lan?: boolean;
   services?: ConstructorParameters<typeof Engine>[7];
   host?: RuntimeHost;
+  projectPersistence?: ProjectWorkspacePersistence;
 }
 /** Construct one builder with a host-owned execution driver. Importing this module starts nothing. */
 export async function createBuilderRuntime(options: RuntimeOptions): Promise<Engine> {
-  const projects = await Projects.open(options.workspace, options.home);
+  const projects = await Projects.open(options.workspace, options.home, options.projectPersistence);
   const engine = new Engine(projects, options.trustExecution ?? false, options.lan ?? false, undefined, {}, {}, undefined, options.services, options.host);
   try { await engine.plugins.ready; return engine; }
   catch (error) { await engine.close(); throw error; }

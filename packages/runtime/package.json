@@ -1,5 +1,5 @@
 {
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "license": "Apache-2.0",
   "engines": {
@@ -20,6 +20,10 @@
     "mobile-builder": "dist/packages/cli/src/index.js"
   },
   "exports": {
+    "./durable-projects": {
+      "types": "./dist/packages/core/src/durable-projects.d.ts",
+      "import": "./dist/packages/core/src/durable-projects.js"
+    },
     ".": {
       "types": "./dist/packages/runtime/src/index.d.ts",
       "import": "./dist/packages/runtime/src/index.js"

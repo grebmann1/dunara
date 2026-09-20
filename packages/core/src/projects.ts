@@ -4,7 +4,9 @@ import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { BuilderError, createSchema, projectSchema, type Project } from './contracts.js';
-import { atomicWrite, canonicalDirectory, exists, noSymlinks, readText, SerialQueue } from './storage.js';
+import { atomicWrite, canonicalDirectory, exists, noSymlinks, readText } from './storage.js';
+import { ProjectDurability, ProjectTransactions, type ProjectWorkspacePersistence, type ProjectWorkspaceSnapshot } from './durable-projects.js';
+import { snapshotSource } from './source.js';
 import { presets } from '../../templates/src/catalog.js';
 import { defaultStudio, projectMetadataSchema, recipeApplicationSchema, type StudioPreferences } from './studio-contracts.js';
 import type { JourneyPreferences } from './journey-contracts.js';
@@ -13,14 +15,30 @@ export const projectMetadataFile = '.mobile-builder.json';
 export const templateRoot = fileURLToPath(new URL('../../templates/expo/', import.meta.url));
 
 export class Projects {
-  readonly mutations = new SerialQueue();
-  private constructor(readonly workspace: string, readonly home: string) {}
-  static async open(workspace: string, home: string) {
-    const service = new Projects(await canonicalDirectory(workspace), await canonicalDirectory(home));
+  readonly mutations: ProjectTransactions;
+  private constructor(readonly workspace: string, readonly home: string, durability?: ProjectDurability) {
+    this.mutations = new ProjectTransactions(durability ? async () => durability.commit(await this.snapshot()) : undefined);
+  }
+  static async open(workspace: string, home: string, persistence?: ProjectWorkspacePersistence) {
+    const durability = persistence ? new ProjectDurability(persistence) : undefined;
+    const service = new Projects(await canonicalDirectory(workspace), await canonicalDirectory(home), durability);
     if (service.workspace === service.home || service.home.startsWith(service.workspace + path.sep)) throw new BuilderError('INVALID_PATH', 'Dunara home must be outside the generated workspace');
+    await durability?.restore(service.workspace, service.home);
     return service;
   }
+  private async snapshot(): Promise<ProjectWorkspaceSnapshot> {
+    const projects = [];
+    for (const record of await this.records()) {
+      await this.validate(record);
+      const { root, ...project } = record;
+      const source = await snapshotSource(root);
+      const metadata = await readText(path.join(root, projectMetadataFile), 16_384);
+      projects.push({ project, files: [...source.files, { path: projectMetadataFile, content: Buffer.from(metadata) }] });
+    }
+    return { version: 1, projects };
+  }
   private async records(): Promise<Project[]> {
+    this.mutations.assertAvailable();
     const registry = path.join(this.home, 'projects.json');
     if (!(await exists(registry))) return [];
     return z.array(projectSchema).max(200).parse(JSON.parse(await readText(registry)));
@@ -33,6 +51,9 @@ export class Projects {
     return project;
   }
   async catalog() {
+    return this.mutations.read(() => this.catalogUnlocked());
+  }
+  private async catalogUnlocked() {
     const projects: Project[] = [], unavailable: UnavailableProject[] = [];
     for (const project of await this.records()) {
       try { await this.metadata(project); projects.push(project); }
@@ -57,6 +78,9 @@ export class Projects {
     });
   }
   async get(id: string) {
+    return this.mutations.read(() => this.getUnlocked(id));
+  }
+  private async getUnlocked(id: string) {
     const project = (await this.records()).find(p => p.id === id);
     if (!project) throw new BuilderError('PROJECT_NOT_FOUND', 'No registered project with this ID');
     return this.validate(project);
@@ -101,6 +125,9 @@ export class Projects {
   }
   // Call under mutations; the dotfile is deliberately outside generic source-file writes.
   async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {
+    return this.mutations.run(() => this.writeMetadataUnlocked(project, studio, applications, journey));
+  }
+  private async writeMetadataUnlocked(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {
     await this.validate(project);
     const file = path.join(project.root, projectMetadataFile);
     await noSymlinks(project.root, file);
