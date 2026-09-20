@@ -1,0 +1,34 @@
+.assistant-setup { margin: 10px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--background); font-size: 12px; overflow-wrap: anywhere; }
+.assistant-setup > summary { display: flex; align-items: center; gap: 9px; padding: 11px 12px; cursor: pointer; font-weight: 600; list-style: none; }
+.assistant-setup > summary::-webkit-details-marker { display: none; }
+.assistant-setup > summary::after { content: '+'; margin-left: auto; }
+.assistant-setup[open] > summary::after { content: '−'; }
+.assistant-setup summary small { display: block; color: var(--muted-foreground); font-size: 11px; font-weight: 400; margin-top: 2px; }
+.assistant-setup-body { padding: 0 12px 12px; display: grid; gap: 10px; min-width: 0; }
+.assistant-setup-body p { margin: 0; line-height: 1.5; }
+.assistant-setup-body fieldset { min-width: 0; border: 0; padding: 0; display: grid; gap: 10px; }
+.assistant-setup-body label { display: grid; gap: 5px; }
+.assistant-setup-body select { width: 100%; min-width: 0; height: 34px; border: 1px solid var(--border); border-radius: 6px; background: var(--background); padding: 0 8px; font: inherit; }
+.assistant-setup-body .backend-check { display: flex; align-items: center; gap: 7px; }
+.assistant-setup-body .settings-section, .assistant-setup-body .backend-card, .assistant-setup-body .backend-private-input { margin: 0; padding: 10px; border-radius: 8px; min-width: 0; }
+.assistant-setup-body .backend-heading { flex-wrap: wrap; gap: 6px; }
+.assistant-setup-body h2, .assistant-setup-body h3, .assistant-setup-body h4 { font-size: 12px; margin: 0 0 6px; }
+.assistant-setup-body .backend-actions, .assistant-setup-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.assistant-setup-body button { max-width: 100%; white-space: normal; height: auto; min-height: 32px; font-size: 12px; }
+.assistant-setup-body input:not([type=checkbox]) { font-size: 12px; min-width: 0; width: 100%; }
+.assistant-setup-body pre { max-width: 100%; overflow: auto; font-size: 11px; }
+.assistant-setup-steps { display: flex; gap: 10px; padding: 0; margin: 0; list-style: none; font-size: 11px; color: var(--muted-foreground); }
+.assistant-setup-steps [data-done=true] { color: var(--foreground); font-weight: 600; }
+.assistant-setup-target { padding: 7px 9px; background: var(--surface); border-radius: 6px; font-size: 11px; }
+.assistant-setup-link { color: var(--primary); text-decoration: underline; cursor: pointer; background: none; border: 0; padding: 0; }
+.assistant-setup-privacy { color: var(--muted-foreground); line-height: 1.5; }
+.assistant-setup-menu { margin-bottom: 6px; font-size: 11px; color: var(--muted-foreground); }
+.assistant-setup-menu summary { cursor: pointer; }
+.assistant-setup-menu > div { display: flex; flex-wrap: wrap; gap: 4px; padding-top: 4px; }
+
+.assistant-setup > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 9px; }
+.assistant-conversation:has(.assistant-setup:focus-within) .assistant-jump { visibility: hidden; }
+.assistant-panel:has(.assistant-setup[open]) .assistant-composer textarea { min-height: 42px; max-height: 80px; }
+@media (max-width: 800px) {
+  .assistant-setup-body button { min-height: 44px; }
+}

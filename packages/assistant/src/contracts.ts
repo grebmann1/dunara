@@ -26,6 +26,13 @@ export const assistantTasksSchema = z.array(z.object({
   .refine(tasks => tasks.filter(task => task.status === 'in_progress').length <= 1, 'Only one task may be in progress');
 export const taskUpdateSchema = z.object({ tasks: assistantTasksSchema }).strict();
 export type AssistantTask = z.infer<typeof assistantTasksSchema>[number];
+// Values use authenticated Studio forms; only public routing metadata enters chat.
+export const setupRequestSchema = z.object({
+  kind: z.enum(['supabase', 'app_openai']),
+  environment: z.enum(['development', 'staging', 'production']).default('development'),
+}).strict();
+export const storedSetupRequestSchema = setupRequestSchema.extend({ projectId: z.uuid() });
+export type AssistantSetupRequest = z.infer<typeof storedSetupRequestSchema>;
 export const storedTurnSchema = z.object({
   id: z.uuid(), epoch: z.uuid(), state: turnStateSchema, provider: assistantProviderSchema.optional(), model: z.string().max(100).optional(), mode: assistantModeSchema.optional(),
   projectId: z.uuid().nullable().optional(),
@@ -37,6 +44,7 @@ export const storedTurnSchema = z.object({
   images: z.array(imageReferenceSchema.extend({ description: z.string().max(2048), status: z.enum(['requested', 'adapter-accepted', 'blocked']) }).strict()).max(2).optional(),
   imageContentAccepted: z.boolean().optional(),
   tasks: assistantTasksSchema.optional(),
+  setupRequests: z.array(storedSetupRequestSchema).max(6).optional(),
 }).strict();
 export type StoredTurn = z.infer<typeof storedTurnSchema>;
 export const conversationSchema = z.object({

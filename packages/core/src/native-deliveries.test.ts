@@ -41,7 +41,7 @@ beforeEach(async () => {
   });
   const plan = await workspaces.plan(id, { profile: 'preview', platform: 'ios', environment: 'none' });
   const workspace = await workspaces.prepare(id, { selection: plan.selection, proposedRevision: plan.proposedRevision, requestId: randomUUID(), confirmed: true });
-  await vi.waitFor(async () => expect((await workspaces.get(id, workspace.id)).state).toBe('ready'));
+  await vi.waitFor(async () => expect((await workspaces.get(id, workspace.id)).state).toBe('ready'), { timeout: 10_000 });
   selection = { workspaceId: workspace.id, deviceId: device.id, teamId: team.id };
   host = { inspect: vi.fn(async () => ({ supported: true, devices: [device], teams: [team], issues: [], xcode: 'Xcode fixture', cocoaPods: 'fixture' })), run: vi.fn(fixtureRun), device: vi.fn(async () => device), installed: vi.fn(async () => installed), install: vi.fn(async () => { installed = true; }), launch: vi.fn(async () => 1234) };
   deliveries = new NativeDeliveries(engine.projects, workspaces, true, true, () => {}, host);

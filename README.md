@@ -86,7 +86,7 @@ The built-in journey keeps the next step close without covering your canvas. The
 
 **Design you can inspect.** Use presets and tokens, compare screen sizes, capture views and share Inspector context with your agent. Review generated or imported artwork before placing it in your app.
 
-**A backend you can review.** Connect Supabase, choose environments and stage configuration changes for approval. Enter private credentials through Studio's dedicated settings. [Set up Supabase →](docs/backend-setup.md)
+**A backend you can review.** Connect Supabase, choose environments and stage configuration changes for approval. Guided chat cards accept backend and app OpenAI credentials through private fields, outside messages and model context. [Private setup in chat →](docs/assistant-setup.md)
 
 **Source you can own.** Download source, assets, configuration, lockfiles and backend files. Dependencies, generated output, credentials and local Studio history stay out of the ZIP. Export does not sign an app or publish it to a store. [See what is included →](docs/project-export.md)
 

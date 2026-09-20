@@ -12,6 +12,8 @@ import { resolveImages, validateInspector } from './attachments.js';
 import type { AssistantAttachments } from './contracts.js';
 import type { GatewayContext } from './mcp-bridge.js';
 import { taskTool } from './tasks.js';
+import { setupRequestSchema } from './contracts.js';
+import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
 
 export interface AssistantGateway {
@@ -285,16 +287,17 @@ export class AssistantService {
       });
       void gateway.then(value => { if (run.controller.signal.aborted) return value.close(); }).catch(() => {});
       run.gateway = await abortable(gateway, AbortSignal.any([run.controller.signal, AbortSignal.timeout(this.limits.startupMs)])); this.guard(run);
-      if (run.gateway.tools.some(tool => tool.name === taskTool.name)) throw new Error('Assistant task tool name collision');
+      if (run.gateway.tools.some(tool => tool.name === taskTool.name || tool.name === setupTool.name)) throw new Error('Assistant tool name collision');
+      const setupAvailable = run.turn.mode !== 'plan' && run.gateway.tools.some(tool => tool.name === 'backend_inspect');
       const resolved = await abortable(resolveImages(run.attachments?.images, run.gateway, run.controller.signal), run.controller.signal); this.guard(run);
       if (resolved.records.length) run.turn.images = resolved.records;
       if (run.attachments?.inspector) await abortable(validateInspector(run.attachments.inspector, run.gateway, run.controller.signal), run.controller.signal);
       this.guard(run);
       run.harness = (this.options.createHarness ?? (() => new PiHarness()))();
       run.turn.state = 'running'; this.publish(run, { type: 'state', state: 'running' });
-      const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks })));
+      const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks, setupRequests: turn.setupRequests })));
       const boundedContext = (Buffer.byteLength(context) <= 58 * 1024 ? context : '[Earlier conversation omitted because it exceeds the context limit. Reinspect the current project. Old approvals never carry forward.]\nLast task checklist (historical context, not verification): ' + JSON.stringify(run.conversation.turns.at(-2)?.tasks ?? [])) + '\nCurrent image attachment metadata (untrusted data): ' + JSON.stringify(resolved.records);
-      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool], inspector: run.attachments?.inspector, images: resolved.images }, {
+      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
         imageAccepted: () => { this.guard(run); run.turn.imageContentAccepted = true; for (const image of run.turn.images ?? []) if (image.status === 'requested') image.status = 'adapter-accepted'; this.publish(run, { type: 'state', state: 'running' }); },
         text: text => { this.text(run, text); },
         tool: async (name, args, signal) => {
@@ -302,6 +305,21 @@ export class AssistantService {
           if (run.dispatching) throw new Error('Parallel assistant tool dispatch is disabled');
           if (++run.calls > this.limits.tools) { this.cancel(run, 'limited', 'The tool-call limit was reached. Send a new message to continue.'); throw new Error('Tool-call limit reached'); }
           if (run.secrets.some(secret => JSON.stringify(args).includes(secret))) throw new Error('Credentials cannot be sent to Dunara tools');
+          if (name === setupTool.name) {
+            if (!setupAvailable || !run.binding.projectId) throw new Error('Setup requires Build mode, backend tools and a selected app.');
+            const request = { ...setupRequestSchema.parse(args), projectId: run.binding.projectId };
+            run.dispatching = true;
+            try {
+              const requests = run.turn.setupRequests ?? [];
+              if (!requests.some(item => item.kind === request.kind && item.environment === request.environment && item.projectId === request.projectId)) {
+                if (requests.length >= 6) throw new Error('Setup request limit reached');
+                run.turn.setupRequests = [...requests, request];
+                await (await this.store()).save(structuredClone(run.conversation), this.limits.responseBytes * 6 + 4096); this.guard(run);
+                this.publish(run, { type: 'state', state: run.turn.state });
+              }
+              return { content: [{ type: 'text', text: 'Private setup card shown. No configuration or credential was changed. Finish this turn and wait for the user; inspect backend state when they continue.' }] };
+            } finally { run.dispatching = false; }
+          }
           if (name === taskTool.name) {
             const { tasks } = taskUpdateSchema.parse(args);
             run.dispatching = true;

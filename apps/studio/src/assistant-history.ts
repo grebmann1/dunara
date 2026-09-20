@@ -15,6 +15,7 @@ export function conversationMarkdown(conversation: Conversation) {
       lines.push('');
     }
     if (turn.tools.length) lines.push('### Actions', '', ...turn.tools.map(tool => `- ${tool.name}: ${tool.state}`), '');
+    if (turn.setupRequests?.length) lines.push('### Private setup requested', '', ...turn.setupRequests.map(request => `- ${request.kind === 'supabase' ? 'Supabase connection' : 'App OpenAI key'} · ${request.environment}`), '', 'These are historical requests, not completion evidence. Check current setup in Studio. Private values are not part of chat history.', '');
     if (turn.notice) lines.push(`Status: ${turn.notice}`, '');
     if (turn.images?.length) lines.push('Image attachments are referenced in Studio and are not embedded in this export.', '');
     lines.push(`Started: ${turn.startedAt}${turn.endedAt ? ` · Ended: ${turn.endedAt}` : ''}`, '', '---', '');

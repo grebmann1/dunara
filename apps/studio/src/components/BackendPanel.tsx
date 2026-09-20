@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Database, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Backends } from '../../../../packages/core/src/backends';
 import { anyBackendPlan, type BackendPlan } from '../../../../packages/core/src/backend-contracts';
@@ -18,6 +18,7 @@ const stateLabels: Record<Operation['state'], string> = { awaiting_approval: 'Ne
 
 export function SupabaseSettings({ disabled, onConnected, compact = false }: { disabled: boolean; onConnected?: () => Promise<void>; compact?: boolean }) {
   const { api, capabilities } = useStudioClient();
+  const fieldId = useId(), privacyId = useId();
   const [status, setStatus] = useState<ReturnType<Backends['status']>>();
   const [remember, setRemember] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const token = useRef<HTMLInputElement>(null), alive = useRef(true), operating = useRef(false);
@@ -43,9 +44,9 @@ export function SupabaseSettings({ disabled, onConnected, compact = false }: { d
     {!compact && <p>Connect your account, then choose a project for your app.</p>}
     <details className="supabase-token-help"><summary>How to get a Supabase token</summary><ol className="supabase-connect-steps"><li><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Open Supabase <ExternalLink size={14} aria-hidden /></a> and sign in or create an account.</li><li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noreferrer">Create a personal access token <ExternalLink size={14} aria-hidden /></a>, give it a name such as “Dunara”, and copy it.</li><li>Paste the token below and save your connection. Next, choose an existing project or create one.</li></ol></details>
     <form autoComplete="off" onSubmit={event => { event.preventDefault(); void update('connect'); }}><fieldset disabled={disabled || busy || !status || status.busy || status.encryption.state === 'unavailable'}>
-      <label htmlFor="supabase-management-token">Personal access token</label>
-      <Input id="supabase-management-token" ref={token} type="password" required minLength={16} maxLength={4096} autoComplete="off" spellCheck={false} autoCapitalize="none" aria-describedby="supabase-privacy" />
-      <p id="supabase-privacy">Kept private in Dunara. Never shared with your app or the Assistant.</p>
+      <label htmlFor={fieldId}>Personal access token</label>
+      <Input id={fieldId} ref={token} type="password" required minLength={16} maxLength={4096} autoComplete="off" spellCheck={false} autoCapitalize="none" aria-describedby={privacyId} />
+      <p id={privacyId}>Kept private in Dunara. Never shared with your app or the Assistant.</p>
       <label className="backend-check"><input type="checkbox" checked={remember} disabled={!status?.rememberAvailable} onChange={event => setRemember(event.target.checked)} />Remember with encrypted storage</label>
       {!compact && status?.encryption.state === 'not_configured' && <p>Session storage is available now. Persistent connections require an encryption key in the Dunara service configuration.</p>}
       {status?.encryption.state === 'unavailable' && <p>Saved connections are locked. Restore the original encryption key before changing this connection.</p>}
@@ -132,7 +133,7 @@ export function BackendPanel({ projectId, disabled, onSettings }: { projectId: s
   </main>;
 }
 
-function OperationReview({ operation: op, disabled, onApprove, onCancel, onReconcile }: { operation: Operation & { steps?: { name: string; state: string }[] }; disabled: boolean; onApprove: () => void; onCancel: () => void; onReconcile: () => void }) {
+export function OperationReview({ operation: op, disabled, onApprove, onCancel, onReconcile }: { operation: Operation & { steps?: { name: string; state: string }[] }; disabled: boolean; onApprove: () => void; onCancel: () => void; onReconcile: () => void }) {
   const decoded = anyBackendPlan.safeParse(op.plan);
   if (!decoded.success) return <article className="backend-card"><h3>Unsupported operation</h3><p>{op.error ?? 'Update Dunara or prepare a new supported plan. This operation cannot execute.'}</p></article>;
   const plan = decoded.data;

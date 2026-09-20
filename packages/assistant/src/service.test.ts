@@ -25,6 +25,59 @@ async function setup(behavior: RunHarness['run'] = async () => {}, limits: Parti
 }
 async function finished(service: AssistantService) { await vi.waitFor(() => expect(service.status().busy).toBe(false)); }
 afterEach(async () => { await Promise.all(services.splice(0).map(service => service.close())); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+it('persists only project-bound setup metadata, rejects credential arguments and resumes without replay', async () => {
+  const projectId = randomUUID();
+  const { service, gateway, home } = await setup(async (context, callbacks, signal) => {
+    expect(context.tools.map(tool => tool.name)).toContain('assistant_request_setup');
+    if (context.prompt === 'Continue') { expect(context.context).toContain('app_openai'); return; }
+    for (const invalid of [
+      { kind: 'app_openai', value: 'private-input-canary' },
+      { kind: 'supabase', projectId: randomUUID() },
+      { kind: 'app_openai', environment: 'https://evil.example' },
+      { kind: 'custom', endpoint: 'https://evil.example' },
+    ]) await expect(callbacks.tool('assistant_request_setup', invalid, signal)).rejects.toThrow();
+    await callbacks.tool('assistant_request_setup', { kind: 'app_openai' }, signal);
+    await callbacks.tool('assistant_request_setup', { kind: 'app_openai' }, signal);
+  });
+  gateway.tools.push({ name: 'backend_inspect', inputSchema: { type: 'object' } });
+  const conversation = await service.createConversation(projectId);
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), prompt: 'Set up app AI' }); await finished(service);
+  const expected = [{ kind: 'app_openai', environment: 'development', projectId }];
+  expect((await service.conversation(conversation.id)).turns[0]).toMatchObject({ state: 'completed', setupRequests: expected });
+  expect(gateway.call).not.toHaveBeenCalled();
+  const history = await readFile(path.join(home, 'assistant', `${conversation.id}.json`), 'utf8');
+  expect(history).not.toContain('private-input-canary');
+  expect(JSON.stringify(service.events(0))).not.toContain('private-input-canary');
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), prompt: 'Continue' }); await finished(service);
+  await service.close();
+  const resumed = new AssistantService({ secretProtection: { kind: 'configured', key: 'a'.repeat(64) }, home }); services.push(resumed);
+  expect((await resumed.conversation(conversation.id)).turns[0]?.setupRequests).toEqual(expected);
+  expect(resumed.status().busy).toBe(false);
+});
+it('does not permit setup cards in Plan mode, without backend tools or without an app', async () => {
+  for (const scenario of ['plan', 'no_backend', 'no_project'] as const) {
+    const { service, gateway } = await setup(async (context, callbacks, signal) => {
+      if (scenario !== 'no_project') expect(context.tools.map(tool => tool.name)).not.toContain('assistant_request_setup');
+      await expect(callbacks.tool('assistant_request_setup', { kind: 'supabase' }, signal)).rejects.toThrow('Setup requires');
+    });
+    if (scenario !== 'no_backend') gateway.tools.push({ name: 'backend_inspect', inputSchema: { type: 'object' } });
+    const conversation = await service.createConversation(scenario === 'no_project' ? null : randomUUID());
+    await service.start({ conversationId: conversation.id, runId: randomUUID(), prompt: 'Connect', mode: scenario === 'plan' ? 'plan' : 'build' }); await finished(service);
+    expect((await service.conversation(conversation.id)).turns[0]).toMatchObject({ state: 'completed' });
+    expect((await service.conversation(conversation.id)).turns[0]?.setupRequests).toBeUndefined();
+    expect(gateway.call).not.toHaveBeenCalled();
+  }
+});
+it('counts setup cards against the turn budget', async () => {
+  const { service, gateway } = await setup(async (_, callbacks, signal) => {
+    await callbacks.tool('assistant_request_setup', { kind: 'supabase' }, signal);
+    await callbacks.tool('assistant_request_setup', { kind: 'app_openai' }, signal);
+  }, { tools: 1 });
+  gateway.tools.push({ name: 'backend_inspect', inputSchema: { type: 'object' } });
+  const conversation = await service.createConversation(randomUUID());
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), prompt: 'Set up' }); await finished(service);
+  expect((await service.conversation(conversation.id)).turns[0]).toMatchObject({ state: 'limited', setupRequests: [{ kind: 'supabase' }] });
+});
 it('does not load a harness on startup, configuration, or history access; unavailable mode fails closed', async () => {
   const { service, harness, input, home } = await setup();
   expect(harness.run).not.toHaveBeenCalled(); expect(service.status()).toMatchObject({ available: true, configured: true, busy: false });
