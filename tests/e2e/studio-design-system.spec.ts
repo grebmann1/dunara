@@ -432,7 +432,7 @@ test('project menu remains usable at 200 percent zoom', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(trigger).toContainText('Project 15');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'OpenAI setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Image generation' })).toBeVisible();
 });
 
 test('creation and Design dialogs fit at 200 percent zoom with reachable actions', async ({ page }) => {
@@ -515,7 +515,7 @@ test('project menu gives long names room and design sheet uses one content-heigh
 test('Settings shared controls fit narrow and zoomed layouts without a project', async ({ page }) => {
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'OpenAI setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Image generation' })).toBeVisible();
   for (const width of [320, 375, 430, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     for (const zoom of width === 1440 ? [1, 2] : [1]) {

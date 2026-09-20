@@ -225,7 +225,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (!assistant || !assistant.status().available) return json(res, { error: { message: 'The assistant is unavailable in this runtime. Use the desktop app with its optional harness installed.' } }, 503);
         if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
         const action = url.pathname.slice('/api/assistant/'.length);
-        if (!['drafts/read', 'drafts/save', 'drafts/configure', 'configure', 'conversations/list', 'conversations/create', 'conversations/read', 'conversations/delete', 'turns/start', 'turns/stop', 'approvals', 'events', 'changes/review', 'changes/file', 'changes/restore'].includes(action)) return json(res, { error: { message: 'Unknown assistant action' } }, 404);
+        if (!['connections/update', 'connections/sign-in', 'connections/answer', 'connections/cancel', 'drafts/read', 'drafts/save', 'drafts/configure', 'configure', 'conversations/list', 'conversations/create', 'conversations/read', 'conversations/delete', 'turns/start', 'turns/stop', 'approvals', 'events', 'changes/review', 'changes/file', 'changes/restore'].includes(action)) return json(res, { error: { message: 'Unknown assistant action' } }, 404);
         const input = await body(req, action === 'turns/start' || action === 'drafts/save' ? 256 * 1024 : 8192);
         if (action.startsWith('changes/')) {
           if (action === 'changes/review') {
@@ -259,6 +259,10 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           if (context !== engine.account.context().revision) throw new BuilderError('REVISION_CONFLICT', 'Account changed while loading the draft.');
           return json(res, snapshot);
         }
+        if (action === 'connections/update') return json(res, assistant.connectionUpdate(input));
+        if (action === 'connections/sign-in') return json(res, await assistant.signIn(input));
+        if (action === 'connections/answer') return json(res, assistant.signInAnswer(input));
+        if (action === 'connections/cancel') return json(res, assistant.signInCancel(input));
         if (action === 'configure') return json(res, assistant.configure(input));
         if (action === 'conversations/list') {
           const { projectId, query } = z.object({ projectId: z.uuid().nullable(), query: z.string().max(200).optional() }).strict().parse(input);

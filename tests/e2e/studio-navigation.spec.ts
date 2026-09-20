@@ -78,7 +78,7 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { level: 1, name: 'Plugins', exact: true })).toBeVisible();
   await settings.focus(); await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'OpenAI setup', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Image generation', exact: true })).toBeVisible();
   await expect.poll(async () => (await engine.studio.snapshot()).studio?.workspace).toBe('settings');
   await plugins.focus();
   await page.keyboard.press('Home');

@@ -71,7 +71,7 @@ for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     await expect(page.getByRole('heading', { name: 'Project details', exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Dunara account', exact: true })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Supabase connection', exact: true })).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: 'OpenAI setup', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Image generation', exact: true })).toBeVisible();
     await page.screenshot({ path: `.builder/plugin-review/disabled-settings-${width}.png` });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });

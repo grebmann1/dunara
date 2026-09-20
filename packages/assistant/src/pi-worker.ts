@@ -1,3 +1,5 @@
+import { assistantProviderSchema } from './provider-contracts.js';
+import { createAssistantRuntime } from './provider-runtime.js';
 import { randomUUID } from 'node:crypto';
 import { lstat, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +11,7 @@ if (!process.send) throw new Error('Assistant worker requires an owning parent')
 const resultSchema = z.object({ content: z.array(z.discriminatedUnion('type', [z.object({ type: z.literal('text'), text: z.string() }), z.object({ type: z.literal('image'), data: z.string(), mimeType: z.string() })])), details: z.unknown().optional(), isError: z.boolean().optional() });
 const inputSchema = z.object({
   epoch: z.uuid(), runId: z.uuid(), conversationId: z.uuid(), projectId: z.uuid().nullable(),
-  prompt: assistantText(ASSISTANT_LIMITS.promptBytes), context: assistantText(64 * 1024), apiKey: z.string().max(4096), model: z.string().min(1).max(100).optional(),
+  prompt: assistantText(ASSISTANT_LIMITS.promptBytes), context: assistantText(64 * 1024), apiKey: z.string().max(16384), provider: assistantProviderSchema.default('openai'), baseUrl: z.string().url().optional(), model: z.string().min(1).max(100).optional(),
   mode: assistantModeSchema.default('build'), inspector: inspectorAttachmentSchema.optional(), images: z.array(harnessImageSchema).max(2).optional(),
   tools: z.array(z.object({ name: z.string().max(160), description: z.string().optional(), inputSchema: z.object({ type: z.literal('object'), properties: z.record(z.string(), z.unknown()).optional(), required: z.array(z.string()).optional() }).catchall(z.unknown()) })).max(100),
 }).strict();
@@ -67,13 +69,13 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
       if (!value || typeof value !== 'object') return false;
       if (Array.isArray(value)) return value.some(hasImage);
       const object = value as Record<string, unknown>;
-      return object.type === 'input_image' && typeof object.image_url === 'string' && object.image_url.startsWith('data:image/png;base64,') || Object.values(object).some(hasImage);
+      return (object.type === 'input_image' && typeof object.image_url === 'string' && object.image_url.startsWith('data:image/png;base64,')) || (object.type === 'image' && typeof object.source === 'object') || (typeof object.inlineData === 'object') || (object.type === 'image_url' && typeof object.image_url === 'object') || Object.values(object).some(hasImage);
     };
     const response = await nativeFetch(request, { ...init, redirect: 'error' });
     if (response.ok && hasImage(payload)) send({ type: 'image-accepted' });
     return response;
   };
-  const { createAgentSession, createExtensionRuntime, ModelRuntime, SessionManager, SettingsManager } = await import('@earendil-works/pi-coding-agent');
+  const { createAgentSession, createExtensionRuntime, SessionManager, SettingsManager } = await import('@earendil-works/pi-coding-agent');
   const { Type } = await import('typebox');
   const loader: ResourceLoader = {
     getExtensions: () => ({ extensions: [], errors: [], runtime: createExtensionRuntime() }),
@@ -87,20 +89,8 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
     getAppendSystemPromptSources: () => [],
     extendResources() { throw new Error('Resources cannot be extended'); }, async reload() {},
   };
-  const runtime = await ModelRuntime.create({ credentials: { async read() {}, async list() { return []; }, async modify() { throw new Error('Credential persistence disabled'); }, async delete() {} }, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
-  let provider = 'openai';
-  let modelId = input.model ?? 'gpt-6-astra';
-  if (fixture) {
-    if (input.apiKey !== 'offline-worker-credential-sentinel') throw new Error('Offline fixtures accept only the public test sentinel, never provider credentials');
-    const url = new URL(fixture.baseUrl);
-    if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password) throw new Error('Fixture provider must be local');
-    provider = 'builder-fixture'; modelId = fixture.model;
-    runtime.registerProvider(provider, { api: 'openai-responses', baseUrl: fixture.baseUrl, models: [{ id: modelId, name: 'Offline fixture', reasoning: false, input: ['text', 'image'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
-  }
-  const model = runtime.getModel(provider, modelId);
-  if (!model || model.api !== 'openai-responses' || !model.input.includes('image')) throw new Error('Selected assistant model is unavailable');
+  const { runtime, model } = await createAssistantRuntime(input, fixture);
   network.origin = new URL(model.baseUrl).origin;
-  await runtime.setRuntimeApiKey(provider, input.apiKey);
   const errors = new Map<string, boolean>();
   const tools = input.tools.map(tool => ({
     name: tool.name, label: tool.name, description: tool.description ?? tool.name, parameters: Type.Unsafe<Record<string, unknown>>(tool.inputSchema), executionMode: 'sequential' as const,
@@ -117,7 +107,7 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
     },
   }));
   const created = await createAgentSession({ cwd: process.cwd(), agentDir: process.env.PI_CODING_AGENT_DIR, model, modelRuntime: runtime, noTools: 'all', tools: tools.map(tool => tool.name), customTools: tools, resourceLoader: loader,
-    sessionManager: SessionManager.inMemory(process.cwd()), settingsManager: SettingsManager.inMemory({ retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: 180000 } }, compaction: { enabled: false }, enableAnalytics: false, enableInstallTelemetry: false, enableSkillCommands: false, images: { autoResize: false, blockImages: false } }),
+    sessionManager: SessionManager.inMemory(process.cwd()), settingsManager: SettingsManager.inMemory({ transport: 'sse', retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: 180000 } }, compaction: { enabled: false }, enableAnalytics: false, enableInstallTelemetry: false, enableSkillCommands: false, images: { autoResize: false, blockImages: false } }),
   });
   session = created.session;
   if (closed) { session.dispose(); return; }

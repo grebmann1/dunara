@@ -50,3 +50,8 @@ export function desktopEnvironment(input: NodeJS.ProcessEnv) {
   }
   return env;
 }
+
+/** Subscription sign-in links emitted by the local Assistant runtime. */
+export function assistantSignInAllowed(value: string) {
+  try { const url = new URL(value); return url.protocol === 'https:' && !url.port && !url.username && !url.password && ['auth.openai.com', 'auth.x.ai', 'accounts.x.ai', 'grok.com', 'x.ai'].includes(url.hostname); } catch { return false; }
+}
