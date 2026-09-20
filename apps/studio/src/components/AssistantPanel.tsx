@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 're
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Hammer, History, ListTodo, LoaderCircle, Play, Plus, Sparkles, Square, X } from 'lucide-react';
 import { Button } from './ui/button';
+import { useStudioClient } from '../api';
 import type { AssistantController } from '../assistant';
 import { AssistantAttachments, AttachmentImage } from './AssistantAttachments';
 import { AssistantMarkdown, CopyMessage } from './AssistantMarkdown';
@@ -24,6 +25,8 @@ const starters = [
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
 export function AssistantPanel({ controller: a, open, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
   const dock = useDock(), narrow = !dock.desktop;
+  const { capabilities } = useStudioClient();
+  const storageLocation = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
   const [manualSetup, setManualSetup] = useState<AssistantSetupRequest>();
   const [setupGeneration, setSetupGeneration] = useState(0);
   const manualSetupElement = useRef<HTMLDivElement>(null);
@@ -137,8 +140,8 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
           {a.status?.connections && <div className="assistant-model-picker"><select aria-label="Chat model" value={`${a.status.providerId}:${a.status.model}`} disabled={a.working || a.status.busy || a.status.signIn?.state === 'waiting'} onChange={event => { const [provider, ...model] = event.target.value.split(':'); void a.selectModel(provider!, model.join(':')); }}>
             {a.status.connections.filter(connection => connection.configured || connection.id === a.status?.providerId).map(connection => <optgroup key={connection.id} label={connection.name}>{connection.models.map(model => <option key={model.id} value={`${connection.id}:${model.id}`} disabled={!connection.configured}>{connection.name} · {model.label}</option>)}</optgroup>)}
           </select><Button variant="ghost" onClick={() => { onOpenChange(false); onSettings(); }}>Connections</Button></div>}
-          <details className="assistant-disclosure"><summary>Draft storage</summary><label className="assistant-review-check"><input type="checkbox" checked={a.persistence.enabled} disabled={!a.persistence.available || a.persistence.loading || a.working} onChange={event => void a.persistence.configure(event.target.checked)} />Remember drafts on this computer</label><p role="status">{a.persistence.notice}</p><p>Unsent text and attachment references are stored privately in Dunara home. Turning this off forgets saved drafts for this Dunara account.</p></details>
-          <details className="assistant-disclosure"><summary><span className="assistant-model-dot" data-connected={a.status?.configured || undefined} />{a.status?.model ?? 'Assistant'}<span>Usage & privacy</span></summary><p>Your message, recent context and requested tool results go to {a.status?.provider ?? 'your selected provider'}. Sending may incur charges. Each turn is limited to 40 actions and 10 minutes. Image generation has a separate approval.</p><p>History is saved on this computer. Stop ends the turn; completed changes remain. Messages are never automatically resent.</p></details>
+          <details className="assistant-disclosure"><summary>Draft storage</summary><label className="assistant-review-check"><input type="checkbox" checked={a.persistence.enabled} disabled={!a.persistence.available || a.persistence.loading || a.working} onChange={event => void a.persistence.configure(event.target.checked)} />Remember drafts {storageLocation}</label><p role="status">{a.persistence.notice}</p><p>Unsent text and attachment references are stored privately {storageLocation}. Turning this off forgets saved drafts for this Dunara account.</p></details>
+          <details className="assistant-disclosure"><summary><span className="assistant-model-dot" data-connected={a.status?.configured || undefined} />{a.status?.model ?? 'Assistant'}<span>Usage & privacy</span></summary><p>Your message, recent context and requested tool results go to {a.status?.provider ?? 'your selected provider'}. Sending may incur charges. Each turn is limited to {a.status?.limits?.tools ?? 40} actions and {Math.ceil((a.status?.limits?.turnMs ?? 600_000) / 60_000)} minutes. Image generation has a separate approval.</p><p>History is saved {storageLocation}. Stop ends the turn; completed changes remain. Messages are never automatically resent.</p></details>
         </footer>
       </Dialog.Content>
     </Dialog.Portal>

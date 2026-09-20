@@ -5,7 +5,8 @@ import type { DraftScope, DraftSnapshot, DraftValue } from '../../../packages/as
 type Entry = { snapshot: DraftSnapshot; scope: DraftScope; tail: Promise<void>; saved: string; failed: boolean; desired: string };
 const keyFor = (scope: DraftScope) => `${scope.projectId ?? 'new'}:${scope.conversationId ?? 'new'}`;
 export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValue, ready: boolean, restore: (value: DraftValue) => void) {
-  const { api } = useStudioClient();
+  const { api, capabilities } = useStudioClient();
+  const storageLocation = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
   const key = keyFor(scope), encoded = JSON.stringify(value);
   const entries = useRef(new Map<string, Entry>()), latest = useRef({ key, value, restore }), mounted = useRef(true);
   const [version, render] = useState(0), [notice, setNotice] = useState(''), [loading, setLoading] = useState(false), [preference, setPreference] = useState<boolean>();
@@ -42,7 +43,7 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
       if (!target.snapshot.enabled || target.failed || target.desired !== JSON.stringify(next) || target.saved === JSON.stringify(next)) return;
       try {
         target.snapshot = await api<DraftSnapshot>('/assistant/drafts/save', { scope: target.scope, update: { context: target.snapshot.context, preferenceRevision: target.snapshot.preferenceRevision, expectedRevision: target.snapshot.revision, value: next } });
-        target.saved = JSON.stringify(next); if (entries.current.get(keyFor(target.scope)) === target) notify('Draft saved on this computer. Never sent automatically.', keyFor(target.scope));
+        target.saved = JSON.stringify(next); if (entries.current.get(keyFor(target.scope)) === target) notify(`Draft saved ${storageLocation}. Never sent automatically.`, keyFor(target.scope));
       } catch { target.failed = true; if (entries.current.get(keyFor(target.scope)) === target) notify('Draft could not be saved because storage or account changed. Current text was kept. Reopen the assistant to review saved content.', keyFor(target.scope)); }
     });
     return target.tail;
@@ -67,7 +68,7 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
       for (const item of entries.current.values()) {
         item.snapshot = { ...item.snapshot, enabled, preferenceRevision: snapshot.preferenceRevision, ...(!enabled ? { revision: null, value: null } : {}) }; item.failed = false;
       }
-      target.snapshot = snapshot; target.saved = ''; notify(enabled ? 'Saving drafts on this computer.' : 'Saved drafts forgotten. Current text remains in this session.');
+      target.snapshot = snapshot; target.saved = ''; notify(enabled ? `Saving drafts ${storageLocation}.` : 'Saved drafts forgotten. Current text remains in this session.');
       if (enabled) await save(target, latest.current.value);
     } catch { notify('Draft preference could not be changed. Current text was kept.'); }
     finally { if (mounted.current) setPreference(undefined); }
