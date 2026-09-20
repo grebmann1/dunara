@@ -1,5 +1,5 @@
 import { afterEach, expect, it } from 'vitest';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { z } from 'zod';
@@ -53,4 +53,14 @@ it('denies traversal, overlaps and restore over existing home files', async () =
   await expect(mountHomeState(other, store.adapter)).rejects.toThrow('empty disposable cache');
   const empty = await home(); store.records.set('../escape', Buffer.from('bad'));
   await expect(mountHomeState(empty, store.adapter)).rejects.toThrow('Invalid home state');
+});
+
+it('tracks writes through a filesystem alias of the mounted runtime home', async () => {
+  const store = remote(), root = await home(), aliasRoot = await home(), alias = path.join(aliasRoot, 'linked-home');
+  await symlink(root, alias);
+  mounts.push(await mountHomeState(root, store.adapter));
+  await atomicWrite(path.join(alias, 'saved.json'), 'acknowledged through alias');
+  expect(Buffer.from(store.records.get('saved.json')!).toString()).toBe('acknowledged through alias');
+  const restored = await home(); mounts.push(await mountHomeState(restored, store.adapter));
+  expect(await readText(path.join(restored, 'saved.json'))).toBe('acknowledged through alias');
 });

@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 
 export type DurableStateRecord = { key: string; content: Uint8Array };
@@ -16,7 +17,17 @@ export function stateKey(key: string) {
     && !/(?:^|\/)(?:node_modules|native-workspaces|native-deliveries)(?:\/|$)/.test(key)
     && !/\.(?:sqlite(?:-wal|-shm)?|sock|tmp)$/.test(key);
 }
+function canonicalPath(file: string): string {
+  file = path.resolve(file);
+  try { return realpathSync(file); }
+  catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT' || path.dirname(file) === file) throw error;
+    return path.join(canonicalPath(path.dirname(file)), path.basename(file));
+  }
+}
 function mountFor(file: string) {
+  if (!mounts.size) return undefined;
+  file = canonicalPath(file);
   for (const mount of mounts.values()) {
     const relative = path.relative(mount.home, file);
     if (relative === '' || (relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative))) return mount;
@@ -27,7 +38,7 @@ export function hasStatePersistence(file: string) { return !!mountFor(file); }
 
 /** Restore before service constructors run. The project registry is hydrated by its separate contract. */
 export async function mountHomeState(home: string, adapter: HomeStatePersistence) {
-  home = path.resolve(home);
+  home = canonicalPath(home);
   if (mountFor(home) || [...mounts.keys()].some(other => other.startsWith(home + path.sep))) throw Error('Home state is already owned');
   const existing = await readdir(home);
   if (existing.some(name => name !== 'projects.json')) throw Error('Home state hydration requires an empty disposable cache');
@@ -59,7 +70,8 @@ export function stageHomeState(file: string, content: Uint8Array | null): Promis
 }
 /** One atomic remote update for compound artifacts such as a launch kit and its manifest. */
 export function stageHomeStateBatch(records: { file: string; content: Uint8Array | null }[]): Promise<void> {
-  if (!records.length) return Promise.resolve();
+  if (!records.length || !mounts.size) return Promise.resolve();
+  records = records.map(record => ({ ...record, file: canonicalPath(record.file) }));
   const mount = mountFor(records[0]!.file);
   if (!mount) { if (records.some(record => mountFor(record.file))) throw Error('Mixed home state ownership'); return Promise.resolve(); }
   if (mount.failure) throw mount.failure;
