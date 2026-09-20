@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Hammer, History, ListTodo, LoaderCircle, Play, Plus, Sparkles, Square, X } from 'lucide-react';
 import { Button } from './ui/button';
@@ -8,20 +8,32 @@ import { AssistantMarkdown, CopyMessage } from './AssistantMarkdown';
 import { AssistantTasks } from './AssistantTasks';
 import { AssistantHistory } from './AssistantHistory';
 import { AssistantChanges } from './AssistantChanges';
+import { AssistantSetupCard } from './AssistantSetupCard';
+import type { AssistantSetupRequest } from '../../../../packages/assistant/src/contracts';
 import { continuationPrompt } from '../assistant-history';
 import '../assistant-images.css';
 import '../assistant-connections.css';
 import { DockGrip, DockMenu, useDock } from './layout/WorkspaceDock';
 
-type Props = { controller: AssistantController; open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; onSettings(): void };
+type Props = { controller: AssistantController; open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; backendEnabled: boolean; onBackend(): void; onSettings(): void };
 const starters = [
   { title: 'Refine this screen', detail: 'Make the details feel right', prompt: 'Review the current screen and suggest improvements to its layout, spacing, and typography.' },
   { title: 'Build something new', detail: 'Turn an idea into a working app', prompt: 'Help me plan a new mobile app. Ask me about the idea, who it is for, and the visual direction.' },
   { title: 'Find and fix an issue', detail: 'Get things working again', prompt: 'Review this project for errors and help me fix what is not working.' },
 ];
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
-export function AssistantPanel({ controller: a, open, onOpenChange, trigger, projectName, onSettings }: Props) {
+export function AssistantPanel({ controller: a, open, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
   const dock = useDock(), narrow = !dock.desktop;
+  const [manualSetup, setManualSetup] = useState<AssistantSetupRequest>();
+  const [setupGeneration, setSetupGeneration] = useState(0);
+  const manualSetupElement = useRef<HTMLDivElement>(null);
+  const setupScope = `${a.status?.epoch}:${a.status?.accountContext}:${a.projectId}:${a.conversation?.id}:${setupGeneration}`;
+  useEffect(() => {
+    const clear = () => { setManualSetup(undefined); setSetupGeneration(value => value + 1); };
+    window.addEventListener('builder-account-changed', clear);
+    return () => window.removeEventListener('builder-account-changed', clear);
+  }, []);
+  useLayoutEffect(() => { if (manualSetup) manualSetupElement.current?.scrollIntoView({ block: 'start' }); }, [manualSetup]);
   const [draggingImages, setDraggingImages] = useState(false);
   const imageDragDepth = useRef(0);
   const [deleting, setDeleting] = useState(false), [showHistory, setShowHistory] = useState(false), [count, setCount] = useState(40), [atBottom, setAtBottom] = useState(true);
@@ -29,6 +41,9 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   const lastScroll = useRef<{ element: HTMLDivElement; top: number } | null>(null);
   const followLatest = () => { following.current = true; lastScroll.current = null; };
   useLayoutEffect(() => { setDeleting(false); setCount(40); followLatest(); earlierHeight.current = null; setAtBottom(true); }, [a.conversation?.id]);
+  useLayoutEffect(() => { setManualSetup(undefined); }, [setupScope]);
+  const continueSetup = (message: string) => { a.setDraft(a.draft.trim() ? `${a.draft}\n\n${message}` : message); input.current?.focus(); };
+  const setupDisabled = a.working || !!a.status?.busy || a.mode === 'plan';
   useLayoutEffect(() => {
     const element = scroll.current; if (!element) return;
     // Native scroll events can follow a React layout commit. Respect an upward
@@ -89,12 +104,14 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
               {turn.tools.length > 0 && <details className="assistant-tool"><summary><span>{turn.tools.length} Dunara {turn.tools.length === 1 ? 'action' : 'actions'}</span></summary><ul>{turn.tools.map((tool, index) => <li key={index}><span>{toolLabel(tool.name)}</span><span className="assistant-tool-state" data-state={tool.state}>{tool.state === 'completed' && <Check size={12} aria-hidden />}{tool.state}</span></li>)}</ul></details>}
               {(turn.response || (here && turn.id === active?.runId)) && <div className="assistant-response"><h3><Sparkles size={14} aria-hidden />Assistant{turn.provider && <span className="assistant-provider-tag" title={`${turn.provider} · ${turn.model}`}>{a.status?.connections?.find(connection => connection.id === turn.provider)?.name ?? turn.provider} · {turn.model}</span>}</h3>{turn.response && <AssistantMarkdown text={turn.response} />}{here && turn.id === active?.runId ? <div className="assistant-progress" role="status">{reviews.length ? <span className="assistant-waiting-dot" /> : <LoaderCircle className="assistant-spinner" size={14} aria-hidden />}{progress}</div> : turn.response && <CopyMessage text={turn.response} />}</div>}
               {turn.notice && <p className="assistant-turn-notice" data-state={turn.state}>{turn.notice}</p>}
+              {backendEnabled && turn.setupRequests?.filter(request => request.projectId === a.projectId).map(request => <AssistantSetupCard key={`${setupScope}:${turn.id}:${request.kind}:${request.environment}`} request={request} initialOpen={turn.id === lastTurn?.id} disabled={setupDisabled} onBackend={() => { onOpenChange(false); onBackend(); }} onContinue={continueSetup} />)}
               {a.status?.sourceChanges && a.conversation?.projectId && turn.mode !== 'plan' && !['starting', 'running'].includes(turn.state) && <AssistantChanges key={`${a.status.epoch}:${a.status.accountContext}:${a.projectId}:${a.conversation.id}:${turn.id}`} conversationId={a.conversation.id} runId={turn.id} status={a.status} working={a.working} onRestore={a.refresh} />}
               {turn.id === lastTurn?.id && turn.mode === 'plan' && turn.state === 'completed' && turn.response && <Button variant="outline" className="assistant-build-plan" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode('build'); a.setDraft('Implement the plan we just discussed. Follow its steps and verify the changes.'); input.current?.focus(); }}><Hammer size={14} aria-hidden />Build this plan</Button>}
               {turn.id === lastTurn?.id && ['cancelled', 'failed', 'interrupted', 'limited'].includes(turn.state) && <Button variant="outline" className="assistant-build-plan" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode(turn.mode ?? 'build'); a.setDraft(continuationPrompt(turn)); input.current?.focus(); }}><Play size={14} aria-hidden />Continue</Button>}
               {['failed', 'interrupted', 'limited'].includes(turn.state) && <Button variant="ghost" className="assistant-edit-message" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode(turn.mode ?? 'build'); a.setDraft(turn.prompt); input.current?.focus(); }}>Edit and resend</Button>}
               {!turn.notice && ['failed', 'interrupted', 'cancelled', 'limited'].includes(turn.state) && <p className="assistant-turn-notice">{turn.state === 'cancelled' ? 'Stopped' : 'This response was interrupted.'}</p>}
             </article>)}
+            {backendEnabled && manualSetup?.projectId === a.projectId && <div ref={manualSetupElement}><AssistantSetupCard key={`${setupScope}:manual:${manualSetup.kind}`} request={manualSetup} initialOpen disabled={setupDisabled} onBackend={() => { onOpenChange(false); onBackend(); }} onContinue={continueSetup} /></div>}
             {a.working && !a.status?.busy && <p className="assistant-progress" role="status"><LoaderCircle className="assistant-spinner" size={14} aria-hidden />Updating conversation…</p>}
             {reviews.map(review => <ApprovalCard key={review.id} review={review} busy={a.working} onAnswer={approve => void a.approve(review, approve)} />)}
             {a.status?.busy && !here && <p className="assistant-turn-notice">Assistant is working in another conversation. You can keep writing here and send when it finishes.</p>}
@@ -105,6 +122,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
           {!atBottom && !reviews.length && !!a.conversation?.turns.length && <Button className="assistant-jump" variant="outline" onClick={() => { followLatest(); setAtBottom(true); scroll.current?.scrollTo({ top: scroll.current.scrollHeight, behavior: 'smooth' }); }}><ArrowDown size={14} aria-hidden />Latest message</Button>}
         </div>
         <footer className="assistant-composer">
+          {backendEnabled && a.projectId && <details className="assistant-setup-menu"><summary>App setup</summary><div><Button variant="ghost" disabled={setupDisabled} onClick={() => { setManualSetup({ projectId: a.projectId!, environment: 'development', kind: 'supabase' }); followLatest(); }}>Connect Supabase</Button><Button variant="ghost" disabled={setupDisabled} onClick={() => { setManualSetup({ projectId: a.projectId!, environment: 'development', kind: 'app_openai' }); followLatest(); }}>Set up app AI</Button></div></details>}
           {a.attachmentError && <p className="assistant-upload-notice" role="alert">{a.attachmentError}</p>}
           {a.uploading && <p className="assistant-upload-notice" role="status">Adding images…</p>}
           <form className="assistant-input-box" onSubmit={event => { event.preventDefault(); send(); }}>

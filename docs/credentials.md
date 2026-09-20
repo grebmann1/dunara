@@ -1,50 +1,60 @@
-# Persistent OpenAI configuration
+# AI connections and credential storage
 
-No key is required for offline Dunara tools. Configuring a key never contacts OpenAI or authorizes image generation. Do not paste real keys into chat, source, command arguments, or screenshots.
+The Assistant uses the provider and model selected in **Settings → AI connections** or the chat footer. Each provider has its own credentials. ChatGPT, Grok, Anthropic, Google Gemini, Mistral and xAI do not require `OPENAI_API_KEY`.
 
-## Option A: Dunara `.env`
+No credential is required for offline Dunara tools. Do not paste real keys into chat, source, command arguments or screenshots.
 
-Create `.env` in the Dunara repository, **not in a generated Expo app**. Enter your key locally in an editor:
+## Assistant connections
+
+- Sign in with ChatGPT or Grok, or configure an API key for OpenAI, Anthropic, Google Gemini, Mistral or xAI. API connections may use a compatible HTTPS endpoint.
+- Keep multiple connections at once. Selecting a provider/model changes future messages; an active turn retains its selected credential, model and endpoint. A disconnected non-OpenAI provider does not silently switch to another provider or the image-generation key.
+- Choose **Remember new connections** to encrypt each connection separately in Dunara home. Without this option, credentials remain in service memory until exit. Replacing a remembered connection with a session-only connection removes that provider's saved credentials. Disconnect removes only that connection.
+- Desktop uses OS-protected encryption. Headless hosts can supply `BUILDER_BACKEND_ENCRYPTION_KEY` (64 hexadecimal characters). If protection is unavailable, remembering is disabled; locked storage retains recoverable ciphertext until protection is restored or that connection is explicitly disconnected.
+- Saving an API key or choosing a model makes no provider request. Subscription sign-in and token refresh contact the selected provider. The installed adapters supply model choices locally; account/model access is checked when sending.
+- The worker receives only the selected access credential. It does not discover ambient provider environment variables or receive subscription refresh tokens. Refresh happens in the parent service before a turn.
+
+## Image generation and the OpenAI fallback
+
+Image generation currently uses OpenAI and has its own **Settings → Image generation** section. Its key is also a compatibility fallback for the **OpenAI** Assistant connection when no separate OpenAI Assistant key is configured. A dedicated OpenAI Assistant key takes precedence without changing image generation. Removing that dedicated key restores the image-key fallback, if available.
+
+ChatGPT subscription sign-in is separate from the OpenAI API connection. Other Assistant providers never use this image key. Changing or disconnecting the image key leaves independently configured Assistant connections intact.
+
+The image key can be entered in Settings or supplied at startup. Remembered image keys take precedence over startup configuration. A session-only replacement removes the saved image key. **Disconnect OpenAI** in Image generation removes its saved key and disables this fallback until reconnect or restart; it never edits `.env`. **Use startup environment key** restores that source explicitly.
+
+### Optional startup configuration
+
+For the OpenAI image key only, create `.env` in the Dunara repository, **not in a generated Expo app**, and enter the value locally:
 
 ```dotenv
 OPENAI_API_KEY=replace-with-your-key
 ```
 
-The values above are placeholders. Protect the file with `chmod 600 .env`, then build/start:
+Protect the file with `chmod 600 .env`, then build/start:
 
 ```sh
 pnpm build
 pnpm desktop
 ```
 
-`pnpm desktop` reads the repository `.env` by default. `--builder-env-file` chooses another file. This deliberately differs from Node's `--env-file`, which loads arbitrary variables before Dunara can filter them; do not use the Node flag for Dunara credentials. The standalone CLI accepts the same flag, defaulting to its working-directory `.env`; its Assistant remains unavailable, so only image generation uses startup configuration there. An MCP/CLI client attaching with `--desktop-connect` cannot override the owning runtime's credentials.
+`pnpm desktop` reads the repository `.env` by default. `--builder-env-file` chooses another file. Use this flag instead of Node's `--env-file`, which imports arbitrary variables before Dunara can filter them. The standalone CLI defaults to its working-directory `.env`; its Assistant is unavailable, so startup credentials configure images only. An MCP/CLI client attaching with `--desktop-connect` cannot override the owning runtime's credentials.
 
-- `OPENAI_API_KEY` configures both image generation and the AI assistant.
-- `BUILDER_ASSISTANT_API_KEY` is a legacy fallback for both features when `OPENAI_API_KEY` is absent.
-- An existing process-environment value overrides the same name in `.env`.
-- Only these two names are imported. Dotenv entries such as `NODE_OPTIONS`, shell expressions and unrelated credentials are not executed or passed to children. No parent-directory search is performed.
+- `OPENAI_API_KEY` supplies the OpenAI image key and, where no dedicated key exists, the OpenAI Assistant fallback. It is not a global credential for every provider.
+- `BUILDER_ASSISTANT_API_KEY` retains legacy OpenAI fallback behavior when `OPENAI_API_KEY` is absent. Configure other providers through AI connections.
+- A process-environment value overrides the same name in `.env`. Only these two model-key names are read by the legacy credential loader. Unrelated entries are not executed or passed to children; no parent-directory search is performed.
 - Missing `.env` is allowed. Existing files must be bounded (64 KiB), valid UTF-8, single-link regular files owned by the current user, without group/world write access or a symlink at the file itself. Keys must be 16–4096 printable non-whitespace ASCII characters. Unsafe/invalid configuration fails without echoing the value.
-- Changes take effect at the next backend restart. `.env` values are reread; changing the launching shell's environment requires relaunching the desktop application.
+- Changes take effect on backend restart. Changing the launching shell's environment requires a full desktop relaunch. Independent remembered provider connections restore from their own encrypted files.
 
-## Option B: Settings
+Existing image-generation keys are retained. If only an old OpenAI Assistant key was saved, it is migrated to the shared OpenAI fallback; when both old stores exist, the image-generation key wins. Legacy plaintext is removed only after encrypted write/read-back verification. Locked or unsafe storage prevents silent fallback to a startup key; restore the original protection or explicitly disconnect to forget it. Provider selection and per-provider stores are independent of this compatibility migration.
 
-Enter the key once in **Settings → OpenAI setup**. Image generation and the AI assistant use the same key. Choose **Remember on this computer** to encrypt it in a private Dunara-home file. Desktop wraps the encryption key with OS protection; headless mode uses the explicit `BUILDER_BACKEND_ENCRYPTION_KEY` (64 hexadecimal characters). If protection is unavailable, remembering is disabled and keys stay in memory for the session. Saving a key never contacts OpenAI.
+## Spending, isolation and recovery
 
-Saved keys take precedence over startup configuration. A session-only replacement removes the saved key. **Disconnect OpenAI** removes the saved key and disconnects both features until reconnect or restart; it never edits `.env`. **Use startup environment key** restores the startup source explicitly. Restart restores saved/startup values.
+Connection changes are refused during an active Assistant turn. Image settings also retain media-work and revision checks, and changing them invalidates previous image-request consent. Every paid image job requires its exact Assets approval; Assistant Send authorizes that bounded turn. Saving settings does not send a validation request or authorize a retry.
 
-Existing image-generation keys are reused. If only an old assistant key was saved, it is migrated to the shared setting. When both exist, the image-generation key wins. Legacy plaintext is removed only after encrypted write and read-back verification. Locked, unsafe or unavailable storage retains recoverable files and prevents silently switching to a startup key. Restore the original protection and restart, or explicitly disconnect to forget the saved key. `OPENAI_API_KEY` is the shared startup key; the legacy `BUILDER_ASSISTANT_API_KEY` is used only when no OpenAI startup key exists.
+Credentials are excluded from status responses, browser storage, chat, project metadata, media jobs, Launch Kits and source exports. Startup model-key variables are filtered from managed generated-app environments. JavaScript memory cannot be reliably zeroized.
 
-Choose **Settings → AI assistant → Assistant model**, then **Save assistant model**. The list comes from the installed harness's compatible OpenAI models without network discovery. Selection is saved separately from the key and applies to future messages in all conversations. It does not verify account access or make a paid request. If a saved model is no longer supported, select a replacement before sending.
+Dunara is a trusted single-user tool, not a sandbox against same-user code. Generated dependencies/code run with your user permissions. Keep Dunara home and `.env` outside generated projects and review code before enabling execution trust. File exclusions do not detect arbitrary secrets manually written into source.
 
-Configuration changes are refused while the assistant or relevant media work is active. Image settings retain revision checks and invalidate previous spending consent. Every paid image job still requires its exact Assets approval; Assistant Send authorizes only that bounded turn. No automatic retry or validation request is made when saving settings.
-
-## Isolation and troubleshooting
-
-Keys are not stored in browser storage, chat, project metadata, media jobs, Launch Kits or release snapshots. Both supported variables are filtered from managed generated-app environments. Desktop transfers startup keys to the supervised backend outside renderer responses and model-visible tool arguments; the Pi worker receives only its selected key for the active turn. JavaScript memory cannot be reliably zeroized.
-
-This is a trusted single-user tool, **not a sandbox against same-user code**. Generated dependencies/code can read files with your user privileges. Never enable execution trust for hostile projects. Keep Dunara home and `.env` out of generated projects and source exports. `.env*` and credentials are gitignored; private snapshot checks reject nested credential artifacts too.
-
-If startup reports unsafe credential storage, inspect the file locally for owner, permissions, file type and format. Do not paste its contents into diagnostics. Dunara never silently repairs unsafe files or falls back to another key. If a key appears lost, check the selected Dunara home, credential source, and whether Remember was selected. `Configured · not verified` intentionally does not claim the account/model works.
+If startup reports locked storage, restore the original protection or explicitly disconnect the affected entry. Do not delete encrypted files as a repair shortcut. If AI connections reports an outdated backend, save unsent drafts, fully quit and relaunch Dunara; refreshing the interface does not reload server code.
 
 ## Account and draft restoration
 

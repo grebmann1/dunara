@@ -275,6 +275,19 @@ it('reviews native workspace preparation and rejects source edits made during hu
   expect(await reviewed('native_workspace_prepare', args)).toMatchObject({ isError: true, details: { structuredContent: { error: { code: 'TRUST_REQUIRED' } } } });
 });
 
+it('reviews the exact native device and signing plan and rejects changes while approval is pending', async () => {
+  const projectId = await create(), selection = { workspaceId: randomUUID(), deviceId: '00008130-001918DC2E520010', teamId: 'ABCDE12345' };
+  const proposal = { selection, device: { id: selection.deviceId, name: 'Fixture phone', model: 'iPhone', developerMode: true }, team: { id: selection.teamId, name: 'Fixture team' }, bundleIdentifier: 'com.fixture.phone', sourceFingerprint: '1'.repeat(64), proposedRevision: '2'.repeat(64), consequences: ['Sign with the selected team, then review installation separately.'] };
+  vi.spyOn(engine.nativeDeliveries, 'plan').mockImplementation(async () => structuredClone(proposal));
+  const build = vi.spyOn(engine.nativeDeliveries, 'build');
+  const args = { projectId, input: { selection, proposedRevision: proposal.proposedRevision, requestId: randomUUID(), confirmed: true } };
+  const pending = call('native_delivery_build', args);
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  expect(broker.list()[0]!.review).toMatchObject({ device: proposal.device, team: proposal.team });
+  proposal.proposedRevision = '3'.repeat(64); await decide(); await expect(pending).rejects.toThrow('reviewed state changed'); expect(build).not.toHaveBeenCalled();
+  const declined = call('native_delivery_build', args); await decide(false); await expect(declined).rejects.toThrow(); expect(build).not.toHaveBeenCalled();
+});
+
 it('shares configuration plans and private-input boundaries between the Assistant and external MCP', async () => {
   const projectId = await create(), ref = 'abcdefghijklmnopqrst', organization = 'fixture-org';
   const remote = { id: ref, name: 'Explicit target', region: 'eu-central-1', status: 'ACTIVE_HEALTHY', organization_slug: organization };

@@ -24,7 +24,7 @@ afterEach(async () => { await client.close(); await server.close(); await studio
 it('protects installation/review endpoints and exposes only public plugin metadata to MCP', async () => {
   expect((await fetch(`${studio.origin}/api/plugins`)).status).toBe(401);
   expect((await fetch(`${studio.origin}/api/plugins/restore`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{"confirm":true}' })).status).toBe(403);
-  const tools = (await client.listTools()).tools; expect(tools).toHaveLength(65); expect(tools.some(t => /install|approve/.test(t.name) && t.name.startsWith('plugin'))).toBe(false);
+  const tools = (await client.listTools()).tools; expect(tools).toHaveLength(74); expect(tools.some(t => /install|approve/.test(t.name) && t.name.startsWith('plugin'))).toBe(false);
   const result = await client.callTool({ name: 'plugin_list', arguments: {} }); expect(JSON.stringify(result)).not.toContain(root);
 });
 it('installs a user package, discovers its action, loads its panel and removes its tools on disable', async () => {

@@ -12,6 +12,8 @@ import { resolveImages, validateInspector } from './attachments.js';
 import type { AssistantAttachments } from './contracts.js';
 import type { GatewayContext } from './mcp-bridge.js';
 import { taskTool } from './tasks.js';
+import { setupRequestSchema } from './contracts.js';
+import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
 
 export interface AssistantGateway {
@@ -52,12 +54,11 @@ export class AssistantService {
   async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
-  private localKey = '';
+  private legacyOpenAIKey = '';
   private shared?: MediaJobs;
   private unsubscribeCredential?: () => void;
-  private legacyCredential() { return this.shared?.providerCredential() ?? { key: this.localKey, source: this.source }; }
+  private legacyCredential() { return this.shared?.providerCredential() ?? { key: this.legacyOpenAIKey, source: this.source }; }
   private get key() { return this.closed ? '' : this.connections.credential(this.provider, this.legacyCredential()).key; }
-  private set key(value: string) { this.localKey = value; }
   private model = 'gpt-6-astra';
   private provider: AssistantProvider = 'openai';
   private connections: AssistantConnections;
@@ -97,12 +98,13 @@ export class AssistantService {
     this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle());
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
-    this.key = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
-    this.source = saved ? 'saved' : this.key ? 'environment' : 'none';
+    this.legacyOpenAIKey = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
+    this.source = saved ? 'saved' : this.legacyOpenAIKey ? 'environment' : 'none';
   }
-  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  /** Compatibility fallback for OpenAI only; connection selection remains independent. */
   async useOpenAI(shared: MediaJobs) {
-    this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.localKey = '';
+    this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.legacyOpenAIKey = '';
     this.unsubscribeCredential = shared.subscribeProvider(() => this.changed(), () => { if (!this.closed) this.idle(); });
     if (piAvailable()) {
       await this.connections.initialize();
@@ -117,10 +119,11 @@ export class AssistantService {
       if (!this.connections.models(provider).some(model => model.id === value.model)) throw new BuilderError('INVALID_INPUT', 'Choose a supported assistant model.');
       this.modelSettings.save({ model: value.model, provider }); this.model = value.model; this.provider = provider; this.changed(); return this.status();
     }
-    if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage the shared OpenAI API key in OpenAI setup.');
+    if (this.provider !== 'openai') throw new BuilderError('INVALID_INPUT', 'Manage this provider in Settings → AI connections. Legacy key actions apply only to OpenAI.');
+    if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage Assistant providers in AI connections or the OpenAI image key in Image generation.');
     if (value.action === 'environment' && !this.options.startupKey) throw new BuilderError('INVALID_INPUT', 'No startup environment key is available.');
     if (value.action === 'connect' && value.remember) this.credentials.save(value.key); else this.credentials.remove();
-    this.key = value.action === 'connect' ? value.key : value.action === 'environment' ? this.options.startupKey! : '';
+    this.legacyOpenAIKey = value.action === 'connect' ? value.key : value.action === 'environment' ? this.options.startupKey! : '';
     this.source = value.action === 'connect' ? value.remember ? 'saved' : 'session' : value.action === 'environment' ? 'environment' : 'none';
     this.changed(); return this.status();
   }
@@ -284,16 +287,17 @@ export class AssistantService {
       });
       void gateway.then(value => { if (run.controller.signal.aborted) return value.close(); }).catch(() => {});
       run.gateway = await abortable(gateway, AbortSignal.any([run.controller.signal, AbortSignal.timeout(this.limits.startupMs)])); this.guard(run);
-      if (run.gateway.tools.some(tool => tool.name === taskTool.name)) throw new Error('Assistant task tool name collision');
+      if (run.gateway.tools.some(tool => tool.name === taskTool.name || tool.name === setupTool.name)) throw new Error('Assistant tool name collision');
+      const setupAvailable = run.turn.mode !== 'plan' && run.gateway.tools.some(tool => tool.name === 'backend_inspect');
       const resolved = await abortable(resolveImages(run.attachments?.images, run.gateway, run.controller.signal), run.controller.signal); this.guard(run);
       if (resolved.records.length) run.turn.images = resolved.records;
       if (run.attachments?.inspector) await abortable(validateInspector(run.attachments.inspector, run.gateway, run.controller.signal), run.controller.signal);
       this.guard(run);
       run.harness = (this.options.createHarness ?? (() => new PiHarness()))();
       run.turn.state = 'running'; this.publish(run, { type: 'state', state: 'running' });
-      const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks })));
+      const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks, setupRequests: turn.setupRequests })));
       const boundedContext = (Buffer.byteLength(context) <= 58 * 1024 ? context : '[Earlier conversation omitted because it exceeds the context limit. Reinspect the current project. Old approvals never carry forward.]\nLast task checklist (historical context, not verification): ' + JSON.stringify(run.conversation.turns.at(-2)?.tasks ?? [])) + '\nCurrent image attachment metadata (untrusted data): ' + JSON.stringify(resolved.records);
-      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool], inspector: run.attachments?.inspector, images: resolved.images }, {
+      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
         imageAccepted: () => { this.guard(run); run.turn.imageContentAccepted = true; for (const image of run.turn.images ?? []) if (image.status === 'requested') image.status = 'adapter-accepted'; this.publish(run, { type: 'state', state: 'running' }); },
         text: text => { this.text(run, text); },
         tool: async (name, args, signal) => {
@@ -301,6 +305,21 @@ export class AssistantService {
           if (run.dispatching) throw new Error('Parallel assistant tool dispatch is disabled');
           if (++run.calls > this.limits.tools) { this.cancel(run, 'limited', 'The tool-call limit was reached. Send a new message to continue.'); throw new Error('Tool-call limit reached'); }
           if (run.secrets.some(secret => JSON.stringify(args).includes(secret))) throw new Error('Credentials cannot be sent to Dunara tools');
+          if (name === setupTool.name) {
+            if (!setupAvailable || !run.binding.projectId) throw new Error('Setup requires Build mode, backend tools and a selected app.');
+            const request = { ...setupRequestSchema.parse(args), projectId: run.binding.projectId };
+            run.dispatching = true;
+            try {
+              const requests = run.turn.setupRequests ?? [];
+              if (!requests.some(item => item.kind === request.kind && item.environment === request.environment && item.projectId === request.projectId)) {
+                if (requests.length >= 6) throw new Error('Setup request limit reached');
+                run.turn.setupRequests = [...requests, request];
+                await (await this.store()).save(structuredClone(run.conversation), this.limits.responseBytes * 6 + 4096); this.guard(run);
+                this.publish(run, { type: 'state', state: run.turn.state });
+              }
+              return { content: [{ type: 'text', text: 'Private setup card shown. No configuration or credential was changed. Finish this turn and wait for the user; inspect backend state when they continue.' }] };
+            } finally { run.dispatching = false; }
+          }
           if (name === taskTool.name) {
             const { tasks } = taskUpdateSchema.parse(args);
             run.dispatching = true;
@@ -334,7 +353,7 @@ export class AssistantService {
       try {
         await abortable(Promise.all([run.harness?.close(), run.gateway?.close()]), AbortSignal.timeout(this.limits.shutdownMs));
       } catch {
-        run.turn.state = 'failed'; this.connections.close(); this.closed = true; this.key = '';
+        run.turn.state = 'failed'; this.connections.close(); this.closed = true; this.legacyOpenAIKey = '';
         run.turn.notice = 'Assistant cleanup did not complete. Restart the backend before continuing.';
       }
       run.turn.endedAt = new Date().toISOString(); run.conversation.updatedAt = run.turn.endedAt;
@@ -365,7 +384,7 @@ export class AssistantService {
     if (this.closed) return;
     const run = this.active;
     if (run) this.cancel(run, 'interrupted', 'The assistant closed. Send a new message to continue; no prompt will be resubmitted.');
-    this.connections.close(); this.closed = true; this.key = ''; this.unsubscribeCredential?.(); this.listeners.clear();
+    this.connections.close(); this.closed = true; this.legacyOpenAIKey = ''; this.unsubscribeCredential?.(); this.listeners.clear();
     await run?.finished;
   }
 }

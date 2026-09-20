@@ -6,6 +6,8 @@ export const TOOL_POLICY: Readonly<Record<string, 'catalog' | 'read' | 'write' |
   plugin_list: 'catalog', plugin_guide: 'catalog', plugin_action: 'write',
   native_build_inspect: 'read', native_build_plan: 'read', native_build_apply: 'review',
   native_workspace_plan: 'read', native_workspace_list: 'read', native_workspace_prepare: 'review', native_workspace_cancel: 'review', native_workspace_remove: 'review',
+  native_delivery_preflight: 'read', native_delivery_plan: 'read', native_delivery_list: 'read', native_delivery_install_plan: 'read',
+  native_delivery_build: 'review', native_delivery_install: 'review', native_delivery_launch: 'review', native_delivery_cancel: 'review', native_delivery_remove: 'review',
   recipe_upgrade_preview: 'read', recipe_upgrade_apply: 'review',
   backend_catalog: 'read', backend_capabilities: 'read', backend_select_environment: 'write',
   backend_environment_inspect: 'read', backend_environment_declare: 'write', preview_set_transport: 'review',

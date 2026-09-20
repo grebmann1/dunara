@@ -39,7 +39,7 @@ it('works with an empty registry, sends only generic events, and reconciles MCP 
     await vi.waitFor(() => expect(frames.length).toBeGreaterThanOrEqual(2));
     expect(frames.every(frame => frame === JSON.stringify({ type: 'reconcile' }))).toBe(true);
     const tools = (await client.listTools()).tools.map(tool => tool.name);
-    expect(tools).toHaveLength(65); expect(tools.some(name => /settings|credential|provider|key/.test(name))).toBe(false);
+    expect(tools).toHaveLength(74); expect(tools.some(name => /settings|credential|provider|key/.test(name))).toBe(false);
     const project = await engine.projects.create({ name: 'Observe', slug: 'observe' });
     expect((await client.callTool({ name: 'media_list', arguments: { projectId: project.id } })).structuredContent).toMatchObject({ capabilities: { available: true, provider: { source: 'session' } } });
     await post({ action: 'disconnect', expectedRevision: engine.mediaJobs.providerStatus().revision });
