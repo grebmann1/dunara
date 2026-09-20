@@ -39,7 +39,7 @@ export class Backends {
     if (!this.database) {
       this.database = new PlatformStore(path.join(this.projects.home, 'platform'), this.options.encryptionKey ? new SecretBox(this.options.encryptionKey) : undefined);
       this.database.recoverExpired();
-      this.scheduler = setInterval(() => this.pump(), 2000);
+      this.scheduler = setInterval(() => { try { this.pump(); } catch { /* A failed durable cache requires the host to reopen it. */ } }, 2000);
       this.scheduler.unref();
     }
     return this.database;
@@ -277,7 +277,7 @@ export class Backends {
       this.store.finish(lease, 'succeeded', { projectRef: ref, environment: plan.environment, recovered: true });
     } catch (error) {
       try { this.store.finish(lease, 'reconciliation_required', null, publicError(error).message); } catch { /* A newer worker or cancellation owns the state. */ }
-    } finally { clearInterval(timer); this.options.changed?.(); }
+    } finally { clearInterval(timer); await this.store.flush(); this.options.changed?.(); }
   }
   private async run(id: string, plan: BackendPlan, signal: AbortSignal) {
     let lease: Lease | undefined;
@@ -288,7 +288,7 @@ export class Backends {
         const provider = this.provider(); await this.validatePlan(plan, signal); signal.throwIfAborted();
         if (plan.action === 'migration') {
           const migration = plan.migration!;
-          if (this.store.beginStep(lease, 'migration')) { await provider.applyMigration(plan.target.projectRef!, migration.name, migration.query, signal); this.store.completeStep(lease, 'migration', { name: migration.name, revision: migration.revision }); }
+          if (this.store.beginStep(lease, 'migration')) { await this.store.flush(); await provider.applyMigration(plan.target.projectRef!, migration.name, migration.query, signal); this.store.completeStep(lease, 'migration', { name: migration.name, revision: migration.revision }); }
           this.store.finish(lease, 'succeeded', { migration: migration.name }); return;
         }
         let ref = plan.target.projectRef;
@@ -296,6 +296,7 @@ export class Backends {
           const password = randomBytes(32).toString('base64url');
           this.store.putSecret(this.actor, `${id}:database-password`, password);
           this.store.beginStep(lease, 'create-project');
+          await this.store.flush();
           const remote = await provider.createProject({ name: plan.target.name!, region: plan.target.region!, organization: plan.target.organization, password }, signal);
           this.store.completeStep(lease, 'create-project', { ref: remote.ref }); ref = remote.ref;
         }
@@ -320,7 +321,7 @@ export class Backends {
         const inFlight = ['migration', 'create-project', 'connect-project', 'save-binding'].some(name => this.store.step(id, name)?.state === 'in_flight');
         try { this.store.finish(lease, inFlight ? 'reconciliation_required' : 'failed', null, publicError(error).message); } catch { /* A cancellation/expired lease already fenced this worker. */ }
       }
-    } finally { this.options.changed?.(); }
+    } finally { await this.store.flush(); this.options.changed?.(); }
   }
   async cancel(projectId: string, operationId: string) {
     await this.operation(projectId, operationId); const result = this.store.cancel(this.actor, operationId); this.active.get(operationId)?.controller.abort(); this.options.changed?.(); return result;

@@ -7,7 +7,7 @@ import { dependencyFiles, dependencyProfile } from "../../../core/src/dependency
 import { revision } from "../../../core/src/files.js";
 import type { Projects } from "../../../core/src/projects.js";
 import type { PreviewDriver } from "../../../core/src/preview-driver.js";
-import { atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
+import { removeStateFile, atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
 
 const reservedSchemes = new Set(['http', 'https', 'exp', 'exps', 'file', 'intent', 'mailto', 'tel', 'sms', 'data', 'javascript']);
 const reservedPackages = new Set('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null _'.split(' '));
@@ -203,7 +203,7 @@ export class NativeBuilds {
         }
         try {
           for (const file of plan.files) await this.replace(identity, file);
-          await rm(journalPath);
+          await removeStateFile(journalPath);
         } catch (error) {
           let restored = plan.state !== 'recovery';
           if (restored) for (const file of [...plan.files].reverse()) {
@@ -214,7 +214,7 @@ export class NativeBuilds {
               await this.replace(identity, { ...file, before: current, after: file.before });
             } catch { restored = false; }
           }
-          if (restored) await rm(journalPath);
+          if (restored) await removeStateFile(journalPath);
           throw new BuilderError('WRITE_FAILED', restored ? 'Build setup failed; original configuration restored. Review again before retrying.' : 'Build setup interrupted. Review recovery before previewing.', { recoveryRequired: !restored, cause: error instanceof Error ? error.message : 'Write failed' });
         }
         this.previews.diagnostics.emit('change', id);

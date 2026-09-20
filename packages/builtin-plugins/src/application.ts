@@ -142,5 +142,11 @@ export class Engine extends BuilderKernel {
     });
   }
   close() { return this.shutdown ??= this.dispose(); }
-  private async dispose() { await this.nativeDeliveries.close(); await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
+  private async dispose() {
+    const errors = [];
+    for (const close of [() => this.nativeDeliveries.close(), () => this.plugins.close(), () => this.account.clear(), () => this.nativeWorkspaces.close(), () => this.launchKits.close(), () => this.appIcons.close(), () => this.mediaJobs.close(), () => this.assets.close(), () => this.captures.close(), () => this.previews.close(), () => this.backends.close(), () => this.projects.closeState()]) {
+      try { await close(); } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Runtime shutdown completed with storage errors');
+  }
 }

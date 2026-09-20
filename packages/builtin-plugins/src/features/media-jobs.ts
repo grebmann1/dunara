@@ -26,7 +26,7 @@ export class MediaJobs {
   subscribeProvider(changed: () => void, beforeChange: () => void) { return this.#settings.subscribe(changed, beforeChange); }
   providerStatus() { return this.#settings.status(this.#inFlight || this.jobs.some(job => job.state === 'queued' || job.state === 'running')); }
   async configureProvider(input: unknown) {
-    return this.queue.run(async () => { this.active(); await this.load(); this.active(); return this.#settings.update(input, this.providerStatus().busy); });
+    return this.queue.run(async () => { this.active(); await this.load(); this.active(); const result = this.#settings.update(input, this.providerStatus().busy); await this.assets.projects.flushState(); return result; });
   }
   capabilities() { return { provider: this.providerStatus(), available: this.providerStatus().configured && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models: [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }], qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : this.providerStatus().configured ? null : 'OpenAI image generation is not configured. Open Settings → Image generation; offline assets remain available.' }; }
   private file() { return path.join(this.assets.projects.home, 'media-jobs.json'); }

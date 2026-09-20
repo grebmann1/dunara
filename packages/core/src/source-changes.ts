@@ -5,7 +5,7 @@ import path from 'node:path';
 import { z } from 'zod';
 import { BuilderError } from './contracts.js';
 import { type Files, revision, validFile } from './files.js';
-import { atomicWrite, exists, noSymlinks, readText } from './storage.js';
+import { atomicWrite, exists, noSymlinks, readText, removeStateFile } from './storage.js';
 
 const scopeSchema = z.object({ projectId: z.uuid(), conversationId: z.uuid(), runId: z.uuid() }).strict();
 export type ChangeScope = z.infer<typeof scopeSchema>;
@@ -194,7 +194,7 @@ export class SourceChanges {
       for (const name of await readdir(directory)) if (/^[a-f0-9-]{36}\.json$/.test(name)) {
         const filename = path.join(directory, name); await noSymlinks(directory, filename);
         const record = recordSchema.parse(JSON.parse(await readText(filename, this.quotas.turnBytes)));
-        if (record.conversationId === conversationId) await rm(filename);
+        if (record.conversationId === conversationId) await removeStateFile(filename);
       }
     });
   }

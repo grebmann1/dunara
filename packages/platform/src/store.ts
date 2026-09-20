@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
-import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync } from 'node:fs';
+import { chmodSync, closeSync, existsSync, lstatSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { authorize, operationSchema, PlatformError, uuid, environmentName, type Actor, type Operation, type OperationState } from './contracts.js';
+import { assertStateAvailable, flushHomeState, hasStatePersistence, stageHomeState } from '../../core/src/durable-state.js';
 import { canonical, hash, SecretBox } from './crypto.js';
 
 type Row = Record<string, unknown>;
@@ -10,10 +11,13 @@ type Submission = { projectId: string; environment: Operation['environment']; ki
 export type Lease = { operationId: string; owner: string; fence: number };
 export type Step = { name: string; state: 'in_flight' | 'completed' | 'rejected' | 'failed'; result: Record<string, unknown> | null };
 
-/** Single-host durable adapter. Hosted multi-worker deployments use the Postgres schema. */
+const stateTables = ['metadata', 'operations', 'operation_steps', 'operation_events', 'records', 'secrets'] as const;
+
+/** SQLite execution cache; an explicit home adapter can durably store its logical records. */
 export class PlatformStore {
-  private readonly db: DatabaseSync;
-  constructor(directory: string, private readonly box?: SecretBox, private readonly now = Date.now) {
+  private readonly database: DatabaseSync;
+  private get db() { assertStateAvailable(this.directory); return this.database; }
+  constructor(private readonly directory: string, private readonly box?: SecretBox, private readonly now = Date.now) {
     if (!path.isAbsolute(directory)) throw new PlatformError('INVALID_PATH', 'Platform storage requires an absolute directory.');
     let current = path.parse(directory).root;
     for (const part of directory.slice(current.length).split(path.sep).filter(Boolean)) {
@@ -26,12 +30,13 @@ export class PlatformStore {
     chmodSync(directory, 0o700);
     const filename = path.join(directory, 'platform.sqlite');
     if (existsSync(filename)) {
+      if (hasStatePersistence(directory)) throw new PlatformError('INVALID_PATH', 'Durable platform hydration requires a fresh database cache.');
       const file = lstatSync(filename);
       if (!file.isFile() || file.nlink !== 1 || (process.getuid && file.uid !== process.getuid())) throw new PlatformError('INVALID_PATH', 'Unsafe platform database file.');
     } else closeSync(openSync(filename, 'wx', 0o600));
     for (const suffix of ['-wal', '-shm', '-journal']) if (existsSync(filename + suffix) && !lstatSync(filename + suffix).isFile()) throw new PlatformError('INVALID_PATH', 'Unsafe platform database companion file.');
     chmodSync(filename, 0o600);
-    this.db = new DatabaseSync(filename);
+    this.database = new DatabaseSync(filename);
     this.db.exec(`PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
       CREATE TABLE IF NOT EXISTS metadata (key TEXT PRIMARY KEY, value TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS operations (
@@ -48,17 +53,51 @@ export class PlatformStore {
         PRIMARY KEY(workspace_id, kind, id));
       CREATE TABLE IF NOT EXISTS secrets (workspace_id TEXT NOT NULL, id TEXT NOT NULL, value TEXT NOT NULL,
         PRIMARY KEY(workspace_id, id));`);
+    try { this.restore(); } catch (error) { this.database.close(); throw error; }
   }
-  close() { this.db.close(); }
+  close() { this.database.close(); }
+  async flush() { await flushHomeState(this.directory); }
+  private checkpoint() {
+    if (!hasStatePersistence(this.directory)) return;
+    const tables = Object.fromEntries(stateTables.map(table => [table, this.db.prepare(`SELECT * FROM ${table}`).all()]));
+    void stageHomeState(path.join(this.directory, 'state.json'), Buffer.from(JSON.stringify({ version: 1, tables })));
+  }
+  private restore() {
+    const file = path.join(this.directory, 'state.json');
+    if (!hasStatePersistence(this.directory) || !existsSync(file)) return;
+    if (lstatSync(file).size > 16_000_000) throw Error('Platform state limit exceeded');
+    const state = JSON.parse(readFileSync(file, 'utf8'));
+    if (state.version !== 1 || !state.tables || Object.keys(state.tables).sort().join() !== [...stateTables].sort().join()) throw Error('Invalid platform state');
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const table of stateTables) {
+        const columns = this.db.prepare(`PRAGMA table_info(${table})`).all().map(row => String(row.name));
+        const rows = state.tables[table];
+        if (!Array.isArray(rows) || rows.length > 100_000) throw Error('Invalid platform rows');
+        const insert = this.db.prepare(`INSERT INTO ${table} (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`);
+        for (const row of rows) {
+          if (!row || Object.keys(row).sort().join() !== [...columns].sort().join()) throw Error('Invalid platform record');
+          const values = columns.map(column => row[column]);
+          if (values.some(value => value !== null && typeof value !== 'string' && !(typeof value === 'number' && Number.isSafeInteger(value)))) throw Error('Invalid platform value');
+          insert.run(...values);
+        }
+      }
+      this.db.exec('COMMIT');
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
   identity() {
     const key = 'local_workspace';
-    this.db.prepare('INSERT OR IGNORE INTO metadata(key,value) VALUES (?,?)').run(key, randomUUID());
+    if (this.db.prepare('INSERT OR IGNORE INTO metadata(key,value) VALUES (?,?)').run(key, randomUUID()).changes) this.checkpoint();
     return String(this.db.prepare('SELECT value FROM metadata WHERE key=?').get(key)!.value);
   }
   private transaction<T>(fn: () => T) {
+    const before = this.db.prepare('SELECT total_changes() AS count').get()!.count;
     this.db.exec('BEGIN IMMEDIATE');
-    try { const result = fn(); this.db.exec('COMMIT'); return result; }
+    let result: T;
+    try { result = fn(); this.db.exec('COMMIT'); }
     catch (error) { this.db.exec('ROLLBACK'); throw error; }
+    if (this.db.prepare('SELECT total_changes() AS count').get()!.count !== before) this.checkpoint();
+    return result;
   }
   private date() { return new Date(this.now()).toISOString(); }
   private row(row: Row): Operation {
@@ -102,12 +141,13 @@ export class PlatformStore {
   private readableRows(rows: Row[]) {
     return rows.flatMap(row => {
       try { return [this.row(row)]; }
-      catch { this.db.prepare("UPDATE operations SET state='failed',error=?,lease_owner=NULL,lease_until=NULL WHERE id=? AND state IN ('queued','awaiting_approval')").run('This stored operation is malformed. Its original record was retained; prepare a new supported plan.', String(row.id)); return []; }
+      catch { this.db.prepare("UPDATE operations SET state='failed',error=?,lease_owner=NULL,lease_until=NULL WHERE id=? AND state IN ('queued','awaiting_approval')").run('This stored operation is malformed. Its original record was retained; prepare a new supported plan.', String(row.id)); this.checkpoint(); return []; }
     });
   }
   rejectUnsupported(actor: Actor, id: string) {
     authorize(actor, actor.workspaceId, 'write');
     this.db.prepare("UPDATE operations SET state='failed',error=?,updated_at=? WHERE id=? AND workspace_id=? AND state='queued'").run('This operation version or kind is unsupported. Update Dunara or prepare a new supported plan. No change was executed.', this.date(), id, actor.workspaceId);
+    this.checkpoint();
   }
   steps(actor: Actor, id: string) {
     this.get(actor, id);
@@ -246,6 +286,7 @@ export class PlatformStore {
   putRecord(actor: Actor, kind: string, id: string, value: unknown) {
     authorize(actor, actor.workspaceId, 'write');
     this.db.prepare('INSERT INTO records(workspace_id,kind,id,value) VALUES (?,?,?,?) ON CONFLICT(workspace_id,kind,id) DO UPDATE SET value=excluded.value').run(actor.workspaceId, kind, id, canonical(value));
+    this.checkpoint();
   }
   getRecord<T>(actor: Actor, kind: string, id: string): T | null {
     authorize(actor, actor.workspaceId, 'read'); const row = this.db.prepare('SELECT value FROM records WHERE workspace_id=? AND kind=? AND id=?').get(actor.workspaceId, kind, id);
@@ -268,6 +309,7 @@ export class PlatformStore {
     if (!this.box) throw new PlatformError('CONFIGURATION_REQUIRED', 'Persistent secrets require a configured encryption key. Use session-only connection otherwise.');
     this.assertSecretStorage(actor);
     this.db.prepare('INSERT INTO secrets(workspace_id,id,value) VALUES (?,?,?) ON CONFLICT(workspace_id,id) DO UPDATE SET value=excluded.value').run(actor.workspaceId, id, this.box.seal(value, `${actor.workspaceId}:${id}`));
+    this.checkpoint();
   }
   getSecret(actor: Actor, id: string) {
     authorize(actor, actor.workspaceId, 'manage'); const row = this.db.prepare('SELECT value FROM secrets WHERE workspace_id=? AND id=?').get(actor.workspaceId, id);
@@ -283,5 +325,5 @@ export class PlatformStore {
       this.box.open(String(row.value), `${actor.workspaceId}:${String(row.id)}`);
     }
   }
-  deleteSecret(actor: Actor, id: string) { this.assertSecretStorage(actor); this.db.prepare('DELETE FROM secrets WHERE workspace_id=? AND id=?').run(actor.workspaceId, id); }
+  deleteSecret(actor: Actor, id: string) { this.assertSecretStorage(actor); this.db.prepare('DELETE FROM secrets WHERE workspace_id=? AND id=?').run(actor.workspaceId, id); this.checkpoint(); }
 }

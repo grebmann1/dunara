@@ -7,6 +7,7 @@ import { BuilderError, createSchema, projectSchema, type Project } from './contr
 import { atomicWrite, canonicalDirectory, exists, noSymlinks, readText } from './storage.js';
 import { ProjectDurability, ProjectTransactions, type ProjectWorkspacePersistence, type ProjectWorkspaceSnapshot } from './durable-projects.js';
 import { snapshotSource } from './source.js';
+import { flushHomeState, mountHomeState, type HomeStatePersistence } from './durable-state.js';
 import { presets } from '../../templates/src/catalog.js';
 import { defaultStudio, projectMetadataSchema, recipeApplicationSchema, type StudioPreferences } from './studio-contracts.js';
 import type { JourneyPreferences } from './journey-contracts.js';
@@ -16,16 +17,21 @@ export const templateRoot = fileURLToPath(new URL('../../templates/expo/', impor
 
 export class Projects {
   readonly mutations: ProjectTransactions;
+  private unmountState?: () => Promise<void>;
   private constructor(readonly workspace: string, readonly home: string, durability?: ProjectDurability) {
     this.mutations = new ProjectTransactions(durability ? async () => durability.commit(await this.snapshot()) : undefined);
   }
-  static async open(workspace: string, home: string, persistence?: ProjectWorkspacePersistence) {
+  static async open(workspace: string, home: string, persistence?: ProjectWorkspacePersistence, statePersistence?: HomeStatePersistence) {
     const durability = persistence ? new ProjectDurability(persistence) : undefined;
     const service = new Projects(await canonicalDirectory(workspace), await canonicalDirectory(home), durability);
     if (service.workspace === service.home || service.home.startsWith(service.workspace + path.sep)) throw new BuilderError('INVALID_PATH', 'Dunara home must be outside the generated workspace');
+    if (statePersistence && service.workspace.startsWith(service.home + path.sep)) throw new BuilderError('INVALID_PATH', 'Durable home and project caches must not overlap');
     await durability?.restore(service.workspace, service.home);
+    if (statePersistence) service.unmountState = await mountHomeState(service.home, statePersistence);
     return service;
   }
+  flushState() { return flushHomeState(this.home); }
+  async closeState() { const unmount = this.unmountState; this.unmountState = undefined; await unmount?.(); }
   private async snapshot(): Promise<ProjectWorkspaceSnapshot> {
     const projects = [];
     for (const record of await this.records()) {

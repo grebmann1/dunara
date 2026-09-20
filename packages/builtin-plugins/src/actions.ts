@@ -19,11 +19,12 @@ import { kitFileIdSchema, launchKitCreateSchema, launchKitRemoveSchema, type Lau
 
 const projectId = z.uuid();
 const text = (value: Record<string, unknown>): CallToolResult => ({ content: [{ type: 'text', text: JSON.stringify(value) }], structuredContent: value });
-async function guarded(operation: () => Promise<CallToolResult>): Promise<CallToolResult> {
+async function guardedResult(operation: () => Promise<CallToolResult>): Promise<CallToolResult> {
   try { return await operation(); } catch (error) { return { ...text(errorResult(error)), isError: true }; }
 }
 const annotations = (readOnlyHint: boolean, destructiveHint = false) => ({ readOnlyHint, destructiveHint, idempotentHint: readOnlyHint, openWorldHint: false });
 export function registerBuiltinTools(server: McpServer, engine: Engine) {
+  const guarded = (operation: () => Promise<CallToolResult>) => guardedResult(async () => { const result = await operation(); await engine.projects.flushState(); return result; });
   registerBackendTools(server, engine);
   server.registerTool('native_delivery_preflight', { description: 'Inspect local Xcode, CocoaPods, paired physical iPhones and available Apple Development signing teams. No build, account login or phone changes. Local Studio only.', inputSchema: { projectId }, annotations: annotations(true) }, ({ projectId }) => guarded(async () => { await engine.projects.get(projectId); return text(await engine.nativeDeliveries.preflight()); }));
   server.registerTool('native_delivery_plan', { description: 'Review a local iOS Release build from a ready Preview/No backend preparation, selecting an exact iPhone and signing team. Includes Apple automatic provisioning effects. No build or installation.', inputSchema: { projectId, selection: deliverySelection }, annotations: annotations(true) }, ({ projectId, selection }) => guarded(async () => text(await engine.nativeDeliveries.plan(projectId, selection))));

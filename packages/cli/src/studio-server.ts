@@ -34,8 +34,14 @@ async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new BuilderError('INVALID_INPUT', 'Malformed JSON request. Check the form and submit again.'); }
 }
-function json(res: ServerResponse, value: unknown, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
+function sendJson(res: ServerResponse, value: unknown, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
 export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService) {
+  // Async stores commit at the write. Legacy synchronous settings stage immutable records;
+  // their acknowledgment barrier must finish before a successful transport response.
+  async function json(res: ServerResponse, value: unknown, status = 200) {
+    if (status < 400) await engine.projects.flushState();
+    sendJson(res, value, status);
+  }
   assistant?.useSourceChanges(engine.sourceChanges, async projectId => {
     if ((await engine.studio.snapshot()).projectId !== projectId) throw new BuilderError('REVISION_CONFLICT', 'Select the conversation’s app before restoring its source.');
   });

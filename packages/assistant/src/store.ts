@@ -2,7 +2,7 @@ import { lstat, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { BuilderError } from '../../core/src/contracts.js';
-import { atomicWrite, exists, noSymlinks, readText, SerialQueue } from '../../core/src/storage.js';
+import { atomicWrite, exists, noSymlinks, readText, removeStateFile, SerialQueue } from '../../core/src/storage.js';
 import { ASSISTANT_LIMITS, conversationSchema, type AssistantLimits, type Conversation } from './contracts.js';
 
 export class AssistantStore {
@@ -90,5 +90,5 @@ export class AssistantStore {
       return false;
     });
   }
-  remove(id: string) { return this.queue.run(async () => { await this.inventory(); await this.readUnchecked(id); await rm(this.filename(id)); }); }
+  remove(id: string) { return this.queue.run(async () => { await this.inventory(); await this.readUnchecked(id); await removeStateFile(this.filename(id)); }); }
 }

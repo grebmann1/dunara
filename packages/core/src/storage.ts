@@ -3,6 +3,7 @@ import { lstat, mkdir, open, realpath, rename, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { BuilderError } from './contracts.js';
+import { assertStateAvailable, stageHomeState } from './durable-state.js';
 
 export async function exists(file: string) { try { return await lstat(file); } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return null; throw e; } }
 export function inside(root: string, target: string) { const rel = path.relative(root, target); return rel !== '' && rel !== '..' && !rel.startsWith(`..${path.sep}`) && !path.isAbsolute(rel); }
@@ -17,6 +18,7 @@ export async function noSymlinks(root: string, target: string) {
 }
 export async function canonicalDirectory(directory: string) { await mkdir(directory, { recursive: true }); return realpath(directory); }
 export async function readText(file: string, limit = 256_000) {
+  assertStateAvailable(file);
   const handle = await open(file, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const stat = await handle.stat();
@@ -27,13 +29,20 @@ export async function readText(file: string, limit = 256_000) {
     return new TextDecoder('utf-8', { fatal: true }).decode(buffer.subarray(0, bytesRead));
   } finally { await handle.close(); }
 }
-export async function atomicWrite(file: string, content: string) {
+export async function atomicWrite(file: string, content: string | Uint8Array) {
+  assertStateAvailable(file);
   const tmp = path.join(path.dirname(file), `.builder-${randomUUID()}.tmp`);
   try {
     const handle = await open(tmp, 'wx', 0o600);
     try { await handle.writeFile(content); await handle.sync(); } finally { await handle.close(); }
     await rename(tmp, file);
+    await stageHomeState(file, Buffer.from(content));
   } finally { await rm(tmp, { force: true }); }
+}
+export async function removeStateFile(file: string) {
+  assertStateAvailable(file);
+  await rm(file);
+  await stageHomeState(file, null);
 }
 export class SerialQueue {
   private tail: Promise<unknown> = Promise.resolve();

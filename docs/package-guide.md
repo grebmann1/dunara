@@ -55,6 +55,7 @@ Explicit subpaths:
 | `/resources` | Installed Studio, template and bundled-plugin paths |
 | `/preview` | Execution-driver types, dependency preflight and source revision helper |
 | `/source` | Bounded source snapshots, checkpoints and portable lockfiles |
+| `/durable-state` | Protected home-state adapter, explicit mounts and durability barriers |
 | `/durable-projects` | Project persistence contract, bounded snapshot validation and empty-cache hydration |
 | `/accounts`, `/backend-oauth` | Generic account and OAuth clients |
 | `/backend-contracts`, `/backend-configuration`, `/oauth-contracts` | Backend schemas and protocol validators |
@@ -64,7 +65,7 @@ Explicit subpaths:
 
 The runtime includes the complete curated templates and bundled plugins. Generated Expo projects contain neither runtime imports nor a requirement to sign into Dunara. Optional Assistant harness packages may be absent; ordinary local building and previewing remain usable. Sharp’s platform binaries are required for media operations; do not disable all optional npm dependencies globally.
 
-An optional `projectPersistence` adapter on `createBuilderRuntime` (or the third argument to `Projects.open`) makes the project mutation queue await an external durable commit before returning success. The adapter is bound by the host to one authorized owner and implements `load` and revision-checked, idempotent `commit`. Source bytes, assets and project metadata restore into **empty disposable** workspace/home directories; existing directories are never overwritten. Failed or ambiguous commits invalidate that cache until the host reopens it from saved state. This project contract does not persist Assistant history, credentials, operation ledgers or other home-directory state; hosts must supply those durability boundaries before claiming complete workspace recovery.
+An optional `projectPersistence` adapter on `createBuilderRuntime` (or the third argument to `Projects.open`) makes the project mutation queue await an external durable commit before returning success. The adapter is bound by the host to one authorized owner and implements `load` and revision-checked, idempotent `commit`. Source bytes, assets and project metadata restore into **empty disposable** workspace/home directories; existing directories are never overwritten. Failed or ambiguous commits invalidate that cache until the host reopens it from saved state. Supply a separate `statePersistence: HomeStatePersistence` adapter for Assistant history, settings, backend ledgers, saved board captures, launch kits and bundled-plugin state. It atomically writes bounded batches of relative keys, with `null` denoting deletion. The host must encrypt these private values, bind them to the same authorized owner/fence, and retain existing inner credential encryption contexts. Async writers await their commits; synchronous settings and ledger writers stage immutable values, then service/transport barriers await them before acknowledgment. Backend requests await the ledger commit before external writes. Failure fences the home cache. Runtime shutdown drains and unmounts even after failure. Local-only native artifacts and transient preview captures are not persisted by this adapter. Hosting must disable unsupported execution/install paths server-side.
 
 ## Studio
 

@@ -5,6 +5,7 @@ import { parseEnv } from 'node:util';
 import { z } from 'zod';
 import { BuilderError } from './contracts.js';
 import { SecretBox } from '../../platform/src/crypto.js';
+import { assertStateAvailable, stageHomeState } from './durable-state.js';
 
 export const credentialKeySchema = z.string().min(16).max(4096).regex(/^[\x21-\x7e]+$/);
 const savedSchema = z.object({ version: z.literal(1), key: credentialKeySchema }).strict();
@@ -52,6 +53,7 @@ export class PrivateSettingsStore<T> {
     this.directory = path.join(home, 'credentials'); this.file = path.join(this.directory, `${slot}.json`);
   }
   private check(create = false) {
+    assertStateAvailable(this.home);
     if (create) mkdirSync(this.home, { recursive: true, mode: 0o700 });
     let home;
     try { home = lstatSync(this.home); } catch (error) { if (missing(error)) return false; throw error; }
@@ -81,13 +83,14 @@ export class PrivateSettingsStore<T> {
       const fd = openSync(temporary, constants.O_WRONLY | constants.O_CREAT | constants.O_EXCL | constants.O_NOFOLLOW, 0o600);
       try { writeFileSync(fd, content); fsyncSync(fd); } finally { closeSync(fd); }
       this.check(); renameSync(temporary, this.file);
+      void stageHomeState(this.file, Buffer.from(content));
     } catch {
       if (temporary) { try { unlinkSync(temporary); } catch { /* The storage failure below also covers failed cleanup. */ } }
       throw failure();
     }
   }
   remove() {
-    try { if (this.load() !== undefined) unlinkSync(this.file); }
+    try { if (this.load() !== undefined) { unlinkSync(this.file); void stageHomeState(this.file, null); } }
     catch { throw failure(); }
   }
 }

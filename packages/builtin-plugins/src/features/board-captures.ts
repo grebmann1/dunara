@@ -1,10 +1,10 @@
-import { lstat, mkdir, readdir, rm } from 'node:fs/promises';
+import { lstat, mkdir, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
 import { BuilderError, revisionSchema, routeSchema } from "../../../core/src/contracts.js";
 import type { Captures } from "../../../core/src/capture.js";
 import { Files, revision } from "../../../core/src/files.js";
-import { atomicWrite, noSymlinks, readText, SerialQueue } from "../../../core/src/storage.js";
+import { atomicWrite, noSymlinks, readText, removeStateFile, SerialQueue } from "../../../core/src/storage.js";
 
 const recordSchema = z.object({ id: z.uuid(), projectId: z.uuid(), route: routeSchema, createdAt: z.iso.datetime(), sourceRevision: revisionSchema, configurationRevision: revisionSchema.optional(), environment: z.string().optional(), changedDuringCapture: z.boolean(), png: z.string().max(2_700_000) }).strict();
 type Record = z.infer<typeof recordSchema>;
@@ -73,7 +73,7 @@ export class BoardCaptures {
         const records = await this.records(id);
         if (!records.some(item => item.route === route) && records.length >= 24) {
           const oldest = records.sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0]!;
-          await rm(path.join(directory, `${revision(oldest.route)}.json`));
+          await removeStateFile(path.join(directory, `${revision(oldest.route)}.json`));
         }
         const file = path.join(directory, `${revision(route)}.json`); await noSymlinks(this.files.projects.home, file);
         await atomicWrite(file, JSON.stringify(record));
