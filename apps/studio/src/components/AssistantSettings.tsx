@@ -42,9 +42,13 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
   }
   const choose = (id: string) => { selectionDirty.current = true; setProvider(id); setModel(connections.find(item => item.id === id)?.models[0]?.id ?? ''); };
   const disconnect = (id: string) => void act('connections/update', { action: 'disconnect', provider: id, expectedRevision: status?.connectionRevision }, 'Connection removed. Other providers remain connected.');
+  if (!status?.available || !connections.length) return <section className="settings-section ai-connections ai-connections-unavailable" aria-label="Assistant configuration">
+    <div className="ai-connections-heading"><KeyRound size={18} aria-hidden /><h2>AI connections</h2></div>
+    <p role="status">{!status ? error || 'Loading connections…' : status.available ? 'Restart Dunara to load AI connections.' : 'The Assistant requires the desktop app with its optional runtime installed.'}</p>
+    {status?.available && <p>The interface has been updated, but the running backend does not provide the connection list. Save unsent drafts, then fully quit and relaunch Dunara. Refreshing this page does not restart the backend.</p>}
+  </section>;
   return <section className="settings-section ai-connections" aria-label="Assistant configuration">
     <div className="ai-connections-heading"><KeyRound size={18} aria-hidden /><div><h2>AI connections</h2><p>Connect your accounts, then choose a model for the Assistant.</p></div></div>
-    {!status?.available && <p role="status">{status ? 'The Assistant is available in the desktop app.' : 'Loading connections…'}</p>}
     <div className="ai-subscriptions">{connections.filter(item => item.kind === 'oauth').map(item => <section className="ai-connection-card" key={item.id} aria-label={`${item.name} connection`}>
       <div className="ai-connection-title"><strong>{item.name}</strong><span>{item.configured ? <><Check size={13} aria-hidden />Connected</> : item.locked ? 'Locked' : 'Subscription'}</span></div>
       <p>{item.configured ? `${item.source === 'saved' ? 'Remembered' : 'This session'} · ready to select below` : `Sign in with your ${item.name} account.`}</p>

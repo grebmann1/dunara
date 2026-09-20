@@ -69,7 +69,7 @@ export class ProviderSettings {
     return this.status(false);
   }
   run(...args: Parameters<ImageProvider['run']>) {
-    if (!this.#provider) throw new BuilderError('INVALID_INPUT', 'OpenAI is not configured. Open Settings or supply OPENAI_API_KEY at startup; no provider call was made.');
+    if (!this.#provider) throw new BuilderError('INVALID_INPUT', 'OpenAI image generation is not configured. Connect an image key in Settings → Image generation; OPENAI_API_KEY is an optional startup fallback. No provider call was made.');
     return this.#provider.run(...args);
   }
   close() { this.#key = ''; this.#listeners.clear(); this.#provider = undefined; this.#startup = undefined; this.#source = 'none'; }

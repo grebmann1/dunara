@@ -1,4 +1,5 @@
 .ai-connections { display: grid; gap: 16px; }
+.ai-connections.ai-connections-unavailable { gap: 0; }
 .ai-connections .ai-connections-heading { display: flex; align-items: flex-start; gap: 10px; }
 .ai-connections-heading h2, .ai-connections-heading p { margin: 0; }
 .ai-connections-heading p { margin-top: 4px; }

@@ -206,3 +206,59 @@ it('snapshots provider selection per turn and preserves independent API connecti
   expect(assistant.status().connections.find(item => item.id === 'anthropic')?.configured).toBe(true);
   expect(engine.mediaJobs.providerStatus().configured).toBe(false);
 });
+
+it('isolates Assistant credentials and endpoints from changes to the OpenAI image fallback', async () => {
+  const anthropic = 'fixture-anthropic-own-key', openai = 'fixture-openai-own-key', image = 'fixture-openai-image-key';
+  const baseUrl = 'https://assistant-gateway.example/v1';
+  const update = (input: Record<string, unknown>) => post('connections/update', { ...input, expectedRevision: assistant.status().connectionRevision });
+  expect((await update({ action: 'connect', provider: 'anthropic', key: anthropic, remember: false, baseUrl })).status).toBe(200);
+  const model = assistant.status().connections.find(item => item.id === 'anthropic')!.models[0]!.id;
+  expect((await post('configure', { action: 'model', provider: 'anthropic', model })).status).toBe(200);
+  const observed = vi.fn(); behavior = async input => { observed(input.provider, input.apiKey, input.baseUrl); };
+  const conversation = await create();
+  const send = async () => { await start(conversation); await vi.waitFor(() => expect(assistant.status().busy).toBe(false)); };
+  await send(); expect(observed).toHaveBeenLastCalledWith('anthropic', anthropic, baseUrl);
+  expect((await settings('replace', image)).status).toBe(200);
+  await send(); expect(observed).toHaveBeenLastCalledWith('anthropic', anthropic, baseUrl);
+  expect((await settings('disconnect')).status).toBe(200);
+  await send(); expect(observed).toHaveBeenLastCalledWith('anthropic', anthropic, baseUrl);
+  expect((await settings('replace', image)).status).toBe(200);
+  for (const action of ['disconnect', 'environment', 'connect']) {
+    expect((await post('configure', { action, ...(action === 'connect' ? { key: image } : {}) })).status).toBe(400);
+  }
+  expect((await update({ action: 'disconnect', provider: 'anthropic' })).status).toBe(200);
+  expect(assistant.status()).toMatchObject({ providerId: 'anthropic', configured: false, source: 'none', environmentAvailable: false });
+  expect((await post('turns/start', { epoch: assistant.epoch, turn: { conversationId: conversation.id, runId: randomUUID(), prompt: 'Do not fall back' } })).status).toBe(400);
+  expect(observed).toHaveBeenCalledTimes(3);
+  expect((await post('configure', { action: 'model', provider: 'openai', model: 'gpt-6-astra' })).status).toBe(200);
+  await send(); expect(observed).toHaveBeenLastCalledWith('openai', image, undefined);
+  expect((await update({ action: 'connect', provider: 'openai', key: openai, remember: false, baseUrl })).status).toBe(200);
+  expect((await settings('disconnect')).status).toBe(200);
+  await send(); expect(observed).toHaveBeenLastCalledWith('openai', openai, baseUrl);
+  expect(engine.mediaJobs.providerStatus().configured).toBe(false);
+  expect((await settings('replace', image)).status).toBe(200);
+  expect((await update({ action: 'disconnect', provider: 'openai' })).status).toBe(200);
+  await send(); expect(observed).toHaveBeenLastCalledWith('openai', image, undefined);
+});
+
+it('restores a saved non-OpenAI selection without advertising an unrelated startup key', async () => {
+  const options = { home: path.join(root, 'separate-assistant'), secretProtection: { kind: 'configured' as const, key: 'a'.repeat(64) } };
+  const initial = new AssistantService(options);
+  try {
+    await initial.useOpenAI(engine.mediaJobs);
+    initial.connectionUpdate({ action: 'connect', provider: 'anthropic', key: 'fixture-remembered-anthropic', remember: true, expectedRevision: initial.status().connectionRevision });
+    initial.configure({ action: 'model', provider: 'anthropic', model: initial.status().connections.find(item => item.id === 'anthropic')!.models[0]!.id });
+  } finally { await initial.close(); }
+  for (const startupKey of [undefined, 'fixture-unrelated-openai-startup']) {
+    const restored = new AssistantService({ ...options, startupKey });
+    try {
+      expect(restored.status()).toMatchObject({ providerId: 'anthropic', configured: true, source: 'saved', environmentAvailable: false });
+      expect(restored.status().connections.find(item => item.id === 'openai')).toMatchObject({ configured: !!startupKey, source: startupKey ? 'environment' : 'none' });
+      for (const action of ['disconnect', 'environment', 'connect']) expect(() => restored.configure({ action, ...(action === 'connect' ? { key: secret } : {}) })).toThrow('AI connections');
+      if (startupKey) {
+        restored.configure({ action: 'model', provider: 'openai', model: 'gpt-6-astra' });
+        expect(restored.status()).toMatchObject({ configured: true, environmentAvailable: true, source: 'environment' });
+      }
+    } finally { await restored.close(); }
+  }
+});

@@ -28,7 +28,7 @@ export class MediaJobs {
   async configureProvider(input: unknown) {
     return this.queue.run(async () => { this.active(); await this.load(); this.active(); return this.#settings.update(input, this.providerStatus().busy); });
   }
-  capabilities() { return { provider: this.providerStatus(), available: this.providerStatus().configured && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models: [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }], qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : this.providerStatus().configured ? null : 'OpenAI is not configured. Open Settings; offline assets remain available.' }; }
+  capabilities() { return { provider: this.providerStatus(), available: this.providerStatus().configured && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models: [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }], qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : this.providerStatus().configured ? null : 'OpenAI image generation is not configured. Open Settings → Image generation; offline assets remain available.' }; }
   private file() { return path.join(this.assets.projects.home, 'media-jobs.json'); }
   private async load() {
     if (this.loaded) return;
@@ -96,7 +96,7 @@ export class MediaJobs {
       this.#settings.assertRevision(expectedConfigurationRevision);
       const job = this.jobs.find(j => j.id === jobId && j.projectId === projectId);
       if (!job || job.state !== 'awaiting-approval') throw new BuilderError('INVALID_INPUT', 'Job is not awaiting approval');
-      if (!this.providerStatus().configured) throw new BuilderError('INVALID_INPUT', 'OpenAI is not configured. Open Settings or supply OPENAI_API_KEY at startup; no provider call was made');
+      if (!this.providerStatus().configured) throw new BuilderError('INVALID_INPUT', 'OpenAI image generation is not configured. Connect an image key in Settings → Image generation; OPENAI_API_KEY is an optional startup fallback. No provider call was made.');
       await this.validate(job); this.active(); job.state = 'queued'; job.approvedAt = new Date().toISOString();
       try { await this.persist(); } catch (error) { job.state = 'awaiting-approval'; delete job.approvedAt; throw error; }
       return this.result(job);

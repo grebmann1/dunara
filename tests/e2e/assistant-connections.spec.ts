@@ -102,3 +102,41 @@ test('subscription sign-in and cancellation preserve an unsaved API key', async 
   await expect(key).toHaveValue('unsaved-api-key-sentinel'); await expect(key).toBeEnabled();
   expect(calls).toHaveLength(0);
 });
+
+test('explains provider-specific credentials and keeps startup guidance scoped to images', async ({ page }, info) => {
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const spending = page.getByRole('region', { name: 'Connections and spending' });
+  await expect(spending).toContainText('Messages use your selected provider and model.');
+  await expect(spending).not.toContainText('OPENAI_API_KEY');
+  const images = page.getByRole('region', { name: 'OpenAI configuration' });
+  await images.getByText('OpenAI fallback and startup settings', { exact: true }).click();
+  await expect(images.getByText(/Other Assistant providers use their own connections/)).toBeVisible();
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await images.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`image-credentials-${width}.png`), animations: 'disabled' });
+    await spending.scrollIntoViewIfNeeded();
+    await expect(spending).toBeInViewport({ ratio: 1 });
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.screenshot({ path: info.outputPath(`connections-spending-${width}.png`), animations: 'disabled' });
+  }
+  expect(calls).toHaveLength(0);
+});
+
+test('explains how to recover when an old backend omits connection metadata', async ({ page }, info) => {
+  await page.route('**/api/assistant/status', route => route.fulfill({ json: { ...assistant.status(), connections: undefined, rememberAvailable: undefined } }));
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const configuration = page.getByRole('region', { name: 'Assistant configuration' });
+  await expect(configuration.getByRole('status')).toHaveText('Restart Dunara to load AI connections.');
+  await expect(configuration).toContainText('Save unsent drafts');
+  await expect(configuration.getByText('API keys & endpoints', { exact: false })).toHaveCount(0);
+  await expect(configuration).not.toContainText('Protected storage is unavailable');
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await configuration.scrollIntoViewIfNeeded();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`outdated-backend-${width}.png`), animations: 'disabled' });
+  }
+  expect(calls).toHaveLength(0);
+});

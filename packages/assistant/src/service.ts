@@ -52,12 +52,11 @@ export class AssistantService {
   async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
-  private localKey = '';
+  private legacyOpenAIKey = '';
   private shared?: MediaJobs;
   private unsubscribeCredential?: () => void;
-  private legacyCredential() { return this.shared?.providerCredential() ?? { key: this.localKey, source: this.source }; }
+  private legacyCredential() { return this.shared?.providerCredential() ?? { key: this.legacyOpenAIKey, source: this.source }; }
   private get key() { return this.closed ? '' : this.connections.credential(this.provider, this.legacyCredential()).key; }
-  private set key(value: string) { this.localKey = value; }
   private model = 'gpt-6-astra';
   private provider: AssistantProvider = 'openai';
   private connections: AssistantConnections;
@@ -97,12 +96,13 @@ export class AssistantService {
     this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle());
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
-    this.key = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
-    this.source = saved ? 'saved' : this.key ? 'environment' : 'none';
+    this.legacyOpenAIKey = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
+    this.source = saved ? 'saved' : this.legacyOpenAIKey ? 'environment' : 'none';
   }
-  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  /** Compatibility fallback for OpenAI only; connection selection remains independent. */
   async useOpenAI(shared: MediaJobs) {
-    this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.localKey = '';
+    this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.legacyOpenAIKey = '';
     this.unsubscribeCredential = shared.subscribeProvider(() => this.changed(), () => { if (!this.closed) this.idle(); });
     if (piAvailable()) {
       await this.connections.initialize();
@@ -117,10 +117,11 @@ export class AssistantService {
       if (!this.connections.models(provider).some(model => model.id === value.model)) throw new BuilderError('INVALID_INPUT', 'Choose a supported assistant model.');
       this.modelSettings.save({ model: value.model, provider }); this.model = value.model; this.provider = provider; this.changed(); return this.status();
     }
-    if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage the shared OpenAI API key in OpenAI setup.');
+    if (this.provider !== 'openai') throw new BuilderError('INVALID_INPUT', 'Manage this provider in Settings → AI connections. Legacy key actions apply only to OpenAI.');
+    if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage Assistant providers in AI connections or the OpenAI image key in Image generation.');
     if (value.action === 'environment' && !this.options.startupKey) throw new BuilderError('INVALID_INPUT', 'No startup environment key is available.');
     if (value.action === 'connect' && value.remember) this.credentials.save(value.key); else this.credentials.remove();
-    this.key = value.action === 'connect' ? value.key : value.action === 'environment' ? this.options.startupKey! : '';
+    this.legacyOpenAIKey = value.action === 'connect' ? value.key : value.action === 'environment' ? this.options.startupKey! : '';
     this.source = value.action === 'connect' ? value.remember ? 'saved' : 'session' : value.action === 'environment' ? 'environment' : 'none';
     this.changed(); return this.status();
   }
@@ -334,7 +335,7 @@ export class AssistantService {
       try {
         await abortable(Promise.all([run.harness?.close(), run.gateway?.close()]), AbortSignal.timeout(this.limits.shutdownMs));
       } catch {
-        run.turn.state = 'failed'; this.connections.close(); this.closed = true; this.key = '';
+        run.turn.state = 'failed'; this.connections.close(); this.closed = true; this.legacyOpenAIKey = '';
         run.turn.notice = 'Assistant cleanup did not complete. Restart the backend before continuing.';
       }
       run.turn.endedAt = new Date().toISOString(); run.conversation.updatedAt = run.turn.endedAt;
@@ -365,7 +366,7 @@ export class AssistantService {
     if (this.closed) return;
     const run = this.active;
     if (run) this.cancel(run, 'interrupted', 'The assistant closed. Send a new message to continue; no prompt will be resubmitted.');
-    this.connections.close(); this.closed = true; this.key = ''; this.unsubscribeCredential?.(); this.listeners.clear();
+    this.connections.close(); this.closed = true; this.legacyOpenAIKey = ''; this.unsubscribeCredential?.(); this.listeners.clear();
     await run?.finished;
   }
 }

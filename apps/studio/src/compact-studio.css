@@ -17,6 +17,7 @@
 .studio .settings-section { padding: 18px; }
 .studio .settings-section h2 { font-size: 15px; }
 .studio .settings-section > p { font-size: 12px; margin-block: 8px; }
+.studio .settings-section .provider-startup-details > p { font-size: 12px; margin-block: 8px; }
 .studio .settings-section fieldset > p { margin: 0; font-size: 12px; }
 .studio .settings-section form { margin-top: 16px; }
 .studio .backend-workspace { gap: 16px; }
