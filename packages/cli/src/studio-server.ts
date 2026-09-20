@@ -21,6 +21,8 @@ import { nativeBuildConfiguration } from '../../core/src/native-builds.js';
 import { workspaceSelection } from '../../core/src/native-workspace-contracts.js';
 import { routeOwner } from '../../builtin-plugins/src/catalog.js';
 import { pluginId } from '../../plugin-runtime/src/contracts.js';
+import { ProjectJourney } from '../../core/src/journey.js';
+import { ProjectExports } from '../../core/src/project-export.js';
 
 const equal = (actual: string | undefined, expected: string) => !!actual && Buffer.byteLength(actual) === Buffer.byteLength(expected) && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
@@ -34,6 +36,11 @@ async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
 }
 function json(res: ServerResponse, value: unknown, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
 export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService) {
+  assistant?.useSourceChanges(engine.sourceChanges, async projectId => {
+    if ((await engine.studio.snapshot()).projectId !== projectId) throw new BuilderError('REVISION_CONFLICT', 'Select the conversation’s app before restoring its source.');
+  });
+  const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
+  const projectExports = new ProjectExports(engine.projects);
   await engine.plugins.ready;
   if (engine.plugins.isEnabled('builder.account')) await engine.account.restore();
   const drafts = new AssistantDrafts(engine.projects.home, assistant?.epoch ?? randomUUID(), () => engine.account.context());
@@ -76,6 +83,18 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
     if (url.pathname.startsWith('/api/')) {
       if (!equal(req.headers.authorization, `Bearer ${token}`)) return json(res, { error: { message: 'Studio authentication required' } }, 401);
       if (url.pathname === '/api/protocol' && req.method === 'GET') return json(res, { version: 1, sdkApi: 1 });
+      const projectDownload = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/download$/);
+      if (projectDownload) {
+        if (req.method !== 'GET') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const controller = new AbortController();
+        const disconnect = () => { if (!res.writableEnded) controller.abort(); }; res.on('close', disconnect);
+        try {
+          const archive = await projectExports.download(z.uuid().parse(projectDownload[1]), controller.signal);
+          if (controller.signal.aborted) return;
+          res.writeHead(200, { 'Content-Type': 'application/zip', 'Content-Length': archive.bytes.length, 'Content-Disposition': `attachment; filename="${archive.filename}"` });
+          return res.end(archive.bytes);
+        } finally { res.off('close', disconnect); }
+      }
       if (url.pathname === '/api/plugins' && req.method === 'GET') return json(res, { plugins: engine.plugins.snapshot(), reviews: engine.plugins.reviewsFor(), operations: engine.plugins.operationList(), recovery: engine.plugins.recovery });
       if (url.pathname.startsWith('/api/plugins/') && req.method === 'POST') {
         const operation = url.pathname.slice('/api/plugins/'.length), input = await body(req);
@@ -206,8 +225,22 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (!assistant || !assistant.status().available) return json(res, { error: { message: 'The assistant is unavailable in this runtime. Use the desktop app with its optional harness installed.' } }, 503);
         if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
         const action = url.pathname.slice('/api/assistant/'.length);
-        if (!['drafts/read', 'drafts/save', 'drafts/configure', 'configure', 'conversations/list', 'conversations/create', 'conversations/read', 'conversations/delete', 'turns/start', 'turns/stop', 'approvals', 'events'].includes(action)) return json(res, { error: { message: 'Unknown assistant action' } }, 404);
+        if (!['connections/update', 'connections/sign-in', 'connections/answer', 'connections/cancel', 'drafts/read', 'drafts/save', 'drafts/configure', 'configure', 'conversations/list', 'conversations/create', 'conversations/read', 'conversations/delete', 'turns/start', 'turns/stop', 'approvals', 'events', 'changes/review', 'changes/file', 'changes/restore'].includes(action)) return json(res, { error: { message: 'Unknown assistant action' } }, 404);
         const input = await body(req, action === 'turns/start' || action === 'drafts/save' ? 256 * 1024 : 8192);
+        if (action.startsWith('changes/')) {
+          if (action === 'changes/review') {
+            const value = z.object({ conversationId: z.uuid(), runId: z.uuid() }).strict().parse(input);
+            return json(res, await assistant.reviewChanges(value.conversationId, value.runId));
+          }
+          if (action === 'changes/file') {
+            const value = z.object({ conversationId: z.uuid(), runId: z.uuid(), path: z.string().max(240) }).strict().parse(input);
+            return json(res, await assistant.changeDiff(value.conversationId, value.runId, value.path));
+          }
+          const value = z.object({ conversationId: z.uuid(), runId: z.uuid(), expectedRevision: z.string().regex(/^[a-f0-9]{64}$/), epoch: z.uuid(), accountContext: z.string(), confirmed: z.literal(true) }).strict().parse(input);
+          if (accountChanging || value.epoch !== assistant.epoch || value.accountContext !== engine.account.context().revision) throw new BuilderError('REVISION_CONFLICT', 'The session or account changed. Review source changes again.');
+          const result = await assistant.restoreChanges(value.conversationId, value.runId, value.expectedRevision);
+          engine.diagnostics.emit('change', result.projectId); return json(res, result);
+        }
         if (action.startsWith('drafts/')) {
           const { scope, update } = z.object({ scope: draftScopeSchema, update: z.unknown().optional() }).strict().parse(input);
           const context = engine.account.context().revision;
@@ -226,6 +259,10 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           if (context !== engine.account.context().revision) throw new BuilderError('REVISION_CONFLICT', 'Account changed while loading the draft.');
           return json(res, snapshot);
         }
+        if (action === 'connections/update') return json(res, assistant.connectionUpdate(input));
+        if (action === 'connections/sign-in') return json(res, await assistant.signIn(input));
+        if (action === 'connections/answer') return json(res, assistant.signInAnswer(input));
+        if (action === 'connections/cancel') return json(res, assistant.signInCancel(input));
         if (action === 'configure') return json(res, assistant.configure(input));
         if (action === 'conversations/list') {
           const { projectId, query } = z.object({ projectId: z.uuid().nullable(), query: z.string().max(200).optional() }).strict().parse(input);
@@ -278,8 +315,23 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         const result = await engine.mediaJobs.configureProvider(await body(req, 8192));
         engine.diagnostics.emit('change'); return json(res, result);
       }
-      if (url.pathname === '/api/projects' && req.method === 'GET') return json(res, { projects: await engine.projects.list(), recipes, presets, trusted: engine.previews.trusted });
+      if (url.pathname === '/api/projects' && req.method === 'GET') return json(res, { ...await engine.projects.catalog(), recipes, presets, trusted: engine.previews.trusted });
       if (url.pathname === '/api/projects' && req.method === 'POST') { const result = await engine.actions.value('project_create', createSchema.parse(await body(req))); engine.diagnostics.emit('change'); return json(res, result?.project); }
+      const recovery = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/remove-unavailable$/);
+      if (recovery) {
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const input = z.object({ expectedRoot: z.string().max(4096) }).strict().parse(await body(req, 8192));
+        const result = await engine.projects.removeUnavailable(z.uuid().parse(recovery[1]), input.expectedRoot);
+        engine.diagnostics.emit('change'); return json(res, result);
+      }
+      const progress = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/journey$/);
+      if (progress) {
+        const id = z.uuid().parse(progress[1]);
+        if (req.method === 'GET') return json(res, await journey.read(id));
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const result = await journey.update(id, await body(req, 16_384));
+        engine.diagnostics.emit('change', id); return json(res, result);
+      }
       const inspector = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/inspector\/(setup-preview|setup-apply)$/);
       if (inspector) {
         if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);

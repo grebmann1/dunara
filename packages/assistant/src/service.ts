@@ -1,3 +1,4 @@
+import { AssistantConnections, assistantProviderSchema, providerDefinition, type AssistantProvider } from './connections.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BuilderError } from '../../core/src/contracts.js';
@@ -11,6 +12,7 @@ import { resolveImages, validateInspector } from './attachments.js';
 import type { AssistantAttachments } from './contracts.js';
 import type { GatewayContext } from './mcp-bridge.js';
 import { taskTool } from './tasks.js';
+import type { SourceChanges } from '../../core/src/source-changes.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -19,8 +21,9 @@ export interface AssistantGateway {
 }
 type ActiveRun = {
   binding: RunBinding; conversation: Conversation; turn: StoredTurn; controller: AbortController; attachments?: AssistantAttachments;
-  accountContext: string; key: string; raw: string; published: string; calls: number; dispatching: boolean;
+  accountContext: string; key: string; secrets: string[]; baseUrl?: string; raw: string; published: string; calls: number; dispatching: boolean;
   harness?: RunHarness; gateway?: AssistantGateway; finished?: Promise<void>; timer?: ReturnType<typeof setTimeout>;
+  sourceToken?: string;
 };
 type ServiceOptions = {
   home: string;
@@ -43,17 +46,23 @@ export class AssistantService {
   readonly epoch = randomUUID();
   private accountContext = () => '';
   private accountVersion = 0;
-  async interruptAccountWork() { this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
+  private sourceChanges?: SourceChanges;
+  private sourceSelection?: (projectId: string) => Promise<void>;
+  useSourceChanges(changes: SourceChanges, selection: (projectId: string) => Promise<void>) { this.idle(); this.sourceChanges = changes; this.sourceSelection = selection; }
+  async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
   private localKey = '';
   private shared?: MediaJobs;
   private unsubscribeCredential?: () => void;
-  private get key() { return this.closed ? '' : this.shared?.providerCredential().key ?? this.localKey; }
+  private legacyCredential() { return this.shared?.providerCredential() ?? { key: this.localKey, source: this.source }; }
+  private get key() { return this.closed ? '' : this.connections.credential(this.provider, this.legacyCredential()).key; }
   private set key(value: string) { this.localKey = value; }
   private model = 'gpt-6-astra';
-  private models = [{ id: 'gpt-6-astra', label: 'GPT-6 Astra' }];
-  private modelSettings: PrivateSettingsStore<{ model: string }>;
+  private provider: AssistantProvider = 'openai';
+  private connections: AssistantConnections;
+  private get models() { return this.connections.models(this.provider); }
+  private modelSettings: PrivateSettingsStore<{ model: string; provider?: AssistantProvider }>;
   private storePromise?: Promise<AssistantStore>;
   private active?: ActiveRun;
   private starting = false;
@@ -66,9 +75,11 @@ export class AssistantService {
   private limits: AssistantLimits;
   private harnessAvailable: boolean;
   private approvals = new ApprovalBroker(() => { if (this.active) this.publish(this.active, { type: 'approval' }); });
+  private secrets() { return [...new Set([this.legacyCredential().key, ...this.connections.secrets()])].filter(Boolean); }
+  private redact(text: string, secrets = this.secrets()) { for (const secret of secrets) text = text.replaceAll(secret, '[redacted]'); return text; }
   pendingApprovals() {
     const pending = this.approvals.list();
-    if (this.key && JSON.stringify(pending).includes(this.key)) { this.approvals.close(); throw new BuilderError('INVALID_INPUT', 'Review contains a credential and cannot be displayed or approved'); }
+    if (this.secrets().some(secret => JSON.stringify(pending).includes(secret))) { this.approvals.close(); throw new BuilderError('INVALID_INPUT', 'Review contains a credential and cannot be displayed or approved'); }
     return pending;
   }
   approve(input: unknown) {
@@ -80,29 +91,31 @@ export class AssistantService {
   constructor(private options: ServiceOptions) {
     this.limits = { ...ASSISTANT_LIMITS, ...options.limits }; this.harnessAvailable = !!options.createHarness || piAvailable();
     this.credentials = sharedOpenAIStore(options.home, options.secretProtection);
-    this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100) }).strict());
-    this.model = this.modelSettings.load()?.model ?? this.model;
+    this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict());
+    const selection = this.modelSettings.load();
+    this.model = selection?.model ?? this.model; this.provider = selection?.provider ?? 'openai';
+    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle());
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
     this.key = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
     this.source = saved ? 'saved' : this.key ? 'environment' : 'none';
   }
-  status() { return { accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.key ? this.shared?.providerCredential().source ?? this.source : 'none', environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: 'OpenAI', model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
   async useOpenAI(shared: MediaJobs) {
     this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.localKey = '';
     this.unsubscribeCredential = shared.subscribeProvider(() => this.changed(), () => { if (!this.closed) this.idle(); });
     if (piAvailable()) {
-      const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
-      const runtime = await ModelRuntime.create({ credentials: { async read() {}, async list() { return []; }, async modify() { throw new Error('Credential persistence disabled'); }, async delete() {} }, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
-      this.models = runtime.getModels('openai').filter(model => model.api === 'openai-responses' && model.input.includes('image') && !/chat|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name }));
+      await this.connections.initialize();
     }
   }
   configure(input: unknown) {
     this.idle();
-    const value = z.discriminatedUnion('action', [z.object({ action: z.literal('model'), model: z.string().min(1).max(100) }).strict(), z.object({ action: z.literal('connect'), key: credentialKeySchema, remember: z.boolean().default(false) }).strict(), z.object({ action: z.literal('disconnect') }).strict(), z.object({ action: z.literal('environment') }).strict()]).parse(input);
+    const value = z.discriminatedUnion('action', [z.object({ action: z.literal('model'), model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict(), z.object({ action: z.literal('connect'), key: credentialKeySchema, remember: z.boolean().default(false) }).strict(), z.object({ action: z.literal('disconnect') }).strict(), z.object({ action: z.literal('environment') }).strict()]).parse(input);
     if (value.action === 'model') {
-      if (!this.models.some(model => model.id === value.model)) throw new BuilderError('INVALID_INPUT', 'Choose a supported assistant model.');
-      this.modelSettings.save({ model: value.model }); this.model = value.model; this.changed(); return this.status();
+      if (this.connections.pending()) throw new BuilderError('INVALID_INPUT', 'Finish or cancel sign-in before switching providers.');
+      const provider = value.provider ?? this.provider;
+      if (!this.connections.models(provider).some(model => model.id === value.model)) throw new BuilderError('INVALID_INPUT', 'Choose a supported assistant model.');
+      this.modelSettings.save({ model: value.model, provider }); this.model = value.model; this.provider = provider; this.changed(); return this.status();
     }
     if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage the shared OpenAI API key in OpenAI setup.');
     if (value.action === 'environment' && !this.options.startupKey) throw new BuilderError('INVALID_INPUT', 'No startup environment key is available.');
@@ -111,6 +124,10 @@ export class AssistantService {
     this.source = value.action === 'connect' ? value.remember ? 'saved' : 'session' : value.action === 'environment' ? 'environment' : 'none';
     this.changed(); return this.status();
   }
+  connectionUpdate(input: unknown) { this.connections.update(input); return this.status(); }
+  async signIn(input: unknown) { await this.connections.begin(input); return this.status(); }
+  signInAnswer(input: unknown) { this.connections.answer(input); return this.status(); }
+  signInCancel(input: unknown) { this.connections.cancel(z.object({ id: z.uuid() }).strict().parse(input).id); return this.status(); }
   private idle() {
     if (this.closed) throw new BuilderError('PROCESS_FAILED', 'Assistant is closed');
     if (this.starting || this.active) throw new BuilderError('REVISION_CONFLICT', 'One assistant turn is already active. Stop it before making this change.');
@@ -138,12 +155,32 @@ export class AssistantService {
   async deleteConversation(id: string) {
     this.idle(); this.starting = true;
     try {
+      await this.conversation(id);
+      await this.sourceChanges?.removeConversation(id);
       await (await this.store()).remove(id);
       this.buffer = this.buffer.filter(event => event.conversationId !== id);
       this.bufferBytes = this.buffer.reduce((bytes, event) => bytes + Buffer.byteLength(JSON.stringify(event)), 0);
     } finally { this.starting = false; }
   }
   subscribe(listener: () => void) { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; }
+  private async changeScope(conversationId: string, runId: string) {
+    if (!this.sourceChanges) throw new BuilderError('INVALID_INPUT', 'Source recovery is unavailable in this runtime');
+    const conversation = await this.conversation(conversationId);
+    const turn = conversation.turns.find(turn => turn.id === runId), projectId = turn?.projectId ?? conversation.projectId;
+    if (!projectId || !turn) throw new BuilderError('INVALID_INPUT', 'This source checkpoint does not belong to the conversation');
+    return { conversationId, runId, projectId };
+  }
+  async reviewChanges(conversationId: string, runId: string) { const scope = await this.changeScope(conversationId, runId); return this.sourceChanges!.inspect(scope); }
+  async changeDiff(conversationId: string, runId: string, file: string) { const scope = await this.changeScope(conversationId, runId); return this.sourceChanges!.diff(scope, file); }
+  async restoreChanges(conversationId: string, runId: string, expectedRevision: string) {
+    this.idle(); this.starting = true; this.changed();
+    const context = this.accountContext(), version = this.accountVersion;
+    const guard = () => { if (this.closed || context !== this.accountContext() || version !== this.accountVersion) throw new BuilderError('REVISION_CONFLICT', 'Account changed during source restore. Review the checkpoint again.'); };
+    try {
+      const scope = await this.changeScope(conversationId, runId);
+      return await this.sourceChanges!.restore(scope, expectedRevision, async () => { guard(); await this.sourceSelection?.(scope.projectId); guard(); });
+    } finally { this.starting = false; this.changed(); }
+  }
   events(after: number, epoch: string | null = this.epoch) {
     z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).parse(after);
     if (epoch !== null) z.uuid().parse(epoch);
@@ -164,6 +201,7 @@ export class AssistantService {
     this.idle();
     if (!this.options.createGateway || !this.key) throw new BuilderError('INVALID_INPUT', 'Configure the available assistant before sending a message');
     if (!this.models.some(model => model.id === this.model)) throw new BuilderError('INVALID_INPUT', 'The saved assistant model is unavailable. Choose a supported model in Settings.');
+    if (this.connections.pending()) throw new BuilderError('INVALID_INPUT', 'Finish or cancel sign-in before sending a message.');
     const value = startTurnSchema.parse(input);
     if (Buffer.byteLength(value.prompt) > this.limits.promptBytes) throw new BuilderError('LIMIT_EXCEEDED', 'Assistant prompt is too large');
     if (this.seenRuns.has(value.runId)) throw new BuilderError('REVISION_CONFLICT', 'This turn was already submitted. It will not be resubmitted.');
@@ -172,15 +210,17 @@ export class AssistantService {
     const accountContext = this.accountContext(), accountVersion = this.accountVersion;
     const accountChanged = () => accountVersion !== this.accountVersion || accountContext !== this.accountContext();
     try {
+      await this.connections.prepare(this.provider);
       const store = await this.store();
       const conversation = await store.read(value.conversationId);
       const attachments = value.attachments;
       if ((attachments?.inspector && attachments.inspector.projectId !== conversation.projectId) || attachments?.images?.some(image => image.projectId !== conversation.projectId)) throw new BuilderError('INVALID_INPUT', 'Attachments must belong to the conversation project');
-      if (attachments && JSON.stringify(attachments).includes(this.key)) throw new BuilderError('INVALID_INPUT', 'Credentials cannot be attached');
+      if (attachments && this.secrets().some(secret => JSON.stringify(attachments).includes(secret))) throw new BuilderError('INVALID_INPUT', 'Credentials cannot be attached');
       if (await store.hasRun(value.runId)) throw new BuilderError('REVISION_CONFLICT', 'This turn was already submitted. It will not be resubmitted.');
       if (this.closed) throw new BuilderError('PROCESS_FAILED', 'Assistant is closed');
       if (accountChanged()) throw new BuilderError('REVISION_CONFLICT', 'Account changed before the turn started. Review your draft before sending again.');
-      const turn: StoredTurn = { id: value.runId, epoch: this.epoch, state: 'starting', model: this.model, mode: value.mode, prompt: value.prompt.replaceAll(this.key, '[redacted]'), response: '', startedAt: new Date().toISOString(), tools: [] };
+      const turn: StoredTurn = { id: value.runId, epoch: this.epoch, state: 'starting', model: this.model, provider: this.provider, mode: value.mode, prompt: this.redact(value.prompt), response: '', startedAt: new Date().toISOString(), tools: [] };
+      turn.projectId = conversation.projectId;
       if (attachments?.inspector) turn.inspector = { projectId: attachments.inspector.projectId, viewId: attachments.inspector.viewId, route: attachments.inspector.selection.pathname, timestamp: attachments.inspector.selection.timestamp };
       conversation.turns.push(turn); conversation.updatedAt = turn.startedAt;
       if (conversation.turns.length === 1) conversation.title = turn.prompt.slice(0, 100);
@@ -191,7 +231,7 @@ export class AssistantService {
         turn.state = 'interrupted'; turn.endedAt = new Date().toISOString(); turn.notice = 'Account changed before the turn started. No provider request was made.';
         await store.save(conversation); throw new BuilderError('REVISION_CONFLICT', turn.notice);
       }
-      const run: ActiveRun = { accountContext, binding: { epoch: this.epoch, runId: value.runId, conversationId: conversation.id, projectId: conversation.projectId }, conversation, turn, attachments, controller: new AbortController(), key: this.key, raw: '', published: '', calls: 0, dispatching: false };
+      const run: ActiveRun = { accountContext, binding: { epoch: this.epoch, runId: value.runId, conversationId: conversation.id, projectId: conversation.projectId }, conversation, turn, attachments, controller: new AbortController(), key: this.key, secrets: this.secrets(), baseUrl: this.connections.credential(this.provider, this.legacyCredential()).baseUrl, raw: '', published: '', calls: 0, dispatching: false };
       this.seenRuns.add(value.runId); this.active = run;
       this.publish(run, { type: 'state', state: 'starting' });
       run.timer = setTimeout(() => { this.cancel(run, 'limited', 'The turn deadline was reached. Send a new message to continue.'); }, this.limits.turnMs);
@@ -204,10 +244,12 @@ export class AssistantService {
     if (this.closed || run.accountContext !== this.accountContext() || this.active !== run || run.binding.epoch !== this.epoch) throw new Error('Assistant turn is no longer active');
   }
   private safeResponse(run: ActiveRun, final = false) {
-    let safe = run.raw.replaceAll(run.key, '[redacted]');
-    for (let length = Math.min(run.key.length - 1, safe.length); length > 0; length--) if (safe.endsWith(run.key.slice(0, length))) {
-      if (!final || length >= 8) safe = safe.slice(0, -length) + (final ? '[redacted]' : '');
-      break;
+    let safe = this.redact(run.raw, run.secrets);
+    for (const secret of run.secrets) {
+      for (let length = Math.min(secret.length - 1, safe.length); length > 0; length--) if (safe.endsWith(secret.slice(0, length))) {
+        if (!final || length >= 8) safe = safe.slice(0, -length) + (final ? '[redacted]' : '');
+        break;
+      }
     }
     return safe;
   }
@@ -224,14 +266,19 @@ export class AssistantService {
     try {
       const factory = this.options.createGateway;
       if (!factory) throw new Error('No assistant gateway');
+      if (run.turn.mode !== 'plan') run.sourceToken = this.sourceChanges?.begin(run.binding, run.controller.signal);
       const gateway = factory(run.binding, run.controller.signal, {
         approvals: this.approvals,
         mode: run.turn.mode ?? 'build',
+        sourceToken: run.sourceToken,
         bindProject: async projectId => {
           this.guard(run);
+          if (run.sourceToken) await this.sourceChanges?.bind(run.sourceToken, projectId);
           const updated = structuredClone(run.conversation); updated.projectId = projectId;
+          updated.turns.find(turn => turn.id === run.turn.id)!.projectId = projectId;
           await (await this.store()).save(updated, this.limits.responseBytes * 6 + this.limits.tools * 1024 + 4096);
           this.guard(run); run.conversation.projectId = projectId; run.binding.projectId = projectId;
+          run.turn.projectId = projectId;
           this.publish(run, { type: 'state', state: run.turn.state });
         },
       });
@@ -246,14 +293,14 @@ export class AssistantService {
       run.turn.state = 'running'; this.publish(run, { type: 'state', state: 'running' });
       const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks })));
       const boundedContext = (Buffer.byteLength(context) <= 58 * 1024 ? context : '[Earlier conversation omitted because it exceeds the context limit. Reinspect the current project. Old approvals never carry forward.]\nLast task checklist (historical context, not verification): ' + JSON.stringify(run.conversation.turns.at(-2)?.tasks ?? [])) + '\nCurrent image attachment metadata (untrusted data): ' + JSON.stringify(resolved.records);
-      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: boundedContext, apiKey: run.key, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool], inspector: run.attachments?.inspector, images: resolved.images }, {
+      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool], inspector: run.attachments?.inspector, images: resolved.images }, {
         imageAccepted: () => { this.guard(run); run.turn.imageContentAccepted = true; for (const image of run.turn.images ?? []) if (image.status === 'requested') image.status = 'adapter-accepted'; this.publish(run, { type: 'state', state: 'running' }); },
         text: text => { this.text(run, text); },
         tool: async (name, args, signal) => {
           this.guard(run); signal.throwIfAborted();
           if (run.dispatching) throw new Error('Parallel assistant tool dispatch is disabled');
           if (++run.calls > this.limits.tools) { this.cancel(run, 'limited', 'The tool-call limit was reached. Send a new message to continue.'); throw new Error('Tool-call limit reached'); }
-          if (JSON.stringify(args).includes(run.key)) throw new Error('Credentials cannot be sent to Dunara tools');
+          if (run.secrets.some(secret => JSON.stringify(args).includes(secret))) throw new Error('Credentials cannot be sent to Dunara tools');
           if (name === taskTool.name) {
             const { tasks } = taskUpdateSchema.parse(args);
             run.dispatching = true;
@@ -287,11 +334,15 @@ export class AssistantService {
       try {
         await abortable(Promise.all([run.harness?.close(), run.gateway?.close()]), AbortSignal.timeout(this.limits.shutdownMs));
       } catch {
-        run.turn.state = 'failed'; this.closed = true; this.key = '';
+        run.turn.state = 'failed'; this.connections.close(); this.closed = true; this.key = '';
         run.turn.notice = 'Assistant cleanup did not complete. Restart the backend before continuing.';
       }
       run.turn.endedAt = new Date().toISOString(); run.conversation.updatedAt = run.turn.endedAt;
-      run.raw = ''; run.key = '';
+      if (run.sourceToken) {
+        try { await this.sourceChanges?.finish(run.sourceToken); }
+        catch { run.turn.notice = 'Source checkpoint finalization needs attention. Review source changes before continuing; no restore was run.'; }
+      }
+      run.raw = ''; run.key = ''; run.secrets = [];
       try { await (await this.store()).save(run.conversation); } catch { run.turn.state = 'failed'; run.turn.notice = 'The final response could not be saved. Delete history to free space before continuing.'; }
       this.publish(run, { type: 'state', state: run.turn.state });
       if (this.active === run) this.active = undefined;
@@ -314,7 +365,7 @@ export class AssistantService {
     if (this.closed) return;
     const run = this.active;
     if (run) this.cancel(run, 'interrupted', 'The assistant closed. Send a new message to continue; no prompt will be resubmitted.');
-    this.closed = true; this.key = ''; this.unsubscribeCredential?.(); this.listeners.clear();
+    this.connections.close(); this.closed = true; this.key = ''; this.unsubscribeCredential?.(); this.listeners.clear();
     await run?.finished;
   }
 }

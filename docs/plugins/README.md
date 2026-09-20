@@ -4,19 +4,21 @@ Dunara includes a Plugins workspace. The normal features are installed from a bu
 
 ## Install and use a plugin
 
-1. Open **Plugins**. Select an installed feature to read its user/agent guides, inspect its actions or open its panel.
-2. Choose **Install plugin** and enter an absolute path to a prebuilt plugin folder or `.builder-plugin.json` archive on the Dunara computer.
+1. Open **Plugins**. Search by name or feature, then select a plugin for its panel, settings and formatted step-by-step guides. On narrow windows, **All plugins** returns to the list and keeps your search.
+2. Choose **Install plugin** to open the installation dialog and enter an absolute path to a prebuilt plugin folder or `.builder-plugin.json` archive on the Dunara computer.
 3. Choose **Inspect package**. Review its identity, version, capabilities, files and content fingerprint.
 4. Check the trust confirmation only for code you trust, then choose **Install and enable**. Plugins are full-trust local JavaScript, not sandboxed apps.
 5. Select the target app before opening a project panel. Configure ordinary settings in the plugin details. If it declares credentials, use **Private credentials**; values use Dunara’s existing protected storage and never appear in discovery or agent tool arguments.
 6. For a recipe or write action, review the proposed inputs and changes, then choose **Apply reviewed changes**. Installation itself does not edit generated apps.
+
+**Manage plugin** contains Reload, Previous version (when available), and Uninstall. **Developer actions** keeps direct action inputs out of the way until needed. Guides can be copied for use with an assistant.
 
 The bundled Plugin Guide includes an SDK introduction and a **For your assistant** guide. Launch Kit, Expo and Media also include small SDK-rendered overview panels alongside their existing full workspaces.
 
 ## Disable, update and recover
 
 - **Disable** removes the plugin’s tools and panels. Disable dependents first; finish/cancel active work and stop owned previews before changing their provider plugin.
-- **Uninstall** retains app source, exported artifacts, settings and remote resources. Applied recipe provenance stays with the app. **Restore bundled plugins** restores removed defaults without enabling ones you deliberately disabled.
+- **Uninstall** retains app source, exported artifacts, settings and remote resources. Applied recipe provenance stays with the app. **Library options → Restore bundled plugins** restores removed defaults without enabling ones you deliberately disabled.
 - To update a normal package, inspect and install its new digest. Development packages can use **Reload** after edits in the selected folder. A change to identity or capabilities requires a new installation review.
 - **Previous version** is available only when the plugin’s data has not changed since the update. It never rolls back generated source or remote provider operations.
 - Approved writes have durable operation records. An interrupted/failed action can have an uncertain outcome; inspect files or provider state before another attempt. Dunara never replays it automatically.

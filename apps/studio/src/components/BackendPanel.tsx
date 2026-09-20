@@ -16,7 +16,7 @@ type Catalog = Awaited<ReturnType<Backends['catalog']>>;
 const environments: EnvironmentName[] = ['development', 'staging', 'production'];
 const stateLabels: Record<Operation['state'], string> = { awaiting_approval: 'Needs your review', queued: 'Queued', running: 'Running', succeeded: 'Completed', failed: 'Failed', cancelled: 'Cancelled', reconciliation_required: 'Check remote outcome' };
 
-export function SupabaseSettings({ disabled }: { disabled: boolean }) {
+export function SupabaseSettings({ disabled, onConnected, compact = false }: { disabled: boolean; onConnected?: () => Promise<void>; compact?: boolean }) {
   const { api, capabilities } = useStudioClient();
   const [status, setStatus] = useState<ReturnType<Backends['status']>>();
   const [remember, setRemember] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
@@ -33,21 +33,23 @@ export function SupabaseSettings({ disabled }: { disabled: boolean }) {
       const pending = api<ReturnType<Backends['status']>>('/backend/connection', { action, ...(action === 'connect' ? { token: token.current?.value ?? '', remember } : {}) });
       if (token.current) token.current.value = '';
       const result = await pending;
-      if (alive.current) { setStatus(result); setNotice(action === 'connect' ? 'Connection saved. Load your projects in Backend to verify access.' : 'Management connection removed. Existing app connections are retained.'); }
+      if (alive.current && action === 'connect') await onConnected?.();
+      if (alive.current) { setStatus(result); setNotice(action === 'connect' ? onConnected ? 'Account saved. Choose your project below to finish connecting this app.' : 'Connection saved. Open Backend to choose or create a project for your app.' : 'Management connection removed. Existing app connections are retained.'); }
     } catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Connection update failed.'); }
     finally { operating.current = false; if (token.current) token.current.value = ''; if (alive.current) setBusy(false); }
   }
-  return <>{capabilities.backendOAuth && <BackendOAuthSettings disabled={disabled || busy || !!status?.busy} onChange={async () => { const next = await api<ReturnType<Backends['status']>>('/backend/connection'); if (alive.current) setStatus(next); }} />}<section className="settings-section backend-connection" aria-label="Supabase connection">
-    <div className="backend-heading"><Database aria-hidden /><h2>Supabase</h2><span className="backend-badge">{status?.configured ? `${status.source} connection` : 'Connect your account'}</span></div>
-    <p>Connect the Supabase organization that owns your apps. Each app environment has its own project.</p>
+  return <>{capabilities.backendOAuth && <BackendOAuthSettings disabled={disabled || busy || !!status?.busy} onChange={async () => { const next = await api<ReturnType<Backends['status']>>('/backend/connection'); if (alive.current) { setStatus(next); if (next.configured) await onConnected?.(); } }} />}<section className="settings-section backend-connection" aria-label="Supabase connection">
+    <div className="backend-heading"><Database aria-hidden /><h2>{compact ? 'Connect your account' : 'Supabase'}</h2>{!compact && <span className="backend-badge">{status?.configured ? `${status.source} connection` : 'Connect your account'}</span>}</div>
+    {!compact && <p>Connect your account, then choose a project for your app.</p>}
+    <details className="supabase-token-help"><summary>How to get a Supabase token</summary><ol className="supabase-connect-steps"><li><a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Open Supabase <ExternalLink size={14} aria-hidden /></a> and sign in or create an account.</li><li><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noreferrer">Create a personal access token <ExternalLink size={14} aria-hidden /></a>, give it a name such as “Dunara”, and copy it.</li><li>Paste the token below and save your connection. Next, choose an existing project or create one.</li></ol></details>
     <form autoComplete="off" onSubmit={event => { event.preventDefault(); void update('connect'); }}><fieldset disabled={disabled || busy || !status || status.busy || status.encryption.state === 'unavailable'}>
       <label htmlFor="supabase-management-token">Personal access token</label>
       <Input id="supabase-management-token" ref={token} type="password" required minLength={16} maxLength={4096} autoComplete="off" spellCheck={false} autoCapitalize="none" aria-describedby="supabase-privacy" />
-      <p id="supabase-privacy">Create a token in your Supabase account settings. It stays in the Dunara service and is never included in app previews or Assistant messages.</p>
+      <p id="supabase-privacy">Kept private in Dunara. Never shared with your app or the Assistant.</p>
       <label className="backend-check"><input type="checkbox" checked={remember} disabled={!status?.rememberAvailable} onChange={event => setRemember(event.target.checked)} />Remember with encrypted storage</label>
-      {status?.encryption.state === 'not_configured' && <p>Session storage is available now. Persistent connections require an encryption key in the Dunara service configuration.</p>}
+      {!compact && status?.encryption.state === 'not_configured' && <p>Session storage is available now. Persistent connections require an encryption key in the Dunara service configuration.</p>}
       {status?.encryption.state === 'unavailable' && <p>Saved connections are locked. Restore the original encryption key before changing this connection.</p>}
-      <div className="backend-actions"><Button type="submit">Save Supabase connection</Button><Button variant="outline" type="button" disabled={!status?.configured} onClick={() => void update('disconnect')}>Disconnect</Button><a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noreferrer">Get a token <ExternalLink size={14} aria-hidden /></a></div>
+      <div className="backend-actions"><Button type="submit">Save Supabase connection</Button>{!compact && <Button variant="outline" type="button" disabled={!status?.configured} onClick={() => void update('disconnect')}>Disconnect</Button>}<a href="https://supabase.com/dashboard/account/tokens" target="_blank" rel="noreferrer">Get a token <ExternalLink size={14} aria-hidden /></a></div>
     </fieldset></form>
     {(error || status?.issue) && <p role="alert">{error || status?.issue}</p>}<p role="status">{busy ? 'Updating connection…' : notice}</p>
   </section></>;
@@ -55,6 +57,9 @@ export function SupabaseSettings({ disabled }: { disabled: boolean }) {
 
 export function BackendPanel({ projectId, disabled, onSettings }: { projectId: string; disabled: boolean; onSettings: () => void }) {
   const { api } = useStudioClient();
+  const [connecting, setConnecting] = useState(false);
+  const connectionForm = useRef<HTMLDivElement>(null), projectForm = useRef<HTMLElement>(null);
+  useEffect(() => { if (connecting) { connectionForm.current?.scrollIntoView({ block: 'start' }); connectionForm.current?.focus({ preventScroll: true }); } }, [connecting]);
   const [state, setState] = useState<Inspection>(), [catalog, setCatalog] = useState<Catalog>();
   const [capabilities, setCapabilities] = useState<Awaited<ReturnType<Backends['capabilities']>>>();
   const [environment, setEnvironment] = useState<EnvironmentName>('development'), [mode, setMode] = useState<'link' | 'create' | 'migration'>('link');
@@ -95,11 +100,23 @@ export function BackendPanel({ projectId, disabled, onSettings }: { projectId: s
   return <main className="destination backend-workspace">
     <header className="backend-title"><div><p className="backend-eyebrow">DATA & SERVICES</p><h1>Backend</h1><p>A Supabase home for your app’s users, data, and files.</p></div><Button variant="outline" disabled={disabled || busy} onClick={() => void perform(refresh)}><RefreshCw size={16} aria-hidden />Refresh</Button></header>
     {error && <p role="alert" className="backend-alert">{error}</p>}<p role="status">{busy ? 'Working…' : notice}</p>
-    <RecipeUpgradePanel key={projectId} projectId={projectId} disabled={disabled || busy} />
     {!state ? <p>Loading backend…</p> : <>
-      {!state.connection.configured && <section className="backend-card backend-intro"><Database size={28} aria-hidden /><div><h2>Connect Supabase to get started</h2><p>Use a project you already own, or create one after reviewing the target and costs.</p><Button onClick={onSettings} disabled={disabled}>Connect in Settings</Button></div></section>}
+      <section className="backend-card backend-setup-guide" aria-label="Supabase setup guide">
+        <p className="backend-eyebrow">{state.environments.some(binding => binding.environment === environment) ? 'PROJECT CONNECTED' : !state.connection.configured ? 'STEP 1 OF 3' : catalog ? 'STEP 3 OF 3' : 'STEP 2 OF 3'}</p>
+        <h2>{state.environments.some(binding => binding.environment === environment) ? 'Your app has a Supabase home' : !state.connection.configured ? 'Connect Supabase to get started' : catalog ? 'Choose a project, then review' : 'Choose where your app’s data lives'}</h2>
+        <p>Use Supabase when your app needs accounts, saved data, or file uploads. Start with development; staging and production can wait.</p>
+        <details className="backend-connection-help"><summary>How connection works</summary><ol><li><strong>Connect your account.</strong> Sign in through the browser when available, or use a personal access token.</li><li><strong>Choose or create a project.</strong> Load your organizations and projects below. If you have none, create an organization in the <a href="https://supabase.com/dashboard" target="_blank" rel="noreferrer">Supabase dashboard</a>, then load again.</li><li><strong>Review and connect.</strong> Choose “Prepare for review”, then approve the connection in Changes & reviews. Creating a project may incur Supabase charges.</li></ol></details>
+        {!state.connection.configured && <Button onClick={() => setConnecting(true)} disabled={disabled || connecting}>Connect Supabase account</Button>}
+        {state.connection.configured && !catalog && <Button disabled={disabled || busy} onClick={() => void perform(() => loadCatalog())}>Choose my Supabase project</Button>}
+        <Button variant="ghost" onClick={onSettings} disabled={disabled}>Connection settings</Button>
+      </section>
+      {connecting && !state.connection.configured && <div ref={connectionForm} className="backend-inline-connection" tabIndex={-1}><SupabaseSettings disabled={disabled || busy} onConnected={async () => {
+        await perform(() => loadCatalog(), 'Account connected. Choose a project and prepare it for review below.');
+        if (alive.current) { projectForm.current?.scrollIntoView({ block: 'start' }); projectForm.current?.focus({ preventScroll: true }); }
+      }} /></div>}
+      <RecipeUpgradePanel key={projectId} projectId={projectId} disabled={disabled || busy} />
       <div className="backend-environments">{environments.map(env => { const binding = state.environments.find(value => value.environment === env); return <section key={env} className="backend-card" data-selected={state.activeEnvironment === env}><div className="backend-heading"><h2>{env}</h2>{state.activeEnvironment === env && <span className="backend-badge">Preview</span>}</div><p>{binding ? binding.projectRef : 'No project connected'}</p>{binding ? <><a href={`https://supabase.com/dashboard/project/${binding.projectRef}`} target="_blank" rel="noreferrer">Open Supabase <ExternalLink size={14} aria-hidden /></a><Button variant="outline" disabled={disabled || busy || env === state.activeEnvironment} onClick={() => void perform(() => api(`${base}/environment`, { environment: env, expectedRevision: state.environmentRevision }), 'Preview environment selected. Start the preview to load this configuration.')}>Use for preview</Button></> : <span className="backend-muted">{env === 'development' ? 'Start here for daily development.' : 'Connect when your app needs it.'}</span>}</section>; })}</div>
-      <section className="backend-card" aria-label="Configure backend"><h2>Configure this app</h2><p>Prepare a change here or ask the Assistant. Every change appears below for review before execution.</p>
+      <section ref={projectForm} tabIndex={-1} className="backend-card" aria-label="Configure backend"><h2>Configure this app</h2><p>Prepare a change here or ask the Assistant. Every change appears below for review before execution.</p>
         <Button variant="outline" disabled={disabled || busy} onClick={() => void perform(checkAccess)}>Check Supabase access</Button>
         {capabilities && capabilities.environment === environment && capabilities.connectionRevision === state.connection.revision && capabilities.environmentRevision === state.environmentRevision && <div role="status"><p>{capabilities.reads.filter(read => read.permission === 'verified').length} access checks passed for {environment}. Write permissions will be checked when an approved change runs.</p>{capabilities.reads.filter(read => read.error).map(read => <p key={read.id}>{read.id.replaceAll('_', ' ')}: {read.error?.message}</p>)}</div>}
         <form onSubmit={event => { event.preventDefault(); void perform(propose, 'Proposal ready for review.'); }}><fieldset disabled={disabled || busy || !state.connection.configured}>

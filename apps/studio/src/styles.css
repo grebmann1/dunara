@@ -23,7 +23,7 @@ button { min-width: 44px; cursor: pointer; border: 1px solid var(--line); backgr
 button:hover:not(:disabled) { background: var(--soft); }
 button:disabled { opacity: .5; cursor: not-allowed; }
 :where(button, a, input, select, textarea, summary):focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
-input, select, textarea { min-width: 0; max-width: 100%; border: 1px solid #859b94; background: var(--surface); border-radius: 7px; color: inherit; padding: 10px; }
+input, select, textarea { min-width: 0; max-width: 100%; border: 1px solid var(--input); background: var(--surface); border-radius: 7px; color: inherit; padding: 10px; }
 input[type=range] { padding: 0; accent-color: var(--teal); }
 input[type=checkbox] { accent-color: var(--teal); }
 textarea { resize: vertical; }
@@ -36,8 +36,8 @@ small { font-size: 13px; line-height: 1.5; }
 code, pre { overflow-wrap: anywhere; }
 summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .muted { color: var(--muted); }
-.primary { background: var(--amber); border-color: #dca84e; color: #183a37; font-weight: 650; }
-.primary:hover:not(:disabled) { background: #f1c77e; }
+.primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); font-weight: 650; }
+.primary:hover:not(:disabled) { background: var(--primary-hover); }
 .primary span { margin-left: 8px; }
 #root { container: studio / inline-size; }
 .studio { height: 100dvh; display: flex; flex-direction: column; min-width: 0; }

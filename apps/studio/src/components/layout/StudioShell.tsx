@@ -1,10 +1,12 @@
-import { useState, type KeyboardEvent, type ReactNode, type Ref } from 'react';
-import { Activity, ArrowRight, Database, Image, LayoutGrid, Plus, Puzzle, Settings, Smartphone } from 'lucide-react';
+import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { Activity, Database, FolderPlus, Image, LayoutGrid, Puzzle, Settings, Smartphone } from 'lucide-react';
 import type { Project } from '../../../../../packages/core/src/contracts';
-import { ProjectPicker } from '../ProjectPicker';
+import { SidebarProjects } from './SidebarProjects';
 import { Button } from '../ui/button';
 import { WorkspaceHeader } from './WorkspaceHeader';
 import { DockWorkspace } from './WorkspaceDock';
+import { ProjectDownload } from '../ProjectDownload';
+import { useStudioClient } from '../../api';
 
 export type Workspace = 'preview' | 'assets' | 'icons' | 'backend' | 'activity' | 'settings' | 'plugins';
 const destinations = [
@@ -13,7 +15,6 @@ const destinations = [
   { id: 'icons', label: 'App Icons', icon: LayoutGrid },
   { id: 'backend', label: 'Backend', icon: Database },
   { id: 'activity', label: 'Activity', icon: Activity },
-  { id: 'settings', label: 'Settings', icon: Settings },
   { id: 'plugins', label: 'Plugins', icon: Puzzle },
 ] as const;
 
@@ -26,7 +27,11 @@ type Props = {
 };
 
 export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true), [sidebarWidth, setSidebarWidth] = useState(248);
+  const drag = useRef<{ x: number; width: number } | null>(null);
+  const resize = (width: number) => setSidebarWidth(Math.max(200, Math.min(360, Math.round(width))));
+  const { capabilities } = useStudioClient();
+  const project = projects.find(project => project.id === selected);
   function navigateWithKeyboard(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([aria-disabled="true"])'));
@@ -44,17 +49,23 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
     buttons[next]?.focus();
   }
   return <div className="studio">
-    <WorkspaceHeader connectionLabel={connectionLabel} usable={usable} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(open => !open)} projectName={projects.find(project => project.id === selected)?.name} projectStatus={projectStatus} assistantControl={assistantControl} isPreview={workspace === 'preview'} />
+    <WorkspaceHeader connectionLabel={connectionLabel} usable={usable} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(open => !open)} projects={projects} selected={selected} onSelect={onSelect} projectStatus={projectStatus} assistantControl={assistantControl} isPreview={workspace === 'preview'} />
     {banners}
-    <div className="workspace" data-sidebar-open={sidebarOpen}>
+    <div className="workspace" data-sidebar-open={sidebarOpen} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside id="studio-sidebar" className="sidebar" hidden={!sidebarOpen}>
-        <div className="workspace-label">Project</div>
-        {projects.length ? <ProjectPicker projects={projects} selected={selected} onSelect={onSelect} /> : <p className="project-empty">{usable ? 'No projects yet' : 'No project selected'}</p>}
-        <Button className="new-project w-full" variant="outline" aria-label="+ New app" disabled={!usable || busy} onClick={onCreate}><Plus aria-hidden />New app</Button>
+        <Button className="new-project sidebar-action" variant="ghost" aria-label="+ New app" disabled={!usable || busy} onClick={onCreate}><FolderPlus aria-hidden />New app</Button>
         <nav className="workspace-nav" aria-label="Workspace" onKeyDown={navigateWithKeyboard}>
-          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Button key={id} disabled={!usable} variant="ghost" className="workspace-nav-item justify-start aria-pressed:bg-muted aria-pressed:font-semibold" aria-pressed={workspace === id} aria-current={workspace === id ? 'page' : undefined} onClick={() => onNavigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span></Button>)}
+          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Button key={id} disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-label={label} aria-describedby={id === 'activity' && pendingReview > 0 ? 'sidebar-review-count' : undefined} aria-pressed={workspace === id} aria-current={workspace === id ? 'page' : undefined} onClick={() => onNavigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span>{id === 'activity' && pendingReview > 0 && <span id="sidebar-review-count" className="sidebar-count" title={`${pendingReview} paid requests awaiting review`} aria-label={`${pendingReview} awaiting review`}>{pendingReview}</span>}</Button>)}
         </nav>
-        {selected && pendingReview > 0 && <p className="review-notice" role="status"><Button className="review-notice-action" variant="ghost" onClick={() => onNavigate('activity')}><span>{pendingReview} paid {pendingReview === 1 ? 'request' : 'requests'} awaiting review in Activity</span><ArrowRight aria-hidden /></Button></p>}
+        <SidebarProjects projects={projects} selected={selected} disabled={!usable || busy} onSelect={onSelect} onCreate={onCreate} />
+        <div className="sidebar-footer">
+          {project && capabilities.localPaths && <ProjectDownload key={project.id} projectId={project.id} name={project.name} disabled={!usable || busy} />}
+          <Button disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-pressed={workspace === 'settings'} aria-current={workspace === 'settings' ? 'page' : undefined} onClick={() => onNavigate('settings')}><Settings aria-hidden /><span>Settings</span></Button>
+        </div>
+        <div className="sidebar-resizer" role="separator" aria-label="Sidebar width" aria-orientation="vertical" aria-valuemin={200} aria-valuemax={360} aria-valuenow={sidebarWidth} tabIndex={0} title="Drag to resize · double-click to reset" onDoubleClick={() => resize(248)} onKeyDown={event => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault(); resize(event.key === 'Home' ? 200 : event.key === 'End' ? 360 : sidebarWidth + (event.key === 'ArrowRight' ? 16 : -16));
+        }} onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); drag.current = { x: event.clientX, width: sidebarWidth }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (drag.current) resize(drag.current.width + event.clientX - drag.current.x); }} onPointerUp={event => { drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onLostPointerCapture={() => { drag.current = null; }} />
       </aside>
       <DockWorkspace><div ref={contentRef} id="workspace-content" className="workspace-content" data-workspace={workspace} tabIndex={-1}>{children}</div></DockWorkspace>
     </div>

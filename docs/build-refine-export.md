@@ -24,6 +24,10 @@ This walkthrough uses one Engine shared by MCP and Studio. It does not add arbit
 
     Serve `dist-web` using a local static server with SPA fallback, with Builder stopped. The app has no Builder runtime dependency. Native exports are JavaScript/assets, not signed/installed applications. See `native-verification.md` for the separate qualification gate. Managed preview installation accepts only the pinned starter manifest/lockfile; changing dependencies requires separate review.
 
+## Download the source project
+
+In local Studio, choose **Download project → Download ZIP** below the project picker. This saves the complete source project with assets, lockfile, backend files and documentation, plus an independent setup guide. The original project is unchanged. Dependencies, build output, private credentials and Dunara's local history are excluded. See [Project download](project-export.md).
+
 ## Keep a local Launch Kit
 
 Before capture retention expires, open **Assets → Launch Kit** (also linked from capture history and App Icons). Review 1–10 existing captures, an optional approved icon master and user-authored listing/attribution drafts. Review the exact contents and explicitly confirm **Create local kit**. Persistent history offers individual authenticated downloads and confirmed deletion. Kits survive Builder restart without Preview; originals remain runtime-only. See `launch-kit.md` for the shared MCP workflow, limits, storage safety and readiness disclosures. These are React Native Web captures, not native App Store screenshots or snapshots of the visible phone's transient state. No app source, native persistence or submission automation is added.

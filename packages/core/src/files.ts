@@ -14,6 +14,7 @@ export function validFile(relative: string) {
   return relative.length <= 240 && !relative.includes('\\') && parts.every(p => /^[a-zA-Z0-9_()[\]. -]+$/.test(p) && !p.startsWith('.') && !denied.has(p) && !/(secret|credential|private.key)/i.test(p)) && (allowed.has(path.extname(relative)) || backendArtifact);
 }
 export class Files {
+  journal?: { prepare(projectId: string, changes: { path: string; before: string | null; after: string }[]): Promise<{ check(): void; applied(path: string): Promise<void> } | undefined> };
   constructor(readonly projects: Projects) {}
   async resolve(id: string, relative: string) {
     if (!validFile(relative)) throw new BuilderError('INVALID_PATH', 'Only scoped source and configuration text files are accessible');
@@ -55,10 +56,12 @@ export class Files {
     for (const write of writes) {
       if (Buffer.byteLength(write.content) > 256_000 || write.content.includes('\0')) throw new BuilderError('LIMIT_EXCEEDED', 'File exceeds text limits');
       const target = await this.resolve(id, write.path);
-      const current = await exists(target) ? revision(await readText(target)) : null;
+      const before = await exists(target) ? await readText(target) : null;
+      const current = before === null ? null : revision(before);
       if (current !== write.expectedRevision) throw new BuilderError('REVISION_CONFLICT', `File changed: ${write.path}`, { path: write.path, currentRevision: current });
-      prepared.push({ write, target });
+      prepared.push({ write, target, before });
     }
+    const journal = await this.journal?.prepare(id, prepared.map(({ write, before }) => ({ path: write.path, before, after: write.content })));
     const applied: { path: string; revision: string }[] = [];
     try {
       for (const { write, target } of prepared) {
@@ -67,8 +70,10 @@ export class Files {
         if (current !== write.expectedRevision) throw new BuilderError('REVISION_CONFLICT', `File changed during batch: ${write.path}`);
         await mkdir(path.dirname(target), { recursive: true });
         await this.resolve(id, write.path);
+        journal?.check();
         await atomicWrite(target, write.content);
         applied.push({ path: write.path, revision: revision(write.content) });
+        await journal?.applied(write.path);
       }
     } catch (error) {
       throw new BuilderError('WRITE_FAILED', 'Batch interrupted; some files may have been written', { applied, cause: error instanceof Error ? error.message : String(error) });

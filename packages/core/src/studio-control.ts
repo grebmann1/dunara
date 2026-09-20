@@ -18,7 +18,7 @@ export class StudioControl {
       const saved = await exists(this.selectionFile) ? z.object({ projectId: z.uuid() }).strict().parse(JSON.parse(await readText(this.selectionFile, 1024))).projectId : '';
       this.selected = projects.some(p => p.id === saved) ? saved : projects[0]?.id ?? '';
     }
-    if (!this.selected && projects.length) this.selected = projects[0]!.id;
+    if (!projects.some(project => project.id === this.selected)) this.selected = projects[0]?.id ?? '';
     const project = projects.find(p => p.id === this.selected);
     const metadata = project ? await this.projects.metadata(project) : undefined;
     const studio = metadata ? { ...metadata.studio, board: { ...metadata.studio.board, views: metadata.studio.board.views.map(v => ({ ...v, refresh: this.refresh.get(`${project!.id}:${v.id}`) ?? 0 })) } } : null;

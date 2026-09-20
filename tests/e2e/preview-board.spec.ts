@@ -102,11 +102,12 @@ test('shared Fit all, focus, wheel and responsive bounds retain exact mixed phon
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
       expect(await page.locator('iframe').evaluateAll(els => els.map(el => [el.clientWidth, el.clientHeight]))).toEqual([[375, 812], [430, 932]]);
       for (const choice of [compact, large]) {
-        await expect(choice.locator('small')).toBeVisible();
+        if (width <= 760) await expect(choice.locator('small')).toBeVisible();
+        else { await expect(choice.locator('small')).toBeHidden(); await expect(choice).toHaveAttribute('title', /375 × 812|430 × 932/); }
         expect(await choice.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
         const bounds = await choice.boundingBox();
         expect(bounds!.width).toBeGreaterThanOrEqual(44);
-        expect(bounds!.height).toBeGreaterThanOrEqual(44);
+        expect(bounds!.height).toBeGreaterThanOrEqual(width <= 760 ? 44 : 32);
       }
       await expect.poll(() => area.evaluate(el => { const a = el.getBoundingClientRect(), board = el.querySelector('.device-fit')!.getBoundingClientRect(); return (board.width <= a.width && board.height <= a.height) || !!document.querySelector('.canvas-hint[role=status]'); })).toBe(true);
       await page.getByRole('button', { name: 'Focus active view', exact: true }).click();

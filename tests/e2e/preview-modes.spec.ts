@@ -187,7 +187,9 @@ test('one compact toolbar groups secondary tools and reveals selection actions o
   const height = (await header.boundingBox())!.height;
   expect(height).toBeLessThanOrEqual(68);
   const chromeHeight = await canvas.evaluate(node => node.getBoundingClientRect().top - node.closest('.workspace-content')!.getBoundingClientRect().top);
-  expect(chromeHeight).toBeLessThanOrEqual(72);
+  const journeyHeight = (await page.locator('.creation-guide').boundingBox())!.height;
+  expect(journeyHeight).toBeLessThanOrEqual(48);
+  expect(chromeHeight - journeyHeight).toBeLessThanOrEqual(72);
   await expect(page.locator('.overview-selection')).toBeHidden();
   await expect(page.getByRole('button', { name: 'Manage screens', exact: true })).toBeHidden();
   await openPreviewTools(page);

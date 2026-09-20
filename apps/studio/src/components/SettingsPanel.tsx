@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { type AssistantStatus, type ProviderStatus, type ProviderUpdate, useStudioClient } from '../api';
+import { type ProviderStatus, type ProviderUpdate, useStudioClient } from '../api';
 import type { Project } from '../../../../packages/core/src/contracts';
 import { KeyRound, ShieldCheck } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { SupabaseSettings } from './BackendPanel';
+import { AssistantSettings } from './AssistantSettings';
 import { AccountSettings } from './AccountSettings';
 
 export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, project }: { enabledPlugins?: string[]; project?: Project; settings?: ProviderStatus; onSettings: (value: ProviderStatus) => void; disabled: boolean }) {
@@ -26,7 +27,7 @@ export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, 
       if (input.current) input.current.value = '';
       const next = await pending;
       onSettings(next);
-      if (alive.current) setNotice(next.configured ? 'Configuration saved. Not verified; no provider request was made.' : 'OpenAI disconnected for image generation and the assistant. Offline tools remain available.');
+      if (alive.current) setNotice(next.configured ? 'Configuration saved. Not verified; no provider request was made.' : 'Image-generation OpenAI key disconnected. Separate Assistant connections remain available. Offline tools remain available.');
     } catch (cause) {
       if (alive.current) setError(cause instanceof Error ? cause.message : 'Settings could not be updated. Re-enter the key to try again.');
       try { onSettings(await api<ProviderStatus>('/settings')); } catch { /* Keep the operation failure visible. */ }
@@ -38,12 +39,13 @@ export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, 
   }
   return <main className="destination settings-workspace">
     <header><h1>Settings</h1><p>Your project and connected services.</p></header>
+    {enabled('builder.assistant') && <AssistantSettings disabled={disabled} revision={settings?.revision} />}
     {capabilities.accountSettings && enabled('builder.account') && <AccountSettings disabled={disabled} projectId={project?.id} />}
     {project && <section className="settings-section project-settings" aria-label="Project details"><h2>Project details</h2><dl><div><dt>Name</dt><dd>{project.name}</dd></div><div><dt>Project ID</dt><dd><code>{project.id}</code></dd></div>{capabilities.localPaths && <div><dt>Source folder</dt><dd><code>{project.root}</code></dd></div>}</dl></section>}
-    {enabled('builder.media') && <><h2>OpenAI setup</h2>
+    {enabled('builder.media') && <><h2>Image generation</h2>
     <section className="settings-section" aria-label="OpenAI configuration">
       <div className="flex items-center gap-3"><KeyRound size={20} aria-hidden="true" /><h2 className="m-0">{settings?.configured ? 'Configured · not verified' : 'Not configured'}</h2></div>
-      <p>One key powers image generation and the AI assistant. Credential source: <strong>{settings?.source ?? 'Loading…'}</strong>. Settings never probes OpenAI. The first separately approved paid request checks live capability.</p>
+      <p>This key powers image generation and is the default for the OpenAI Assistant connection. Credential source: <strong>{settings?.source ?? 'Loading…'}</strong>. Settings never probes OpenAI. The first separately approved paid request checks live capability.</p>
       <form autoComplete="off" onSubmit={event => { event.preventDefault(); void update('replace'); }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={disabled || busy || !settings || settings.busy || settings.storage === 'locked'}>
           <Label htmlFor="openai-session-key">OpenAI API key</Label>
@@ -64,54 +66,6 @@ export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, 
     </section>
     </>}
     {enabled('builder.supabase') && <SupabaseSettings disabled={disabled} />}
-    {enabled('builder.assistant') && <AssistantSettings disabled={disabled} revision={settings?.revision} />}
-    <section className="settings-section"><div className="flex items-center gap-3"><ShieldCheck size={20} aria-hidden="true" /><h2 className="m-0">Lifetime and spending</h2></div><p>Saved keys take precedence over startup environment keys. Session-only replacement removes the saved key. Disconnect deletes the saved key and disables OpenAI for both features until you reconnect or restart; it never edits your environment or .env file.</p><p>Dunara reads <code>OPENAI_API_KEY</code> from its startup environment or .env file. Existing saved OpenAI keys are reused for both features. Restart reloads saved or startup keys without making a provider request.</p><p>Changing configuration invalidates previous consent. Every billable request still requires its exact prompt, references and model disclosure plus fresh approval in Assets. “Configured” does not mean the key, account or model has been verified.</p></section>
+    <section className="settings-section"><div className="flex items-center gap-3"><ShieldCheck size={20} aria-hidden="true" /><h2 className="m-0">Lifetime and spending</h2></div><p>Saved keys take precedence over startup environment keys. Session-only replacement removes the saved key. Disconnect deletes the saved key and disables this shared OpenAI key until you reconnect or restart; it never edits your environment or .env file.</p><p>Dunara reads <code>OPENAI_API_KEY</code> from its startup environment or .env file. Existing saved OpenAI keys are reused for both features. Restart reloads saved or startup keys without making a provider request.</p><p>Changing configuration invalidates previous consent. Every billable request still requires its exact prompt, references and model disclosure plus fresh approval in Assets. “Configured” does not mean the key, account or model has been verified.</p></section>
   </main>;
-}
-
-function AssistantSettings({ disabled, revision }: { disabled: boolean; revision?: string }) {
-  const { api } = useStudioClient();
-  const alive = useRef(true), operating = useRef(false), version = useRef(0);
-  const [status, setStatus] = useState<AssistantStatus>(), [selected, setSelected] = useState(''), [busy, setBusy] = useState(false), [notice, setNotice] = useState(''), [error, setError] = useState('');
-  useEffect(() => {
-    alive.current = true;
-    const refresh = async () => {
-      if (operating.current) return;
-      const request = ++version.current;
-      try { const value = await api<AssistantStatus>('/assistant/status'); if (alive.current && request === version.current) { setStatus(value); setSelected(previous => previous || value.model || ''); } }
-      catch { if (alive.current && request === version.current) setError('Assistant status unavailable. Check the local runtime.'); }
-    };
-    void refresh(); const timer = setInterval(() => void refresh(), 5000);
-    return () => { alive.current = false; version.current++; clearInterval(timer); };
-  }, [revision]);
-  async function update() {
-    if (disabled || operating.current || !status?.available || status.busy || !selected) return;
-    operating.current = true; version.current++; setBusy(true); setError(''); setNotice('');
-    try {
-      const next = await api<AssistantStatus>('/assistant/configure', { action: 'model', model: selected });
-      if (alive.current) { setStatus(next); setNotice('Assistant model saved for future messages. No provider request was made.'); }
-    } catch (cause) { if (alive.current) setError(cause instanceof Error ? cause.message : 'Assistant configuration failed.'); }
-    finally { operating.current = false; if (alive.current) setBusy(false); }
-  }
-  return <section className="settings-section" aria-label="Assistant configuration">
-    <div className="flex items-center gap-3"><KeyRound size={20} aria-hidden="true" /><h2 className="m-0">AI assistant</h2></div>
-    <p>{!status ? 'Loading assistant availability…' : !status.available ? 'The AI assistant is available in the desktop app.' : status.configured ? `Uses your OpenAI key · ${status.source ?? 'session'}` : 'Add your OpenAI API key above to start using the assistant.'}</p>
-    <form onSubmit={event => { event.preventDefault(); void update(); }}>
-      <fieldset className="m-0 min-w-0 border-0 p-0" disabled={disabled || busy || !status?.available || status.busy}>
-        <Label htmlFor="assistant-model">Assistant model</Label>
-        <select id="assistant-model" value={selected} required onChange={event => { setSelected(event.target.value); setNotice(''); }} aria-describedby="assistant-model-help">
-          {!selected && <option value="" disabled>Select a model</option>}
-          {selected && !status?.models?.some(model => model.id === selected) && <option value={selected} disabled>{selected} (unavailable)</option>}
-          {status?.models?.map(model => <option key={model.id} value={model.id}>{model.label} · {model.id}</option>)}
-        </select>
-        <p id="assistant-model-help">Choose a model for future messages in all conversations. Your choice is remembered on this computer. Models come from the installed assistant; access depends on your OpenAI account.</p>
-        <Button type="submit" disabled={selected === status?.model || !status?.models?.some(model => model.id === selected)}>Save assistant model</Button>
-      </fieldset>
-    </form>
-    <p>Sending a message may incur charges and shares your message, recent conversation and requested app content with OpenAI. Image generation requires its own approval.</p>
-    <p>Conversation history stays on this computer. Delete it in the assistant panel.</p>
-    {status?.busy && <p role="status">An assistant turn is active. Wait for it to finish or stop it before changing the model or OpenAI key.</p>}
-    {error && <p role="alert" className="settings-error">{error}</p>}
-    <p role="status">{busy ? 'Saving assistant model…' : notice}</p>
-  </section>;
 }

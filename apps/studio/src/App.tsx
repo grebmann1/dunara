@@ -17,6 +17,12 @@ import { DesignPanel, type DesignDraft } from './components/DesignPanel';
 import { StudioConsole } from './components/StudioConsole';
 import { AssetsPanel } from './components/AssetsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
+import { CreationGuide, browserJourney } from './components/CreationGuide';
+import { UnavailableProjects } from './components/UnavailableProjects';
+import { NativeBuildPanel } from './components/NativeBuildPanel';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from './components/ui/dialog';
+import type { UnavailableProject } from '../../../packages/core/src/projects';
+import type { JourneyState } from '../../../packages/core/src/journey';
 import { BackendPanel } from './components/BackendPanel';
 import { PluginsPanel, usePlugins } from './plugins/PluginsPanel';
 import { workspaceOwner } from '../../../packages/builtin-plugins/src/contributions';
@@ -35,6 +41,7 @@ export function App() {
   const hiddenDestinations = pluginCatalog.state ? Object.entries(workspaceOwner).filter(([, owner]) => !pluginCatalog.state!.plugins.some(plugin => plugin.id === owner && plugin.status === 'active')).map(([workspace]) => workspace) : [];
   const [connected, setConnected] = useState(false), [available, setAvailable] = useState(false), [connectionError, setConnectionError] = useState('');
   const [projects, setProjects] = useState<Project[]>([]), [selected, setSelected] = useState('');
+  const [unavailableProjects, setUnavailableProjects] = useState<UnavailableProject[]>([]), [buildOpen, setBuildOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false), assistantButton = useRef<HTMLButtonElement>(null);
   const assistantEnabled = pluginEnabled('builder.assistant');
   const assistant = useAssistant(ready && assistantEnabled, selected || null, assistantOpen && assistantEnabled);
@@ -80,7 +87,7 @@ export function App() {
     generation.current++; selectionVersion.current++; selection.current = id;
     setBoards(current => current[id] ? current : { ...current, [id]: initialBoard(crypto.randomUUID()) });
     setSelected(id); setState(undefined); setPendingReview(0); setError('');
-    setConsolePanel(null);
+    setConsolePanel(null); setBuildOpen(false);
   }, []);
   const applySession = useCallback((value: StudioSession) => {
     if (session.current?.revision === value.revision) return;
@@ -90,6 +97,8 @@ export function App() {
       const id = value.projectId, studio = value.studio;
       setBoards(current => ({ ...current, [id]: studio.board }));
       setLocalWorkspace(studio.workspace); setLocalDesignOpen(studio.designOpen); setLocalAssetsTab(studio.assetsTab);
+    } else if (selection.current) {
+      selectProject(''); setLocalWorkspace('preview'); setLocalDesignOpen(false);
     }
   }, [selectProject]);
   function control(action: StudioAction): Promise<boolean> {
@@ -109,9 +118,9 @@ export function App() {
     let pending = (async () => {
     const version = ++generation.current;
     try {
-      const [catalog, provider, shared] = await Promise.all([api<{ projects: Project[]; trusted: boolean }>('/projects'), api<ProviderStatus>('/settings'), api<StudioSession>('/studio')]);
+      const [catalog, provider, shared] = await Promise.all([api<{ projects: Project[]; unavailable?: UnavailableProject[]; trusted: boolean }>('/projects'), api<ProviderStatus>('/settings'), api<StudioSession>('/studio')]);
       if (version !== generation.current) return;
-      setProjects(catalog.projects); setTrusted(catalog.trusted); setSettings(provider);
+      setProjects(catalog.projects); setUnavailableProjects(catalog.unavailable ?? []); setTrusted(catalog.trusted); setSettings(provider);
       if (!pendingControls.current) applySession(shared);
       const id = selection.current;
       const current = generation.current;
@@ -171,12 +180,26 @@ export function App() {
     assistantControl={assistantEnabled && assistant.status?.available && <Button ref={assistantButton} variant="ghost" className="assistant-toggle" aria-label="Assistant" title={assistant.approvals.length ? 'Assistant · waiting for review' : assistant.status.busy ? 'Assistant · working' : 'Assistant'} aria-expanded={assistantOpen && (!dock.desktop || dock.active[dock.layout.positions.assistant] === 'assistant')} aria-controls="assistant-panel" onClick={() => { if (dock.desktop && assistantOpen && dock.active[dock.layout.positions.assistant] !== 'assistant') dock.activate('assistant', dock.layout.positions.assistant); else setAssistantOpen(value => !value); }}><MessageSquare aria-hidden /><span className="assistant-label">Assistant</span>{(assistant.status.busy || assistant.error || assistant.connectionError) && <i aria-hidden data-state={assistant.approvals.length ? 'waiting' : assistant.error || assistant.connectionError ? 'error' : 'running'} />}<span className="sr-only" role="status">{assistant.approvals.length ? 'Waiting for review' : assistant.status.busy ? 'Working' : assistant.error || assistant.connectionError ? 'Error' : ''}</span></Button>}
     projectStatus={state && <div className="preview-status" data-state={busyProject === selected && busy ? 'busy' : state.preview.status} role="status"><i aria-hidden="true" />{(busyProject === selected && busy) || state.preview.status}</div>}
     banners={<>{connectionError && <div className="error-banner" role="alert">{connectionError}</div>}{!creating && errorBanner}</>}
-    overlays={<><AssistantPanel controller={assistant} open={assistantOpen && assistantEnabled && !creating} onOpenChange={setAssistantOpen} trigger={assistantButton} projectName={projects.find(project => project.id === selected)?.name} onSettings={() => setWorkspace('settings')} /><CreateProjectDialog open={creating} onOpenChange={setCreating} busy={!!busy} name={name} slug={slug} onName={value => { setName(value); setSlug(value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')); }} onSlug={setSlug} error={errorBanner} onSubmit={e => {
-      e.preventDefault();
+    overlays={<><Dialog open={buildOpen && !!state} onOpenChange={setBuildOpen}><DialogContent placement="drawer" className="preview-tool-dialog"><DialogTitle>Build setup</DialogTitle><DialogDescription>Prepare an installable version of your app.</DialogDescription><div className="preview-tool-body">{state && <NativeBuildPanel key={selected} projectId={selected} onRefresh={() => void reconcile()} />}</div></DialogContent></Dialog><AssistantPanel controller={assistant} open={assistantOpen && assistantEnabled && !creating} onOpenChange={setAssistantOpen} trigger={assistantButton} projectName={projects.find(project => project.id === selected)?.name} onSettings={() => setWorkspace('settings')} /><CreateProjectDialog open={creating} onOpenChange={setCreating} busy={!!busy} backendEnabled={pluginEnabled('builder.supabase')} name={name} slug={slug} onName={value => { setName(value); setSlug(value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')); }} onSlug={setSlug} error={errorBanner} onSubmit={async setup => {
       const result = createSchema.safeParse({ name, slug, recipe: 'wellness', preset: 'sage' });
-      if (!result.success) { setError('Use a name with letters, numbers, spaces, periods, apostrophes or hyphens and a lowercase directory slug.'); return; }
-      void perform('Creating app', async () => { const project = await api<Project>('/projects', result.data); applySession(await api<StudioSession>('/studio')); await control({ type: 'select-project', projectId: project.id }); setCreating(false); });
+      if (!result.success) { setError('Use a name with letters, numbers, spaces, periods, apostrophes or hyphens and a lowercase directory slug.'); return false; }
+      let briefSaved = false;
+      const created = await perform('Creating app', async () => { const project = await api<Project>('/projects', result.data);
+        applySession(await api<StudioSession>('/studio')); await control({ type: 'select-project', projectId: project.id }); setCreating(false);
+        try {
+          const previous = { ...browserJourney(''), brief: setup.brief, idea: true, backendLater: setup.backend === 'none' };
+          const progress = await api<JourneyState>(`/projects/${project.id}/journey`);
+          await api(`/projects/${project.id}/journey`, { expectedRevision: progress.revision, patch: previous }); briefSaved = true;
+        } catch { setError('Your app was created, but its brief could not be saved. Add it in Your app journey.'); }
+        if (setup.backend === 'supabase') await control({ type: 'navigate', workspace: 'backend' }); });
+      return created && briefSaved;
     }} /></>}>
+      {ready && <UnavailableProjects entries={unavailableProjects} localPaths={capabilities.localPaths} disabled={!usable || !!busy} onRetry={() => void reconcile()} onRemove={entry => perform('Removing registration', () => api(`/projects/${entry.project.id}/remove-unavailable`, { expectedRoot: entry.project.root }))} />}
+      {ready && !!state && <CreationGuide visible={workspace === 'preview'} key={`guide:${selected}`} projectId={selected} state={state} disabled={!usable || !!busy} mediaEnabled={pluginEnabled('builder.media')} backendEnabled={pluginEnabled('builder.supabase')} assistantEnabled={assistantEnabled && !!assistant.status?.available} buildEnabled={pluginEnabled('builder.expo')} launchKitEnabled={pluginEnabled('builder.launch-kit') && pluginEnabled('builder.media')} onBuild={() => { closePanelsForDialog(); setBuildOpen(true); }} onPublish={() => { void control({ type: 'assets-tab', tab: 'launch-kit' }); }} onNavigate={setWorkspace} onCreate={() => setCreating(true)} onPlan={brief => {
+        assistant.setMode('plan');
+        if (!assistant.draft.trim()) assistant.setDraft(`${brief.trim() ? `My app idea: ${brief.trim()}\n\n` : ''}Help me define my app idea step by step: who it is for, the problem it solves, the main screens, and its visual direction. Ask me one question at a time.`);
+        showAssistant();
+      }} />}
       {workspaceUnavailable && <main className="destination"><h1>This feature is disabled</h1><p>Enable its plugin to return to this workspace. Your app source and saved settings are still available.</p><Button onClick={() => setWorkspace('plugins')}>Open Plugins</Button></main>}
       <main hidden={workspace !== 'preview' || workspaceUnavailable} className="main" onKeyDown={event => {
         if (event.key !== 'Escape' || !(event.target instanceof Element)) return;

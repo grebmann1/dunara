@@ -88,3 +88,16 @@ it('persists canvas modes and configures comparisons atomically without losing s
   expect(restored.studio!.board).toMatchObject({ mode: 'compare', comparison: 'screens' });
   expect(restored.studio!.board.views.map(view => view.route)).toEqual(['/', '/habit']);
 });
+
+it('falls back to healthy projects and clears selection when all folders disappear', async () => {
+  const first = await engine.projects.create({ name: 'First', slug: 'first' });
+  const second = await engine.projects.create({ name: 'Second', slug: 'second' });
+  await act({ type: 'select-project', projectId: first.id });
+  await rm(first.root, { recursive: true });
+  expect((await engine.studio.snapshot()).projectId).toBe(second.id);
+  await act({ type: 'navigate', workspace: 'settings' });
+  await rm(second.root, { recursive: true });
+  expect(await engine.studio.snapshot()).toMatchObject({ projectId: null, studio: null });
+  const third = await engine.projects.create({ name: 'Third', slug: 'third' });
+  expect((await engine.studio.snapshot()).projectId).toBe(third.id);
+});

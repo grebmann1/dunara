@@ -99,7 +99,7 @@ test('canvas controls and bottom content fit six widths and browser zoom', async
           if (!(node instanceof HTMLButtonElement)) throw new Error('Expected a canvas button');
           return { width: node.offsetWidth, height: node.offsetHeight };
         });
-        expect(dimensions.width).toBeGreaterThanOrEqual(44); expect(dimensions.height).toBeGreaterThanOrEqual(44);
+        expect(dimensions.width).toBeGreaterThanOrEqual(width <= 760 ? 44 : 32); expect(dimensions.height).toBeGreaterThanOrEqual(width <= 760 ? 44 : 32);
       }
       await page.getByRole('button', { name: '100%', exact: true }).click();
       await canvas.focus(); await page.keyboard.press('End');

@@ -1,0 +1,41 @@
+.ai-connections { display: grid; gap: 16px; }
+.ai-connections .ai-connections-heading { display: flex; align-items: flex-start; gap: 10px; }
+.ai-connections-heading h2, .ai-connections-heading p { margin: 0; }
+.ai-connections-heading p { margin-top: 4px; }
+.ai-subscriptions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.ai-connection-card { min-width: 0; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.ai-connection-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ai-connection-title span { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted); }
+.ai-connections .ai-connection-card p { font-size: 12px; margin: 6px 0 12px; }
+.ai-remember { display: flex; align-items: center; gap: 8px; font-size: 12px; }
+.settings-section .ai-remember input[type="checkbox"] { width: 20px; height: 20px; min-height: 20px; flex: 0 0 20px; }
+.settings-section .ai-remember input[type="checkbox"]::before { left: 0; top: 0; }
+.settings-section .ai-remember input[type="checkbox"]:checked::after { left: 7px; top: 3px; }
+.ai-connections small { color: var(--muted); line-height: 1.5; }
+.ai-model-form fieldset, .ai-api-settings fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 10px; }
+.ai-model-fields { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; }
+.ai-model-fields label { display: grid; gap: 6px; min-width: 0; font-size: 12px; }
+.ai-model-fields select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+.ai-model-form button, .ai-api-settings button[type="submit"] { justify-self: start; }
+.ai-api-settings { border-top: 1px solid var(--line); padding-top: 14px; }
+.ai-api-settings summary, .ai-sign-in summary { cursor: pointer; font-size: 13px; }
+.ai-api-settings > summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }
+.ai-api-list { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.ai-api-list button { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 6px; font-size: 12px; }
+.ai-api-list button[aria-pressed=true] { background: var(--primary-soft); color: var(--primary); }
+.ai-api-settings form { display: grid; gap: 10px; max-width: 520px; }
+.ai-api-settings form details { display: grid; gap: 8px; }
+.ai-sign-in { display: grid; gap: 10px; background: var(--primary-soft); border-radius: 8px; padding: 14px; min-width: 0; }
+.ai-sign-in a { display: inline-flex; gap: 6px; align-items: center; justify-self: start; }
+.ai-sign-in form { display: grid; gap: 8px; }
+.ai-sign-in code { overflow-wrap: anywhere; }
+.assistant-model-picker { margin-top: 8px; display: flex; gap: 6px; align-items: center; min-width: 0; }
+.assistant-model-picker select { flex: 1; min-width: 0; max-width: 100%; height: 30px; font-size: 11px; text-overflow: ellipsis; border-radius: 6px; }
+.assistant-model-picker button { flex-shrink: 0; font-size: 11px; }
+@container studio (max-width: 760px) {
+  .ai-subscriptions, .ai-model-fields { grid-template-columns: 1fr; }
+  .ai-api-list button, .assistant-model-picker select { min-height: 44px; }
+  .ai-remember { min-height: 44px; }
+}
+
+.assistant-provider-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 400; color: var(--muted); }

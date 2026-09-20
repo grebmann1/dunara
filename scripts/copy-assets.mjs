@@ -1,6 +1,15 @@
 import { access, cp, chmod, mkdir, readFile, rm } from 'node:fs/promises';
 import path from 'node:path';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
+
+// Electron needs a raster icon; derive it from the same mark used by Studio.
+const desktopAssets = 'dist/packages/desktop/assets';
+await mkdir(desktopAssets, { recursive: true });
+const mark = await sharp('packages/catalog/assets/brand-mark.svg', { density: 1152 }).resize(824, 824).png().toBuffer();
+await sharp({ create: { width: 1024, height: 1024, channels: 4, background: '#00000000' } })
+  .composite([{ input: mark, left: 100, top: 100 }]).png().toFile(`${desktopAssets}/app-icon.png`);
+
 await mkdir('dist/packages/templates', { recursive: true });
 await rm('dist/packages/templates/expo', { recursive: true, force: true });
 await cp('packages/templates/expo', 'dist/packages/templates/expo', { recursive: true, filter: file => !['node_modules', '.expo', 'dist'].includes(path.basename(file)) });

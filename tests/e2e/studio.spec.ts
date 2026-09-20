@@ -60,7 +60,7 @@ test('desktop Preview and Settings scrolling stays within the workspace', async 
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 768, height: 800 }]) {
     await page.setViewportSize(viewport);
     for (const destination of ['Preview', 'Settings']) {
-      await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+      await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       if (destination === 'Preview') {
         const canvas = page.getByRole('region', { name: 'Phone preview canvas' });
@@ -104,7 +104,7 @@ test('phone and 200 percent Preview and Settings layouts keep reachable final co
     await page.setViewportSize(viewport);
     await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, viewport.width === 1440 ? 2 : 1);
     for (const destination of ['Preview', 'Settings']) {
-      await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+      await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       await scrollEvidence(page, `${destination.replace(' ', '-')}-${viewport.width === 1440 ? 'zoom' : viewport.width}`, await scrollPosition(page));
       // The edge-to-edge Preview canvas owns wheel zoom; document scroll starts outside it.
@@ -152,7 +152,7 @@ test('scroll ownership preserves keyboard focus, polling, banners and short-heig
   expect((await scrollPosition(page)).workspaceTop).toBe(0);
 
   for (const destination of ['Assets', 'Activity', 'Settings', 'Preview']) {
-    await page.getByRole('navigation', { name: 'Workspace', exact: true }).getByRole('button', { name: destination, exact: true }).click();
+    await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
     await expect.poll(async () => (await scrollPosition(page)).workspaceTop).toBe(0);
     await expect(destination === 'Preview' ? page.locator('.topbar h1') : content.locator('h1:visible')).toBeInViewport();
     if (destination === 'Preview') await expect(page.locator('.toolbar')).toBeInViewport();
@@ -342,7 +342,7 @@ test('project route controls remain reachable at phone width and meet target siz
     const dialog = page.getByRole('dialog', { name: 'Project routes', exact: true });
     await expect(dialog).toBeInViewport({ ratio: 0.99 });
     const small = await dialog.locator('button, input, select, summary').evaluateAll(nodes => nodes.filter(node => {
-      const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.height < 44;
+      const rect = node.getBoundingClientRect(); return rect.width > 0 && rect.height > 0 && rect.height < (matchMedia('(max-width: 760px), (pointer: coarse)').matches ? 44 : 36);
     }).map(node => node.getAttribute('aria-label') || node.textContent));
     expect(small).toEqual([]);
   }
@@ -379,7 +379,7 @@ test('200 percent scaling and keyboard navigation preserve usable controls', asy
   await page.getByLabel('App name', { exact: true }).focus();
   await page.getByRole('button', { name: '+ New app', includeHidden: true }).evaluate(node => node.focus());
   await expect(page.getByLabel('App name', { exact: true })).toBeFocused();
-  await page.keyboard.press('Tab'); await expect(page.getByLabel('Directory slug')).toBeFocused();
+  await page.keyboard.press('Tab'); await expect(page.getByLabel('The idea', { exact: false })).toBeFocused();
   await page.keyboard.press('Escape'); await expect(page.getByRole('button', { name: '+ New app' })).toBeFocused();
 });
 
@@ -473,7 +473,10 @@ test('project picker has an honest empty state and a single accessible project c
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.getByRole('button', { name: '+ New app' }).click();
   await page.getByLabel('App name', { exact: true }).fill('Alpha Studio');
+  await page.locator('.creation-folder summary').click();
   await page.getByLabel('Directory slug').fill('alpha-studio');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('radio', { name: /No backend for now/ }).check();
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const picker = page.getByRole('combobox', { name: 'Project', exact: true });
@@ -493,7 +496,7 @@ test('project picker has an honest empty state and a single accessible project c
     await picker.focus(); await picker.press('Tab'); await page.keyboard.press('Shift+Tab');
     await expect(picker).toBeFocused();
     const bounds = await picker.boundingBox();
-    expect(bounds!.height).toBeGreaterThanOrEqual(44);
+    expect(bounds!.height).toBeGreaterThanOrEqual(width <= 760 ? 44 : 36);
     expect(bounds!.x).toBeGreaterThanOrEqual(0);
     expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
     const layout = await page.evaluate(() => ({
@@ -559,29 +562,36 @@ test('project picker has an honest empty state and a single accessible project c
 test('create validates names and slugs, cancels, rejects duplicates and guards repeat submits', async ({ page }) => {
   await engine.projects.create({ name: 'Existing app', slug: 'existing' });
   await page.goto(studio.launchUrl);
-  await page.getByRole('button', { name: 'Design', exact: true }).click();
   const open = page.getByRole('button', { name: '+ New app' });
   await open.click(); await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   expect(await engine.projects.list()).toHaveLength(1);
   await open.click();
   await page.getByLabel('App name', { exact: true }).fill('Invalid !');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await page.getByRole('radio', { name: /No backend for now/ }).check();
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Use a name');
   await page.getByRole('button', { name: 'Dismiss error' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
   await page.getByLabel('App name', { exact: true }).fill('Valid name');
+  await page.locator('.creation-folder summary').click();
   await page.getByLabel('Directory slug').fill('BAD slug');
   expect(await page.getByLabel('Directory slug').evaluate((node: HTMLInputElement) => node.checkValidity())).toBe(false);
   await page.getByLabel('Directory slug').fill('existing');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Dismiss error' }).click();
+  await page.getByRole('button', { name: 'Back', exact: true }).click();
+  await page.locator('.creation-folder summary').click();
   await page.getByLabel('Directory slug').fill('valid-name');
+  await page.getByRole('button', { name: 'Continue', exact: true }).click();
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; }); let posts = 0;
   await page.route('**/api/projects', async route => { if (route.request().method() === 'POST') { posts++; await held; } await route.continue(); });
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Create app', exact: true })).toBeDisabled();
-  await page.getByLabel('Directory slug').press('Enter');
+  await expect(page.getByRole('button', { name: 'Creating…', exact: true })).toBeDisabled();
+  await page.keyboard.press('Enter');
   release();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   expect(posts).toBe(1); expect(await engine.projects.list()).toHaveLength(2);
@@ -713,13 +723,13 @@ test('shortcut paths, invalid custom paths and project switch reset are explicit
   await expect(page.getByLabel('Corner radius')).toHaveValue('31');
 });
 
-test('create dialog supports focus, Escape and 44px keyboard targets', async ({ page }) => {
+test('create dialog supports focus, Escape and compact keyboard targets', async ({ page }) => {
   await page.goto(studio.launchUrl);
   const trigger = page.getByRole('button', { name: '+ New app' });
   await trigger.click();
-  await expect(page.getByRole('dialog', { name: 'Create an app' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'What are you making?' })).toBeVisible();
   await expect(page.getByLabel('App name', { exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(page.getByRole('dialog')).toHaveCount(0); await expect(trigger).toBeFocused();
-  const bounds = await trigger.boundingBox(); expect(bounds!.height).toBeGreaterThanOrEqual(44);
+  const bounds = await trigger.boundingBox(); expect(bounds!.height).toBeGreaterThanOrEqual(36);
 });

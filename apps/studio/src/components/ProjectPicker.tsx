@@ -7,7 +7,7 @@ export function ProjectPicker({ projects, selected, onSelect }: { projects: Proj
   const current = projects.find(project => project.id === selected);
   const nameCounts = new Map<string, number>();
   for (const project of projects) nameCounts.set(project.name, (nameCounts.get(project.name) ?? 0) + 1);
-  return <div className="project-picker">
+  return <span className="project-picker">
     <Select value={selected} onValueChange={id => { if (id !== selected) onSelect(id); }}>
       <SelectTrigger className="project-picker-trigger" aria-label="Project" title={current ? `${current.name} · ${current.slug}` : 'Choose project'}>
         <Smartphone className="project-picker-icon" aria-hidden />
@@ -23,5 +23,5 @@ export function ProjectPicker({ projects, selected, onSelect }: { projects: Proj
         })}
       </SelectContent>
     </Select>
-  </div>;
+  </span>;
 }

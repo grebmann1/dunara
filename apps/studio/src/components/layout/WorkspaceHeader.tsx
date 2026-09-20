@@ -1,16 +1,19 @@
 import type { ReactNode } from 'react';
+import type { Project } from '../../../../../packages/core/src/contracts';
+import { ProjectPicker } from '../ProjectPicker';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { Button } from '../ui/button';
-import mark from '../../../../../packages/catalog/assets/brand-mark.svg';
+import mark from '../../../../../packages/catalog/assets/brand-mark.svg?no-inline';
 import '../../header-polish.css';
 
 type Props = {
   connectionLabel: string; usable: boolean; sidebarOpen: boolean; onToggleSidebar: () => void;
-  projectName?: string; projectStatus: ReactNode; isPreview: boolean; assistantControl?: ReactNode;
+  projects: Project[]; selected: string; onSelect: (id: string) => void; projectStatus: ReactNode; isPreview: boolean; assistantControl?: ReactNode;
 };
 
-export function WorkspaceHeader({ connectionLabel, usable, sidebarOpen, onToggleSidebar, projectName, projectStatus, isPreview, assistantControl }: Props) {
-  const Title = isPreview ? 'h1' : 'p';
+export function WorkspaceHeader({ connectionLabel, usable, sidebarOpen, onToggleSidebar, projects, selected, onSelect, projectStatus, isPreview, assistantControl }: Props) {
+  const projectName = projects.find(project => project.id === selected)?.name;
+  const Title = isPreview ? 'h1' : 'div';
   const SidebarIcon = sidebarOpen ? PanelLeftClose : PanelLeftOpen;
   const local = connectionLabel === 'Local workspace';
   return <header className="topbar" data-project={!!projectName} data-sidebar-open={sidebarOpen}>
@@ -18,7 +21,7 @@ export function WorkspaceHeader({ connectionLabel, usable, sidebarOpen, onToggle
     <div className="header-identity">
       <Button variant="ghost" className="w-11 shrink-0 p-2" aria-label={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'} title={sidebarOpen ? 'Collapse sidebar' : 'Expand sidebar'} aria-expanded={sidebarOpen} aria-controls="studio-sidebar" onClick={onToggleSidebar}><SidebarIcon aria-hidden /></Button>
       <span className="studio-brand" title="Dunara Studio"><img src={mark} alt="Dunara" width="28" height="28" />{!projectName && <span>Dunara</span>}</span>
-      {projectName && <Title className="header-project" title={projectName}>{projectName}</Title>}
+      {projectName && <Title className="header-project" title={projectName}><ProjectPicker projects={projects} selected={selected} onSelect={onSelect} /></Title>}
     </div>
     <div className="header-status" data-connection-state={local ? 'local' : 'attention'}>
       {projectStatus}

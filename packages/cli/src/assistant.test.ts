@@ -50,7 +50,7 @@ it('exposes optional unavailable status without changing headless behavior', asy
 });
 it('rejects missing authentication, forged Origin/Host, URL credentials, methods, oversized input and secret-bearing schema errors', async () => {
   const value = { action: 'connect', key: secret };
-  for (const action of ['configure', 'events', 'conversations/read', 'approvals', 'turns/start', 'drafts/read', 'drafts/save', 'drafts/configure']) {
+  for (const action of ['connections/update', 'connections/sign-in', 'connections/answer', 'connections/cancel', 'configure', 'events', 'conversations/read', 'approvals', 'turns/start', 'drafts/read', 'drafts/save', 'drafts/configure']) {
     expect((await post(action, value, { Authorization: '' })).status).toBe(401);
     expect((await post(action, value, { Origin: 'null' })).status).toBe(403);
     expect((await post(action, value, { Origin: '' })).status).toBe(403);
@@ -178,4 +178,31 @@ it('keeps draft endpoints private, scopes conversations and fences writes and ac
   expect(invoked).toHaveBeenCalledTimes(1);
   await post('conversations/delete', { conversationId: record.id, confirmed: true });
   expect(JSON.parse(await readFile(path.join(root, 'home/credentials/assistant-drafts.json'), 'utf8')).rows).toEqual([]);
+});
+
+it('snapshots provider selection per turn and preserves independent API connections', async () => {
+  const xai = 'fixture-xai-secret-sentinel', anthropic = 'fixture-anthropic-secret-sentinel';
+  for (const [provider, key] of [['xai', xai], ['anthropic', anthropic]]) {
+    const response = await post('connections/update', { action: 'connect', provider, key, remember: false, expectedRevision: assistant.status().connectionRevision });
+    expect(response.status).toBe(200); expect(await response.text()).not.toContain(key);
+  }
+  const model = assistant.status().connections.find(item => item.id === 'xai')!.models[0]!.id;
+  expect((await post('configure', { action: 'model', provider: 'xai', model })).status).toBe(200);
+  let release!: () => void;
+  behavior = async (input, callbacks) => {
+    expect(input).toMatchObject({ provider: 'xai', model, apiKey: xai });
+    expect(input.prompt).not.toContain(anthropic);
+    callbacks.text(anthropic.slice(0, 12)); callbacks.text(anthropic.slice(12));
+    await new Promise<void>(resolve => { release = resolve; });
+  };
+  const conversation = await create(), turn = await start(conversation, `Explain ${anthropic}`);
+  await vi.waitFor(() => expect(release).toBeDefined());
+  expect((await post('configure', { action: 'model', provider: 'openai', model: 'gpt-6-astra' })).status).toBe(400);
+  expect((await post('connections/update', { action: 'disconnect', provider: 'xai', expectedRevision: assistant.status().connectionRevision })).status).toBe(400);
+  release(); await vi.waitFor(() => expect(assistant.status().busy).toBe(false));
+  const record = await assistant.conversation(conversation.id);
+  expect(record.turns[0]).toMatchObject({ id: turn.runId, provider: 'xai', model, prompt: 'Explain [redacted]', response: '[redacted]' });
+  expect((await post('connections/update', { action: 'disconnect', provider: 'xai', expectedRevision: assistant.status().connectionRevision })).status).toBe(200);
+  expect(assistant.status().connections.find(item => item.id === 'anthropic')?.configured).toBe(true);
+  expect(engine.mediaJobs.providerStatus().configured).toBe(false);
 });

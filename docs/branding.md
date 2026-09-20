@@ -1,10 +1,12 @@
 # Dunara naming and compatibility
 
-The product is **Dunara** (formerly Mobile App Builder), with **Dunara Studio**, **Dunara Assistant**, and **Dunara SDK** as the product family. The website retains the approved ivory, sand, charcoal and rust palette and the line **A new world. Built by you.** The shared mark is an ivory D and dune with an amber navigation star.
+The product is **Dunara** (formerly Mobile App Builder), with **Dunara Studio**, **Dunara Assistant**, and **Dunara SDK** as the product family. The website retains the approved ivory, sand, charcoal and rust palette and the line **A new world. Built by you.** The shared mark is a white geometric D with a rising diagonal cut on a coral tile. Its source is `packages/catalog/assets/brand-mark.svg`, used by the Studio header and favicon. The build derives a 1024px transparent PNG with macOS icon margins for the Electron Dock and About panel. Website/cloud consumers receive the mark through a future qualified catalogue package release.
 
 The September 19, 2026 rename updates website branding and metadata, Studio branding/favicon and setup copy, desktop window/application labels and menus, Assistant instructions, bundled plugin guides and current user/SDK documentation. The native operations menu is now **Studio** (Show Studio, Reconnect Studio, Restart backend, Copy MCP socket path, Runtime status); the application menu is **Dunara**.
 
 ## Compatibility
+
+Studio uses restrained coral accents with white and neutral-gray surfaces. Shared CSS tokens in `apps/studio/src/theme.css` drive primary actions, hover states, selection fills and focus rings; the action coral is darker than the logo for readable white labels. Success, warning and error states retain semantic colors. Generated-app presets and artwork samples keep their own palettes.
 
 This is a display-name change. The repository and package identities stay stable:
 

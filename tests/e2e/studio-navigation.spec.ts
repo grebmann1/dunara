@@ -58,7 +58,7 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   const nav = page.getByRole('navigation', { name: 'Workspace', exact: true });
   const preview = nav.getByRole('button', { name: 'Preview', exact: true });
   const assets = nav.getByRole('button', { name: 'Assets', exact: true });
-  const settings = nav.getByRole('button', { name: 'Settings', exact: true });
+  const settings = page.locator('.sidebar-footer').getByRole('button', { name: 'Settings', exact: true });
   const plugins = nav.getByRole('button', { name: 'Plugins', exact: true });
   await expect(preview).toBeEnabled();
   await expect(assets).toBeEnabled();
@@ -75,12 +75,12 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   await assets.focus();
   await page.keyboard.press('End');
   await expect(plugins).toBeFocused();
-  await page.keyboard.press('ArrowUp');
-  await expect(settings).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('heading', { name: 'OpenAI setup', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Plugins', exact: true })).toBeVisible();
+  await settings.focus(); await page.keyboard.press('Enter');
+  await expect(page.getByRole('heading', { name: 'Image generation', exact: true })).toBeVisible();
   await expect.poll(async () => (await engine.studio.snapshot()).studio?.workspace).toBe('settings');
-  await settings.focus();
+  await plugins.focus();
   await page.keyboard.press('Home');
   await expect(preview).toBeFocused();
   await page.keyboard.press('ArrowUp');
@@ -110,7 +110,7 @@ test('grouped preview tools dismiss outside and retain an unfinished route', asy
   await expect(manualPath).toBeHidden();
 
   await tools.click();
-  await page.locator('.topbar .header-project').click();
+  await page.locator('.topbar .studio-brand').click();
   await expect(page.getByRole('button', { name: 'Project settings', exact: true })).toBeHidden();
   await openProjectRoutes(page);
   await expect(manualPath).toHaveValue('/settings');

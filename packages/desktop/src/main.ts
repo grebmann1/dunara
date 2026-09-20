@@ -4,7 +4,7 @@ import { parseArgs } from 'node:util';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DesktopHost } from './host.js';
-import { downloadAllowed, navigationAllowed, oauthAuthorizationAllowed, rendererPreferences, setupLinkAllowed } from './security.js';
+import { downloadAllowed, navigationAllowed, oauthAuthorizationAllowed, rendererPreferences, assistantSignInAllowed, setupLinkAllowed } from './security.js';
 import { startupEnvironment, startupVariableNames } from '../../core/src/service-config.js';
 import { diagnosticWriter } from './diagnostics.js';
 import { PlatformError } from '../../platform/src/contracts.js';
@@ -90,7 +90,7 @@ if (!app.requestSingleInstanceLock()) {
   process.once('SIGINT', () => app.quit()); process.once('SIGTERM', () => app.quit());
   app.on('web-contents-created', (_event, contents) => {
     contents.setWindowOpenHandler(details => {
-      if (window && contents === window.webContents && host && new URL(contents.getURL()).origin === host.origin && (oauthAuthorizationAllowed(details.url) || setupLinkAllowed(details.url))) void shell.openExternal(details.url).catch(() => { dialog.showErrorBox('Could not open your browser', 'Try the link again from Dunara.'); });
+      if (window && contents === window.webContents && host && new URL(contents.getURL()).origin === host.origin && (oauthAuthorizationAllowed(details.url) || assistantSignInAllowed(details.url) || setupLinkAllowed(details.url))) void shell.openExternal(details.url).catch(() => { dialog.showErrorBox('Could not open your browser', 'Try the link again from Dunara.'); });
       return { action: 'deny' };
     });
     contents.on('will-attach-webview', event => event.preventDefault());
@@ -101,6 +101,9 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(async () => {
   app.setName('Dunara');
+  const appIcon = fileURLToPath(new URL('../assets/app-icon.png', import.meta.url));
+  app.dock?.setIcon(appIcon);
+  app.setAboutPanelOptions({ applicationName: 'Dunara', iconPath: appIcon });
   // Ephemeral browser storage; provider credentials remain only in the Node backend.
   const browserSession = session.fromPartition('builder-desktop');
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));

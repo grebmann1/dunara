@@ -39,3 +39,9 @@ it('allows only top-level Studio-owned downloads', () => {
 it('does not inherit credentials, Node injection, or Electron overrides', () => {
   expect(desktopEnvironment({ PATH: '/bin', HOME: '/tmp/home', OPENAI_API_KEY: 'secret', NODE_OPTIONS: '--import attacker', ELECTRON_RUN_AS_NODE: '1', AWS_SECRET_ACCESS_KEY: 'private', DYLD_INSERT_LIBRARIES: 'bad' })).toEqual({ PATH: '/bin', HOME: '/tmp/home' });
 });
+
+it('opens only known HTTPS Assistant sign-in hosts without embedded credentials', async () => {
+  const { assistantSignInAllowed } = await import('./security.js');
+  for (const url of ['https://auth.openai.com/oauth/authorize?state=test', 'https://auth.x.ai/activate', 'https://accounts.x.ai/authorize']) expect(assistantSignInAllowed(url)).toBe(true);
+  for (const url of ['https://auth.openai.com.evil.test/authorize', 'https://secret@auth.x.ai/', 'http://auth.x.ai/', 'https://auth.x.ai:8443/', 'javascript:alert(1)']) expect(assistantSignInAllowed(url)).toBe(false);
+});

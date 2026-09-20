@@ -36,12 +36,12 @@ test('project identity and status share one compact header across widths and zoo
     const name = await title.boundingBox();
     const status = await page.locator('.preview-status').boundingBox();
     const toggle = await page.getByRole('button', { name: 'Collapse sidebar', exact: true }).boundingBox();
-    expect(header!.height).toBe(56);
+    expect(header!.height).toBe(width <= 760 ? 52 : 48);
     expect(Math.abs(name!.y + name!.height / 2 - (status!.y + status!.height / 2))).toBeLessThan(1);
     expect(name!.x).toBeGreaterThanOrEqual(toggle!.x + toggle!.width);
     expect(name!.x + name!.width).toBeLessThanOrEqual(status!.x);
-    expect(toggle!.width).toBeGreaterThanOrEqual(44);
-    expect(toggle!.height).toBeGreaterThanOrEqual(44);
+    expect(toggle!.width).toBeGreaterThanOrEqual(width <= 760 ? 44 : 36);
+    expect(toggle!.height).toBeGreaterThanOrEqual(width <= 760 ? 44 : 36);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     if (width > 760) {
       expect((await page.locator('.sidebar').boundingBox())!.y).toBe(header!.height);
@@ -58,7 +58,7 @@ test('project identity and status share one compact header across widths and zoo
     expect(collapsedMark!.x - (collapsedToggle!.x + collapsedToggle!.width)).toBe(8);
     expect(collapsedTitle!.x - (collapsedMark!.x + collapsedMark!.width)).toBe(8);
     expect(await title.evaluate(node => getComputedStyle(node).borderLeftWidth)).toBe('0px');
-    expect((await page.locator('.topbar').boundingBox())!.height).toBe(56);
+    expect((await page.locator('.topbar').boundingBox())!.height).toBe(width <= 760 ? 52 : 48);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     await page.screenshot({ path: testInfo.outputPath(`header-collapsed-${width}.png`) });
     await expand.press('Enter');
@@ -123,9 +123,9 @@ test('header prioritizes preview and connection state beside a working Assistant
         await page.setViewportSize(size);
         const header = (await page.locator('.topbar').boundingBox())!;
         const button = (await toggle.boundingBox())!;
-        expect(header.height).toBe(56);
+        expect(header.height).toBe(size.width <= 760 ? 52 : 48);
         expect(button.width).toBeGreaterThanOrEqual(44);
-        expect(button.height).toBe(44);
+        expect(button.height).toBe(size.width <= 760 ? 44 : 36);
         expect(button.x + button.width).toBeLessThanOrEqual(header.x + header.width);
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
         if (size.width === 1440) {
@@ -146,7 +146,7 @@ test('header prioritizes preview and connection state beside a working Assistant
       for (const width of [1440, 750]) {
         await page.setViewportSize({ width, height: 1000 });
         await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
-        expect((await page.locator('.topbar').boundingBox())!.height).toBe(112);
+        expect((await page.locator('.topbar').boundingBox())!.height).toBe(width <= 760 ? 104 : 96);
         await expect(toggle).toBeInViewport();
         await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
         await page.evaluate(() => { document.documentElement.style.zoom = ''; });
@@ -177,8 +177,8 @@ test('header icon collapses and restores the sidebar without remounting the work
     await expect(collapse).toHaveAttribute('aria-expanded', 'true');
     await expect(collapse).toHaveAttribute('aria-controls', 'studio-sidebar');
     const target = await collapse.boundingBox();
-    expect(target!.width).toBeGreaterThanOrEqual(44);
-    expect(target!.height).toBeGreaterThanOrEqual(44);
+    expect(target!.width).toBeGreaterThanOrEqual(width <= 760 ? 44 : 36);
+    expect(target!.height).toBeGreaterThanOrEqual(width <= 760 ? 44 : 36);
     const expanded = await content.boundingBox();
     if ([1440, 375, 430].includes(width)) await page.screenshot({ path: testInfo.outputPath(`sidebar-expanded-${width}.png`), fullPage: true });
     await collapse.click();
@@ -212,14 +212,14 @@ test('header icon collapses and restores the sidebar without remounting the work
   expect(errors).toEqual([]);
 });
 
-test('sidebar omits the removed footer across widths and zoom', async ({ page }) => {
+test('sidebar footer keeps Settings without promotional copy across widths and zoom', async ({ page }) => {
   await page.goto(studio.launchUrl);
   for (const zoom of [1, 2]) {
     await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
     for (const width of [375, 768, 1280, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       await expect(page.locator('#studio-sidebar')).toBeVisible();
-      await expect(page.locator('.sidebar-footer')).toHaveCount(0);
+      await expect(page.locator('.sidebar-footer').getByRole('button', { name: 'Settings', exact: true })).toBeVisible();
       await expect(page.getByText('Local, shared workspace.', { exact: true })).toHaveCount(0);
       await expect(page.getByText('Build with your agent. Review here.', { exact: true })).toHaveCount(0);
       await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
@@ -347,7 +347,7 @@ test('narrow creation dialog traps focus, fits the viewport and returns focus', 
   const trigger = page.getByRole('button', { name: '+ New app' });
   await trigger.click();
   const dialog = page.getByRole('dialog');
-  await expect(dialog).toHaveAccessibleName('Create an app');
+  await expect(dialog).toHaveAccessibleName('What are you making?');
   await expect(page.getByLabel('App name', { exact: true })).toBeFocused();
   for (let i = 0; i < 12; i++) {
     await page.keyboard.press('Tab');
@@ -381,7 +381,7 @@ test('long project lists remain bounded and dismissal permits the next modal', a
   await page.keyboard.press('Escape');
   await expect(project).toBeFocused(); await expect(project).toHaveText(selected!);
   await page.getByRole('button', { name: '+ New app' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Create an app' });
+  const dialog = page.getByRole('dialog', { name: 'What are you making?' });
   await expect(dialog.getByLabel('App name', { exact: true })).toBeFocused();
   await expect(list).toHaveCount(0);
   await expect(dialog).toBeVisible();
@@ -432,7 +432,7 @@ test('project menu remains usable at 200 percent zoom', async ({ page }) => {
   await page.keyboard.press('Enter');
   await expect(trigger).toContainText('Project 15');
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'OpenAI setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Image generation' })).toBeVisible();
 });
 
 test('creation and Design dialogs fit at 200 percent zoom with reachable actions', async ({ page }) => {
@@ -455,6 +455,7 @@ test('creation and Design dialogs fit at 200 percent zoom with reachable actions
       await apply.scrollIntoViewIfNeeded();
       await expect(apply).toBeInViewport();
     } else {
+      await dialog.locator('.creation-folder summary').click();
       await dialog.getByLabel('Directory slug').focus();
       await page.keyboard.press('Tab');
       await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
@@ -514,7 +515,7 @@ test('project menu gives long names room and design sheet uses one content-heigh
 test('Settings shared controls fit narrow and zoomed layouts without a project', async ({ page }) => {
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'OpenAI setup' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Image generation' })).toBeVisible();
   for (const width of [320, 375, 430, 768, 1280, 1440]) {
     await page.setViewportSize({ width, height: 800 });
     for (const zoom of width === 1440 ? [1, 2] : [1]) {
@@ -522,7 +523,8 @@ test('Settings shared controls fit narrow and zoomed layouts without a project',
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       const undersized = await page.locator('.settings-workspace button, .settings-workspace input').evaluateAll(nodes => nodes.filter(node => {
         const rect = node.getBoundingClientRect();
-        return rect.width < 44 || rect.height < 44;
+        const minimum = matchMedia('(max-width: 760px), (pointer: coarse)').matches ? 44 : 36;
+        return rect.width < minimum || rect.height < minimum;
       }).map(node => ({ name: node.getAttribute('name') || node.getAttribute('type') || node.textContent, width: node.getBoundingClientRect().width, height: node.getBoundingClientRect().height })));
       expect(undersized).toEqual([]);
       await page.getByLabel('OpenAI API key', { exact: true }).focus();
