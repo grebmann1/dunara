@@ -55,6 +55,7 @@ export class Engine extends BuilderKernel {
   readonly nativeDeliveries: NativeDeliveries;
   constructor(projects: Projects, trusted: boolean, lan = false, imageProvider?: ImageProvider, providerOptions: ProviderOptions = {}, backendOptions: BackendOptions = {}, accountProvider?: AccountProvider, services: ServiceConfig = serviceConfiguration(), runtime: {
     hosted?: boolean;
+    computePaused?: boolean;
     previews?: (environment: (id: string) => Promise<import('../../core/src/runtime-environment.js').AppEnvironment>, beforeStart: (id: string) => Promise<void>, diagnostics: Engine['diagnostics'], projects: Projects) => PreviewDriver;
     capture?: (id: string, route: string, viewport: {width: number; height: number}, signal?: AbortSignal) => Promise<Buffer>;
   } = {}) {
@@ -65,7 +66,7 @@ export class Engine extends BuilderKernel {
     const protection = secretProtection(services), accountStore = new EncryptedSettingsStore(projects.home, 'builder-account', savedAccountSchema, protection);
     this.account = new AccountSession(accountProvider ?? (services.account ? new AccountProvider(services.account) : undefined), Date.now, { available: !!protection, load: () => accountStore.load(), save: value => accountStore.save(value), remove: () => accountStore.remove() });
     this.backendOAuth = new BackendOAuth(this.account, services.oauthBrokerOrigin, backendOptions.fetch);
-    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, changed: () => this.diagnostics.emit('change') });
+    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, paused: () => !!runtime.computePaused, changed: () => this.diagnostics.emit('change') });
     const environment = (id: string) => this.backends.appEnvironment(id);
     const beforeStart = async (id: string) => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); };
     this.previews = runtime.previews?.(environment, beforeStart, this.diagnostics, projects) ?? new Previews(projects, this.diagnostics, trusted, lan, environment, beforeStart);

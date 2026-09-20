@@ -16,7 +16,7 @@ import { type ConfigurationPlan } from "../../../platform/src/configuration.js";
 import type { BackendOAuth } from "../../../core/src/backend-oauth.js";
 type AnyPlan = BackendPlan | ConfigurationPlan;
 
-export type BackendOptions = { encryptionKey?: string; fetch?: Fetcher; changed?: () => void; oauth?: BackendOAuth };
+export type BackendOptions = { paused?: () => boolean; encryptionKey?: string; fetch?: Fetcher; changed?: () => void; oauth?: BackendOAuth };
 export class Backends {
   private database?: PlatformStore;
   private sessionToken?: string;
@@ -210,13 +210,14 @@ export class Backends {
   }
   /** Only called by the authenticated Studio human route, never registered as an MCP tool. */
   async approve(projectId: string, input: unknown) {
+    if (this.options.paused?.()) throw new PlatformError("EXECUTION_PAUSED", "Backend execution is paused by the host.");
     const value = backendApprovalSchema.parse(input), op = await this.operation(projectId, value.operationId);
     const plan = anyBackendPlan.parse(op.plan); await this.validatePlan(plan);
     this.store.approve(this.actor, op.id, value.planHash);
     this.launch(op.id, plan); this.options.changed?.(); return this.operation(projectId, op.id);
   }
   private pump() {
-    if (this.closing || !this.database) return;
+    if (this.closing || this.options.paused?.() || !this.database) return;
     this.store.recoverExpired();
     for (const op of this.store.queued(this.actor)) {
       const decoded = anyBackendPlan.safeParse(op.plan);
@@ -225,7 +226,7 @@ export class Backends {
     }
   }
   private launch(id: string, plan: AnyPlan) {
-    if (this.closing || this.active.has(id)) return;
+    if (this.closing || this.options.paused?.() || this.active.has(id)) return;
     const controller = new AbortController();
     const promise = (plan.version === 2 ? this.configuration.run(id, plan, controller.signal) : this.run(id, plan, controller.signal)).finally(() => { this.active.delete(id); this.options.changed?.(); });
     this.active.set(id, { controller, promise }); void promise.catch(() => {});

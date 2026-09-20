@@ -43,7 +43,7 @@ const server = await startStudio(engine, studioAssets);
 // On shutdown, close the server and then the engine.
 ```
 
-Importing runtime entries starts no service. `Engine`, `Projects` and `Diagnostics` are supported composition APIs. `createBuilderRuntime` awaits bundled plugin discovery and cleans up failed initialization. A host may supply a `PreviewDriver` and capture callback through `host`; this replaces the local process runner. The driver receives the project registry, diagnostics, public app environment and preflight callback. Hosts own sandbox admission, tenant authorization, transport authentication and preview ingress. UI capabilities never replace server authorization.
+Importing runtime entries starts no service. `Engine`, `Projects` and `Diagnostics` are supported composition APIs. `createBuilderRuntime` awaits bundled plugin discovery and cleans up failed initialization. A host may supply a `PreviewDriver` and capture callback through `host`; this replaces the local process runner. The driver receives the project registry, diagnostics, public app environment and preflight callback. Hosts own sandbox admission, tenant authorization, transport authentication and preview ingress. UI capabilities never replace server authorization. A host can set `computePaused` to suspend the backend queue and deny new approvals; it must also gate its Assistant/media HTTP endpoints and preview driver.
 
 Explicit subpaths:
 
