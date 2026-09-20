@@ -1,0 +1,10 @@
+Use case: stylized-concept
+Asset type: wide editorial hero artwork for the Dunara open-source mobile app builder README.
+Primary request: a beautiful post-apocalyptic desert frontier that feels like a new beginning, extending an established visual world of ivory-suited explorers, ancient futuristic ruins, warm sand, charcoal and restrained rust-coral accents.
+Scene/backdrop: a vast ochre desert at dawn, rippled dunes flowing through the remains of a once advanced city. Weathered monumental arches and broken slender towers rise through luminous dust. A small, carefully restored outpost sits within the ruins, with a few hardy plants and warm lights suggesting life returning.
+Subject: one small human explorer in a weathered ivory expedition suit with graphite joints, a sealed smoked visor, a compact practical backpack and one muted rust-coral fabric detail. Seen from behind at the right-center foreground, looking toward the distant outpost. Natural anatomy, realistic materials.
+Style/medium: cinematic architectural concept art, painterly realism, finely observed sandstone and brushed metal, atmospheric depth and beautifully controlled scale. An editorial science-fiction landscape, not a game poster.
+Composition/framing: very wide landscape, clear silhouettes, quiet shadowed space in the left third, the explorer and ruined arch in the right half. The scene must work as a shallow README banner and remain readable when reduced.
+Lighting/mood: low amber sunrise, soft volumetric haze, long graceful shadows. Quiet, hopeful and human; discovery and rebuilding.
+Color palette: warm ivory, pale sand, burnt sienna, muted rust, charcoal, small amber lights. Low saturation with rich tonal depth.
+Constraints: original scene; no logos, no text, no typography, no interface, no devices with screens, no watermark, no weapons, no violence, no famous franchise designs, no wings or fairy anatomy, no oversaturated orange wash.
