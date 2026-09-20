@@ -76,6 +76,8 @@ export class ProjectTransactions extends SerialQueue {
   private failed = false;
   constructor(private readonly commit?: () => Promise<void>) { super(); }
   assertAvailable() { if (this.failed) throw Error('Workspace persistence is uncertain. Reopen the workspace to recover saved changes.'); }
+  /** Shutdown waits for in-flight work without trying to commit a fenced or unchanged cache. */
+  drain() { return super.run(async () => {}); }
   override run<T>(fn: () => Promise<T>): Promise<T> {
     if (this.context.getStore()?.active) { this.assertAvailable(); return fn(); }
     return super.run(async () => {

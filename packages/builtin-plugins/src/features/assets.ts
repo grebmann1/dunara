@@ -41,7 +41,7 @@ export async function normalizeImage(bytes: Buffer, mime: string) {
 export class Assets {
   private closed = false;
   constructor(readonly projects: Projects) {}
-  close() { this.closed = true; return this.projects.mutations.run(async () => {}); }
+  close() { this.closed = true; return this.projects.mutations.drain(); }
   private active(signal?: AbortSignal) { if (this.closed || signal?.aborted) invalid('Asset operation cancelled or Engine closed'); }
   private async target(id: string, relative = manifestPath) {
     const { root } = await this.projects.get(id); const file = path.join(root, relative);

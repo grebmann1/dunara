@@ -49,6 +49,7 @@ describe('durable project workspaces', () => {
     remoteStore.setFailure(failure);
     await expect(first.files.write(project.id, [{ path: 'src/change.ts', content: 'new value', expectedRevision: null }])).rejects.toThrow();
     await expect(first.files.read(project.id, 'src/change.ts')).rejects.toThrow('Reopen the workspace');
+    await expect(first.projects.mutations.drain()).resolves.toBeUndefined();
     remoteStore.setFailure(undefined);
     const second = await open(remoteStore.store);
     if (failure === 'after') expect((await second.files.read(project.id, 'src/change.ts')).content).toBe('new value');
