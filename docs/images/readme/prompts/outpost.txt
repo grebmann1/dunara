@@ -1,0 +1,10 @@
+Use case: stylized-concept
+Asset type: wide closing artwork for the Dunara open-source mobile app builder README, companion to a desert-frontier hero.
+Primary request: a warm, beautifully restored creative outpost within post-apocalyptic desert ruins; a place where someone is building what comes next.
+Scene/backdrop: a weathered sandstone and brushed-metal workshop nested beneath an enormous broken futuristic arch. Beyond it, pale dunes and half-buried architectural fragments recede into evening haze. The workshop has repaired ribs, cream fabric shade panels, a simple workbench with small unbranded mechanical components, a few hardy plants in reclaimed vessels and a softly glowing amber lantern.
+Subject: one human explorer in a weathered ivory expedition suit with graphite joints, a sealed smoked visor, a compact practical backpack and a restrained rust-coral detail. Seated beside the workshop at right-center, quietly repairing a small non-weapon mechanism. The human should be small within the architectural landscape.
+Style/medium: cinematic architectural concept art, painterly realism and tactile details. Match a sophisticated ivory, sand, charcoal and rust editorial identity. Intentional negative space and distinct silhouettes; no clutter.
+Composition/framing: wide landscape suitable for a closing README banner. Workshop and explorer in the right half; open dune terrain and warm atmospheric depth in the left half. Strong calm architectural framing.
+Lighting/mood: late golden-hour light outside, warm amber glow within the workshop, cool charcoal shadows; peaceful, resourceful, intimate and hopeful.
+Color palette: warm ivory, sand, taupe, muted rust-coral, graphite, amber highlights; gently desaturated.
+Constraints: original scene; no logos, no text, no typography, no interface or simulated product screenshot, no luminous computer screens, no watermark, no weapons, no violence, no famous franchise designs, no wings or fairy anatomy.
