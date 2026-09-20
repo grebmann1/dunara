@@ -2,6 +2,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
+import { Engine } from './engine.js';
+import type { HomeStatePersistence } from './durable-state.js';
 import { Projects } from './projects.js';
 import { Files } from './files.js';
 import type { ProjectWorkspaceHead, ProjectWorkspacePersistence } from './durable-projects.js';
@@ -94,4 +97,25 @@ describe('durable project workspaces', () => {
     await expect(open(malicious)).rejects.toThrow('Invalid durable project file');
     expect(await readdir(path.join(roots.at(-1)!, 'apps'))).toEqual([]);
   });
+});
+
+it('restores Assistant checkpoints after cache paths and inode identities change', async () => {
+  const { store } = remote(), state = new Map<string, Uint8Array>();
+  const home: HomeStatePersistence = { async load() { return [...state].map(([key, content]) => ({ key, content })); }, async write(input) { for (const { key, content } of input.records) { if (content === null) state.delete(key); else state.set(key, content); } } };
+  async function engine() { const root = await mkdtemp(path.join(os.tmpdir(), 'dunara-checkpoint-')); roots.push(root); const value = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home'), store, home), false); await value.plugins.ready; return value; }
+  const first = await engine(); let scope;
+  try {
+    const project = await first.projects.create({ name: 'Checkpoint', slug: 'checkpoint' });
+    scope = { projectId: project.id, conversationId: randomUUID(), runId: randomUUID() };
+    const token = first.sourceChanges.begin(scope, new AbortController().signal);
+    await first.sourceChanges.withToken(token, () => first.files.write(project.id, [{ path: 'src/checkpoint.ts', expectedRevision: null, content: 'export const changed = true;' }]));
+    await first.sourceChanges.finish(token);
+  } finally { await first.close(); }
+  const second = await engine();
+  try {
+    const review = await second.sourceChanges.inspect(scope!);
+    expect(review.canRestore).toBe(true);
+    await second.sourceChanges.restore(scope!, review.revision, async () => {});
+    expect((await second.files.list(scope!.projectId)).files).not.toContain('src/checkpoint.ts');
+  } finally { await second.close(); }
 });

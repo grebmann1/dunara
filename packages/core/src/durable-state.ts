@@ -89,3 +89,11 @@ export async function flushHomeState(home: string) {
   const mount = mountFor(home); if (!mount) return;
   await mount.tail; if (mount.failure) throw mount.failure;
 }
+
+// Physical folder guards remain meaningful within a cache, while durable receipts bind to project IDs.
+export function persistProjectIdentity<T extends { id: string; root: string; device: number; inode: number }>(home: string, identity: T): T {
+  return hasStatePersistence(home) ? { ...identity, root: `durable-project:${identity.id}`, device: 0, inode: 0 } : identity;
+}
+export function restoreProjectIdentity<T extends { id: string; root: string; device: number; inode: number }>(home: string, saved: T, current: T): T {
+  return hasStatePersistence(home) && saved.id === current.id && saved.root === `durable-project:${current.id}` && saved.device === 0 && saved.inode === 0 ? current : saved;
+}
