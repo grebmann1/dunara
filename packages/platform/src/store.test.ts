@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
+import { mountHomeState, type HomeStatePersistence } from '../../core/src/durable-state.js';
 import { PlatformStore } from './store.js';
 import { SecretBox } from './crypto.js';
 import type { Actor } from './contracts.js';
@@ -57,4 +58,33 @@ it('requires management permissions for credentials and production authorization
   expect(() => store.putSecret({ ...actor, role: 'editor' }, 'token', 'secret')).toThrow('cannot perform');
   store.putRecord(actor, 'binding', 'project', { value: 'private' });
   expect(store.getRecord({ ...actor, workspaceId: randomUUID() }, 'binding', 'project')).toBe(null);
+});
+
+it('restores the private ledger and fences ambiguous provider writes after an empty-cache restart', async () => {
+  const records = new Map<string, Uint8Array>();
+  const adapter: HomeStatePersistence = {
+    async load() { return [...records].map(([key, content]) => ({ key, content })); },
+    async write(input) { for (const { key, content } of input.records) { if (content === null) records.delete(key); else records.set(key, content); } },
+  };
+  const first = await realpath(await mkdtemp(path.join(tmpdir(), 'builder-platform-durable-'))); dirs.push(first);
+  const unmount = await mountHomeState(first, adapter);
+  let now = Date.now();
+  const store = new PlatformStore(path.join(first, 'platform'), new SecretBox('ab'.repeat(32)), () => now);
+  const actor: Actor = { id: 'owner', workspaceId: store.identity(), role: 'owner', source: 'local-owner' };
+  const op = store.submit(actor, input()); store.approve(actor, op.id, op.planHash);
+  const lease = store.claim(actor, op.id, 'before-crash', 1000);
+  store.putSecret(actor, 'fixture', 'private-fixture-value'); store.beginStep(lease, 'remote-create');
+  await store.flush(); store.close(); await unmount(); await rm(first, { recursive: true });
+  const second = await realpath(await mkdtemp(path.join(tmpdir(), 'builder-platform-restored-'))); dirs.push(second);
+  const unmount2 = await mountHomeState(second, adapter);
+  const restored = new PlatformStore(path.join(second, 'platform'), new SecretBox('ab'.repeat(32)), () => now);
+  try {
+    expect(restored.identity()).toBe(actor.workspaceId);
+    expect(restored.getSecret(actor, 'fixture')).toBe('private-fixture-value');
+    expect(restored.step(op.id, 'remote-create')?.state).toBe('in_flight');
+    now += 1001; expect(restored.recoverExpired()).toBe(1);
+    expect(restored.get(actor, op.id).state).toBe('reconciliation_required');
+    expect(() => restored.claim(actor, op.id, 'after-crash')).toThrow();
+    await restored.flush();
+  } finally { restored.close(); await unmount2(); }
 });

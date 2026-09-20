@@ -1,6 +1,6 @@
 import { openProjectRoutes } from './preview-actions.js';
 import { selectProject } from './project-picker.js';
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page, type Route } from '@playwright/test';
 import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
 import sharp from 'sharp';
 import os from 'node:os';
@@ -55,12 +55,21 @@ async function scrollEvidence(page: Page, name: string, measurements: unknown) {
   await page.screenshot({ path: `${prefix}.png` });
 }
 
+async function fulfillUnlessAborted(route: Route, response: Parameters<Route['fulfill']>[0]) {
+  try { await route.fulfill(response); }
+  catch (error) {
+    // Switching projects can intentionally cancel a response held by this fixture.
+    if (route.request().failure()?.errorText !== 'net::ERR_ABORTED') throw error;
+  }
+}
+
 test('desktop Preview and Settings scrolling stays within the workspace', async ({ page }) => {
   await scrollFixture(page);
   for (const viewport of [{ width: 1280, height: 720 }, { width: 1440, height: 900 }, { width: 768, height: 800 }]) {
     await page.setViewportSize(viewport);
     for (const destination of ['Preview', 'Settings']) {
       await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
+      await expect(page.locator('.workspace-content')).toHaveAttribute('data-workspace', destination.toLowerCase());
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       if (destination === 'Preview') {
         const canvas = page.getByRole('region', { name: 'Phone preview canvas' });
@@ -105,6 +114,7 @@ test('phone and 200 percent Preview and Settings layouts keep reachable final co
     await page.evaluate(zoom => { document.documentElement.style.zoom = String(zoom); }, viewport.width === 1440 ? 2 : 1);
     for (const destination of ['Preview', 'Settings']) {
       await page.locator('#studio-sidebar').getByRole('button', { name: destination, exact: true }).click();
+      await expect(page.locator('.workspace-content')).toHaveAttribute('data-workspace', destination.toLowerCase());
       await page.evaluate(() => { scrollTo(0, 0); document.querySelector('.workspace-content')!.scrollTop = 0; });
       await scrollEvidence(page, `${destination.replace(' ', '-')}-${viewport.width === 1440 ? 'zoom' : viewport.width}`, await scrollPosition(page));
       // The edge-to-edge Preview canvas owns wheel zoom; document scroll starts outside it.
@@ -114,7 +124,7 @@ test('phone and 200 percent Preview and Settings layouts keep reachable final co
       expect.soft((await scrollPosition(page)).workspaceTop).toBe(0);
       expect.soft(await page.locator('.workspace-content').evaluate(node => getComputedStyle(node).overflowY)).toBe('visible');
       const last = page.locator('.workspace-content button:visible:not(:disabled), .workspace-content summary:visible').last();
-      await last.scrollIntoViewIfNeeded();
+      await last.click({ trial: true });
       await last.focus();
       await expect(last).toBeFocused();
       await expect(last).toBeInViewport();
@@ -290,7 +300,7 @@ test('late failures and delayed inspection stay scoped to their project', async 
   let received!: () => void;
   const arrived = new Promise<void>(resolve => { received = resolve; });
   await page.route(`**/projects/${first.id}/design`, async route => {
-    received(); await held; await route.fulfill({ status: 400, json: { error: { message: 'Old project failure' } } });
+    received(); await held; await fulfillUnlessAborted(route, { status: 400, json: { error: { message: 'Old project failure' } } });
   });
   await page.getByRole('button', { name: 'Apply changes' }).click(); await arrived;
   await selectProject(page, second.id);
@@ -304,7 +314,7 @@ test('late failures and delayed inspection stay scoped to their project', async 
   let inspected!: () => void;
   const inspection = new Promise<void>(resolve => { inspected = resolve; });
   await page.route(`**/projects/${first.id}`, async route => {
-    const response = await route.fetch(); inspected(); await inspectHeld; await route.fulfill({ response });
+    const response = await route.fetch(); inspected(); await inspectHeld; await fulfillUnlessAborted(route, { response });
   });
   await selectProject(page, first.id); await inspection;
   await selectProject(page, second.id);

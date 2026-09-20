@@ -1,3 +1,4 @@
+import { persistProjectIdentity, restoreProjectIdentity } from '../../../core/src/durable-state.js';
 import { lstat, mkdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { isDeepStrictEqual } from 'node:util';
@@ -7,7 +8,7 @@ import { dependencyFiles, dependencyProfile } from "../../../core/src/dependency
 import { revision } from "../../../core/src/files.js";
 import type { Projects } from "../../../core/src/projects.js";
 import type { PreviewDriver } from "../../../core/src/preview-driver.js";
-import { atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
+import { removeStateFile, atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
 
 const reservedSchemes = new Set(['http', 'https', 'exp', 'exps', 'file', 'intent', 'mailto', 'tel', 'sms', 'data', 'javascript']);
 const reservedPackages = new Set('abstract assert boolean break byte case catch char class const continue default do double else enum extends final finally float for goto if implements import instanceof int interface long native new package private protected public return short static strictfp super switch synchronized this throw throws transient try void volatile while true false null _'.split(' '));
@@ -128,6 +129,7 @@ export class NativeBuilds {
     let consequences = ['Update local app.json and eas.json only. Stop the current preview before writing; start it again when ready.', 'Development uses Metro and requires expo-dev-client. Preview bundles JavaScript for testing with the laptop off.', 'Development and preview use the same app identifiers and replace each other on a device. Separate variants require a separately reviewed configuration.', 'Expo ownership, signing, dependency installation, backend variables and actual builds remain separate steps.'];
     if (await exists(journalPath)) {
       const journalText = await readText(journalPath, 300_000), journal = journalSchema.parse(JSON.parse(journalText));
+      journal.identity = restoreProjectIdentity(this.projects.home, journal.identity, identity);
       if (!isDeepStrictEqual(identity, journal.identity) || new Set(journal.files.map(file => file.path)).size !== journal.files.length) throw new BuilderError('REVISION_CONFLICT', 'Build recovery belongs to a different project root or is invalid. Preserve the record and restore the original project.');
       if (input !== undefined) throw new BuilderError('INVALID_INPUT', 'Review recovery without a new configuration first.');
       guards.journal = revision(journalText); state = 'recovery'; consequences = ['Restore the local configuration from before the interrupted setup. Concurrent edits are preserved; resolve conflicts before restoring.'];
@@ -199,11 +201,11 @@ export class NativeBuilds {
         const identity = await this.identity(id), journalPath = await this.journalPath(id);
         if (plan.state !== 'recovery') {
           await mkdir(path.dirname(journalPath), { recursive: true }); await this.journalPath(id);
-          await atomicWrite(journalPath, serialize(journalSchema.parse({ version: 1, identity, files: plan.files })));
+          await atomicWrite(journalPath, serialize(journalSchema.parse({ version: 1, identity: persistProjectIdentity(this.projects.home, identity), files: plan.files })));
         }
         try {
           for (const file of plan.files) await this.replace(identity, file);
-          await rm(journalPath);
+          await removeStateFile(journalPath);
         } catch (error) {
           let restored = plan.state !== 'recovery';
           if (restored) for (const file of [...plan.files].reverse()) {
@@ -214,7 +216,7 @@ export class NativeBuilds {
               await this.replace(identity, { ...file, before: current, after: file.before });
             } catch { restored = false; }
           }
-          if (restored) await rm(journalPath);
+          if (restored) await removeStateFile(journalPath);
           throw new BuilderError('WRITE_FAILED', restored ? 'Build setup failed; original configuration restored. Review again before retrying.' : 'Build setup interrupted. Review recovery before previewing.', { recoveryRequired: !restored, cause: error instanceof Error ? error.message : 'Write failed' });
         }
         this.previews.diagnostics.emit('change', id);

@@ -206,11 +206,13 @@ export class BackendConfiguration {
           for (const dep of step.dependsOn) if (this.ctx.store.step(id, dep)?.state !== 'completed') throw new PlatformError('DEPENDENCY_REQUIRED', 'An earlier configuration step is incomplete.');
           signal.throwIfAborted(); this.ctx.store.heartbeat(lease!);
           this.ctx.store.beginStep(lease!, step.id);
+          await this.ctx.store.flush();
           await this.execute(lease!, plan, step, signal);
         });
         this.ctx.store.finish(lease!, 'succeeded', { configurationHash: hash(plan), steps: plan.steps.length, qualification: plan.steps.some(step => step.kind === 'verification') ? 'service_checks_only' : 'not_run' });
       });
     } catch (error) { if (lease) this.finishError(lease, plan, error); }
+    finally { await this.ctx.store.flush(); }
   }
   private async withHeartbeat(lease: Lease, fn: () => Promise<void>) {
     const timer = setInterval(() => { try { this.ctx.store.heartbeat(lease); } catch { /* Commits are fenced. */ } }, 15_000);

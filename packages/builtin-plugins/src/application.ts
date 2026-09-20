@@ -55,6 +55,7 @@ export class Engine extends BuilderKernel {
   readonly nativeDeliveries: NativeDeliveries;
   constructor(projects: Projects, trusted: boolean, lan = false, imageProvider?: ImageProvider, providerOptions: ProviderOptions = {}, backendOptions: BackendOptions = {}, accountProvider?: AccountProvider, services: ServiceConfig = serviceConfiguration(), runtime: {
     hosted?: boolean;
+    computePaused?: boolean;
     previews?: (environment: (id: string) => Promise<import('../../core/src/runtime-environment.js').AppEnvironment>, beforeStart: (id: string) => Promise<void>, diagnostics: Engine['diagnostics'], projects: Projects) => PreviewDriver;
     capture?: (id: string, route: string, viewport: {width: number; height: number}, signal?: AbortSignal) => Promise<Buffer>;
   } = {}) {
@@ -65,7 +66,7 @@ export class Engine extends BuilderKernel {
     const protection = secretProtection(services), accountStore = new EncryptedSettingsStore(projects.home, 'builder-account', savedAccountSchema, protection);
     this.account = new AccountSession(accountProvider ?? (services.account ? new AccountProvider(services.account) : undefined), Date.now, { available: !!protection, load: () => accountStore.load(), save: value => accountStore.save(value), remove: () => accountStore.remove() });
     this.backendOAuth = new BackendOAuth(this.account, services.oauthBrokerOrigin, backendOptions.fetch);
-    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, changed: () => this.diagnostics.emit('change') });
+    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, paused: () => !!runtime.computePaused, changed: () => this.diagnostics.emit('change') });
     const environment = (id: string) => this.backends.appEnvironment(id);
     const beforeStart = async (id: string) => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); };
     this.previews = runtime.previews?.(environment, beforeStart, this.diagnostics, projects) ?? new Previews(projects, this.diagnostics, trusted, lan, environment, beforeStart);
@@ -142,5 +143,11 @@ export class Engine extends BuilderKernel {
     });
   }
   close() { return this.shutdown ??= this.dispose(); }
-  private async dispose() { await this.nativeDeliveries.close(); await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
+  private async dispose() {
+    const errors = [];
+    for (const close of [() => this.nativeDeliveries.close(), () => this.plugins.close(), () => this.account.clear(), () => this.nativeWorkspaces.close(), () => this.launchKits.close(), () => this.appIcons.close(), () => this.mediaJobs.close(), () => this.assets.close(), () => this.captures.close(), () => this.previews.close(), () => this.backends.close(), () => this.projects.closeState()]) {
+      try { await close(); } catch (error) { errors.push(error); }
+    }
+    if (errors.length) throw new AggregateError(errors, 'Runtime shutdown completed with storage errors');
+  }
 }

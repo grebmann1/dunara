@@ -1,3 +1,4 @@
+import { persistProjectIdentity, restoreProjectIdentity } from '../../../core/src/durable-state.js';
 import { lstat, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
@@ -6,7 +7,7 @@ import { dependencyFiles, dependencyProfile } from "../../../core/src/dependency
 import { revision } from "../../../core/src/files.js";
 import { Projects, templateRoot } from "../../../core/src/projects.js";
 import type { PreviewDriver } from "../../../core/src/preview-driver.js";
-import { atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
+import { removeStateFile, atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
 
 const recipe = 'supabase-notes-v1' as const;
 export const recipeUpgradePaths = [
@@ -80,6 +81,7 @@ export class RecipeUpgrades {
     ];
     if (await exists(journalPath)) {
       const journalText = await readText(journalPath, 6_000_000), journal = journalSchema.parse(JSON.parse(journalText));
+      journal.identity = restoreProjectIdentity(this.projects.home, journal.identity, identity);
       if (JSON.stringify(journal.identity) !== JSON.stringify(identity)) throw new BuilderError('REVISION_CONFLICT', 'The project root changed since the interrupted upgrade. Preserve the recovery record and restore the original project first.');
       if (new Set(journal.files.map(file => file.path)).size !== journal.files.length) throw new BuilderError('INVALID_INPUT', 'Invalid recipe recovery record.');
       guards.journal = revision(journalText); state = 'recovery';
@@ -152,14 +154,14 @@ export class RecipeUpgrades {
         const identity = await this.identity(id), journalPath = await this.journalPath(id);
         if (plan.state === 'recovery') {
           for (const file of [...plan.files].reverse()) await this.replace(identity, file);
-          await rm(journalPath);
+          await removeStateFile(journalPath);
         } else {
           const journal: Journal = { version: 1, recipe, identity, files: plan.files.map(file => ({ path: z.enum(recipeUpgradePaths).parse(file.path), before: file.before, after: file.after! })) };
           await mkdir(path.dirname(journalPath), { recursive: true });
-          await this.journalPath(id); await atomicWrite(journalPath, JSON.stringify(journal));
+          await this.journalPath(id); await atomicWrite(journalPath, JSON.stringify({ ...journal, identity: persistProjectIdentity(this.projects.home, journal.identity) }));
           try {
             for (const file of plan.files) await this.replace(identity, file);
-            await rm(journalPath);
+            await removeStateFile(journalPath);
           } catch (error) {
             // Restore only our exact writes. A concurrent editor's content remains untouched.
             let restored = true;
@@ -171,7 +173,7 @@ export class RecipeUpgrades {
                 await this.replace(identity, { path: file.path, before: current, after: file.before, expectedRevision: revision(current) });
               } catch { restored = false; }
             }
-            if (restored) await rm(journalPath);
+            if (restored) await removeStateFile(journalPath);
             throw new BuilderError('WRITE_FAILED', restored ? 'Upgrade failed. Original files were restored; review again before retrying.' : 'Upgrade interrupted. Review recovery in Backend before previewing.', { cause: error instanceof Error ? error.message : 'Write failed', recoveryRequired: !restored });
           }
         }

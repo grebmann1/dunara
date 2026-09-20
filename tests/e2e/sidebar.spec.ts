@@ -63,7 +63,11 @@ test('sidebar width supports dragging, keyboard resizing and reset without losin
   await handle.dblclick(); await expect(handle).toHaveAttribute('aria-valuenow', '248');
   const list = page.locator('.sidebar-project-list');
   expect(await list.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
-  await list.getByRole('button').first().focus(); await page.keyboard.press('End');
+  // Resizing saves preferences asynchronously and temporarily disables project selection.
+  await expect(list.getByRole('button').last()).toBeEnabled();
+  await list.getByRole('button').first().focus();
+  await expect(list.getByRole('button').first()).toBeFocused();
+  await page.keyboard.press('End');
   await expect(list.getByRole('button').last()).toBeFocused();
   await expect(list.getByRole('button').last()).toBeInViewport({ ratio: 1 });
   await expect(page.locator('.sidebar-footer').getByRole('button', { name: 'Settings', exact: true })).toBeInViewport({ ratio: 1 });

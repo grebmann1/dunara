@@ -155,11 +155,20 @@
   .header-status:has(.assistant-toggle) { gap: 8px; }
 }
 @media (max-height: 600px) {
+  .assistant-composer:has(.assistant-disclosure[open]) { flex-shrink: 1; min-height: 0; display: flex; flex-direction: column; }
+  .assistant-composer > :not(.assistant-disclosure) { flex-shrink: 0; }
+  .assistant-disclosure { min-height: 28px; flex-shrink: 1; }
   .assistant-composer textarea { min-height: 48px; max-height: 48px; }
   .assistant-history { min-height: 0; flex-shrink: 1; overflow-y: auto; }
   .assistant-disclosure[open] { max-height: 20dvh; }
   .assistant-composer:has(.assistant-disclosure[open] ~ .assistant-disclosure[open]) .assistant-disclosure[open] { max-height: 15dvh; }
   .assistant-empty { padding: 8px 0; }
   .assistant-attachment-picker { bottom: var(--attachment-short-bottom, 64px); max-height: min(380px, var(--attachment-short-space, 40dvh)); padding: 12px; }
+}
+@media (max-height: 400px) {
+  .assistant-header { padding-block: 6px; }
+  .assistant-composer { padding: 6px 12px 4px; }
+  .assistant-composer .assistant-setup-menu > summary { min-height: 32px; padding-block: 6px; }
+  .assistant-mode-switch button { min-height: 36px; padding-block: 4px; }
 }
 @media (prefers-reduced-motion: reduce) { .assistant-spinner { animation: none; } }

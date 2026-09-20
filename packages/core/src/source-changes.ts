@@ -3,9 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { lstat, mkdir, readdir, rm } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { persistProjectIdentity, restoreProjectIdentity } from './durable-state.js';
 import { BuilderError } from './contracts.js';
 import { type Files, revision, validFile } from './files.js';
-import { atomicWrite, exists, noSymlinks, readText } from './storage.js';
+import { atomicWrite, exists, noSymlinks, readText, removeStateFile } from './storage.js';
 
 const scopeSchema = z.object({ projectId: z.uuid(), conversationId: z.uuid(), runId: z.uuid() }).strict();
 export type ChangeScope = z.infer<typeof scopeSchema>;
@@ -66,10 +67,13 @@ export class SourceChanges {
     if (!info.isFile() || info.isSymbolicLink() || info.nlink !== 1 || (info.mode & 0o077) || info.uid !== process.getuid?.()) throw new BuilderError('INVALID_PATH', 'Unsafe source checkpoint file');
     const record = recordSchema.parse(JSON.parse(await readText(filename, this.quotas.turnBytes)));
     if (record.projectId !== scope.projectId || record.conversationId !== scope.conversationId || record.runId !== scope.runId) throw new BuilderError('INVALID_INPUT', 'Source checkpoint belongs to another turn or project');
-    return record;
+    const project = await this.files.projects.get(scope.projectId), current = await lstat(project.root);
+    const identity = restoreProjectIdentity(this.files.projects.home, { id: record.projectId, root: record.root, device: record.device, inode: record.inode }, { id: project.id, root: project.root, device: current.dev, inode: current.ino });
+    return { ...record, root: identity.root, device: identity.device, inode: identity.inode };
   }
   private async save(record: Record) {
-    const content = JSON.stringify(recordSchema.parse(record));
+    const identity = persistProjectIdentity(this.files.projects.home, { id: record.projectId, root: record.root, device: record.device, inode: record.inode });
+    const content = JSON.stringify(recordSchema.parse({ ...record, root: identity.root, device: identity.device, inode: identity.inode }));
     const bytes = Buffer.byteLength(content), directory = await this.directory(), filename = await this.filename(record.runId);
     if (bytes > this.quotas.turnBytes) throw new BuilderError('LIMIT_EXCEEDED', 'This turn exceeds its source checkpoint limit. Start a smaller turn.');
     const names = (await readdir(directory)).filter(name => /^[a-f0-9-]{36}\.json$/.test(name));
@@ -194,7 +198,7 @@ export class SourceChanges {
       for (const name of await readdir(directory)) if (/^[a-f0-9-]{36}\.json$/.test(name)) {
         const filename = path.join(directory, name); await noSymlinks(directory, filename);
         const record = recordSchema.parse(JSON.parse(await readText(filename, this.quotas.turnBytes)));
-        if (record.conversationId === conversationId) await rm(filename);
+        if (record.conversationId === conversationId) await removeStateFile(filename);
       }
     });
   }

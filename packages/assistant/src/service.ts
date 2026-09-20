@@ -45,6 +45,7 @@ async function abortable<T>(task: Promise<T>, signal: AbortSignal): Promise<T> {
   } finally { signal.removeEventListener('abort', abort); }
 }
 export class AssistantService {
+  async flushState() { const { flushHomeState } = await import('../../core/src/durable-state.js'); await flushHomeState(this.options.home); }
   readonly epoch = randomUUID();
   private accountContext = () => '';
   private accountVersion = 0;
@@ -201,6 +202,8 @@ export class AssistantService {
     this.changed();
   }
   async start(input: unknown) {
+    this.idle();
+    await this.flushState();
     this.idle();
     if (!this.options.createGateway || !this.key) throw new BuilderError('INVALID_INPUT', 'Configure the available assistant before sending a message');
     if (!this.models.some(model => model.id === this.model)) throw new BuilderError('INVALID_INPUT', 'The saved assistant model is unavailable. Choose a supported model in Settings.');

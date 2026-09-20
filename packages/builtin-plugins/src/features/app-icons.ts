@@ -13,7 +13,7 @@ const object = z.record(z.string(), z.unknown());
 export class AppIcons {
   private closed = false;
   constructor(readonly assets: Assets, readonly files: Files) {}
-  close() { this.closed = true; return this.assets.projects.mutations.run(async () => {}); }
+  close() { this.closed = true; return this.assets.projects.mutations.drain(); }
   private active() { if (this.closed) invalid('Icon operation cancelled or Engine closed'); }
   async check(id: string, assetId: string) {
     const { asset, bytes } = await this.assets.read(id, assetId);

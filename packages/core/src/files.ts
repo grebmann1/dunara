@@ -24,11 +24,17 @@ export class Files {
     return target;
   }
   async read(id: string, relative: string) {
+    return this.projects.mutations.read(() => this.readUnlocked(id, relative));
+  }
+  private async readUnlocked(id: string, relative: string) {
     const target = await this.resolve(id, relative);
     const content = await readText(target);
     return { path: relative, content, revision: revision(content) };
   }
   async list(id: string) {
+    return this.projects.mutations.read(() => this.listUnlocked(id));
+  }
+  private async listUnlocked(id: string) {
     const { root } = await this.projects.get(id);
     const files: string[] = []; let truncated = false; let visited = 0;
     const walk = async (directory: string, depth: number) => {

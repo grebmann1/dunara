@@ -11,7 +11,7 @@ import type { EnvironmentName } from '../../platform/src/contracts.js';
 const roots: string[] = [], services: Backends[] = [];
 afterEach(async () => { for (const service of services.splice(0)) await service.close(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
 const ref = 'abcdefghijklmnopqrst', org = 'my-organization';
-async function fixture() {
+async function fixture(paused = false) {
   const root = await mkdtemp(path.join(os.tmpdir(), 'builder-backend-')); roots.push(root);
   const projects = await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), files = new Files(projects);
   const project = await projects.create({ name: 'Connected', slug: 'connected' });
@@ -27,7 +27,7 @@ async function fixture() {
     if (url.endsWith('/config/auth')) return Response.json({ site_url: 'https://app.example', uri_allow_list: '', external_email_enabled: true, mailer_autoconfirm: false, smtp_pass: 'smtp-private-canary' });
     throw new Error('Unexpected test provider route');
   });
-  const backends = new Backends(projects, files, { fetch: fetcher, encryptionKey: 'ab'.repeat(32) }); services.push(backends);
+  const backends = new Backends(projects, files, { paused: () => paused, fetch: fetcher, encryptionKey: 'ab'.repeat(32) }); services.push(backends);
   backends.configure({ token: 'canary-management-private' });
   return { projects, files, project, requests, fetcher, backends };
 }
@@ -176,4 +176,13 @@ it('fences concurrent environment switches, preview starts and stale capture ide
     await expect(engine.selectBackendEnvironment(id, { environment: 'development', expectedRevision: selected.environmentRevision })).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
     expect(spy).toHaveBeenCalledOnce();
   } finally { vi.restoreAllMocks(); await engine.close(); }
+});
+
+it('keeps reviews readable while the host pauses new backend execution', async () => {
+  const f = await fixture(true);
+  const plan = await f.backends.plan(f.project.id, { action: 'link', environment: 'development', projectRef: ref, organization: org });
+  const operation = await f.backends.submit(f.project.id, { plan, requestId: randomUUID() });
+  await expect(f.backends.approve(f.project.id, { operationId: operation.id, planHash: operation.planHash })).rejects.toThrow('paused');
+  expect((await f.backends.operation(f.project.id, operation.id)).state).toBe('awaiting_approval');
+  expect(f.requests.every(request => request.method === 'GET')).toBe(true);
 });

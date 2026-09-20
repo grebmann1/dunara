@@ -8,6 +8,7 @@ import { BuilderError } from "../../../core/src/contracts.js";
 import { Assets, readBinary } from "../../../core/src/assets.js";
 import { Captures } from "../../../core/src/capture.js";
 import { Projects } from "../../../core/src/projects.js";
+import { stageHomeStateBatch, assertStateAvailable } from '../../../core/src/durable-state.js';
 import { exists, noSymlinks, SerialQueue } from "../../../core/src/storage.js";
 import { KIT_BYTES, KIT_PROJECT_LIMIT, KIT_STORAGE_BYTES, kitFileIdSchema, kitLimitations, launchKitCreateSchema, launchKitManifestSchema, launchKitRemoveSchema, type LaunchKit, type LaunchKitFile, type LaunchKitManifest } from "../../../core/src/launch-kit-contracts.js";
 
@@ -77,6 +78,7 @@ export class LaunchKits {
     this.identities.set(target, identity);
   }
   private async rootDirectory(create = false) {
+    assertStateAvailable(this.root);
     await this.directory(this.projects.home);
     if (!(await exists(this.root))) {
       if (this.identities.has(this.root)) throw new BuilderError('INVALID_PATH', 'Launch Kit storage root disappeared');
@@ -236,6 +238,7 @@ export class LaunchKits {
         if (this.closed) invalid('Launch Kit service is closed');
         if (await exists(target)) invalid('Bundle identity already exists; no files overwritten');
         await rename(staging, target); staged = false;
+        await stageHomeStateBatch([...contents].map(([id, content]) => ({ file: path.join(target, fileName(id)), content })));
         return { manifest, files: [descriptor('manifest', contents.get('manifest')!), ...manifest.files], location: `launch-kits/${projectId}/${id}` } satisfies LaunchKit;
       } finally {
         if (staged) {
@@ -250,8 +253,9 @@ export class LaunchKits {
   remove(projectId: string, input: unknown) {
     return this.operation(async () => {
       const { bundleId } = launchKitRemoveSchema.parse(input);
-      const { directory } = await this.load(projectId, bundleId);
+      const { directory, kit } = await this.load(projectId, bundleId);
       await this.rootDirectory(); await this.directory(path.dirname(directory)); await this.directory(directory);
+      await stageHomeStateBatch(['manifest', ...kit.manifest.files.map(file => file.id)].map(id => ({ file: path.join(directory, fileName(id)), content: null })));
       await rm(directory, { recursive: true });
       this.identities.delete(directory); this.identities.delete(path.join(directory, 'screenshots'));
       return { removed: bundleId };

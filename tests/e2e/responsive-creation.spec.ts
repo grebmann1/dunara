@@ -148,6 +148,17 @@ test('chat history and privacy details remain usable in a short viewport', async
     }
     await page.screenshot({ path: info.outputPath(`privacy-${size.width}x${size.height}.png`) });
   }
+  for (const size of [{ width: 375, height: 812 }, { width: 430, height: 932 }, { width: 1440, height: 1000 }]) {
+    await page.setViewportSize(size);
+    await expect(panel.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
+    await panel.getByRole('button', { name: 'Send message' }).click({ trial: true });
+    for (const disclosure of await panel.locator('.assistant-disclosure').all()) {
+      if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
+    }
+    await expect(panel.locator('.assistant-disclosure[open]')).toHaveCount(2);
+    for (const disclosure of await panel.locator('.assistant-disclosure[open]').all()) await expect(disclosure).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath(`privacy-${size.width}x${size.height}.png`) });
+  }
 });
 
 
