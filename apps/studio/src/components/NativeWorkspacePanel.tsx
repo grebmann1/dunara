@@ -3,11 +3,12 @@ import type { WorkspacePlan, WorkspaceSelection, WorkspaceStatus } from '../../.
 import { useStudioClient } from '../api';
 import { Button } from './ui/button';
 import { FieldSelect } from './ui/field-select';
+import { NativeDeliveryPanel } from './NativeDeliveryPanel';
 
 const steps = { copy: 'Copying reviewed source', install: 'Installing pinned dependencies', typecheck: 'Checking TypeScript', 'export-web': 'Exporting web', 'export-ios': 'Exporting iOS JavaScript', 'export-android': 'Exporting Android JavaScript', verify: 'Verifying prepared files' };
 const running = (value: WorkspaceStatus) => value.state === 'preparing' || value.state === 'cancelling';
 export function NativeWorkspacePanel({ projectId }: { projectId: string }) {
-  const { api } = useStudioClient();
+  const { api, capabilities } = useStudioClient();
   const base = `/projects/${projectId}/native-workspaces`;
   const [selection, setSelection] = useState<WorkspaceSelection>({ profile: 'preview', platform: 'all', environment: 'none' });
   const [plan, setPlan] = useState<WorkspacePlan>(), [workspaces, setWorkspaces] = useState<WorkspaceStatus[]>([]);
@@ -67,7 +68,7 @@ export function NativeWorkspacePanel({ projectId }: { projectId: string }) {
       <details><summary>Files in this preparation</summary><ul className="native-workspace-files">{plan.files.map(file => <li key={file.path}><code>{file.path}</code>{plan.overlays.some(change => change.path === file.path) ? ' · adjusted in the copy' : ''}</li>)}</ul></details>
       <Button disabled={busy || workspaces.some(running)} onClick={() => void perform('prepare')}>{busy ? 'Starting preparation…' : 'Prepare reviewed workspace'}</Button>
     </div>}
-    <p>Successful preparation checks JavaScript exports. Installing on a phone still requires a signed build and an Expo account.</p>
+    <p>{capabilities.localPaths ? 'Preparation validates JavaScript. Continue below to build and install a signed iPhone app on this Mac.' : 'Preparation validates JavaScript. Installing on a phone requires a separate signed build.'}</p>
     {!!workspaces.length && <div className="native-workspace-jobs"><h3>Preparations</h3>{workspaces.map(workspace => <article className="native-build-note" key={workspace.id} aria-label={`Preparation ${workspace.id.slice(0, 8)}`}>
       <h4>{workspace.selection.profile === 'preview' ? 'Preview' : 'Development'} · {workspace.selection.platform === 'all' ? 'iOS and Android' : workspace.selection.platform === 'ios' ? 'iOS' : 'Android'} · {workspace.backend.environment === 'none' ? 'No backend' : workspace.backend.environment}</h4>
       <p role="status">{workspace.state === 'ready' ? 'Ready for the next build step' : workspace.state === 'preparing' ? steps[workspace.step] : workspace.state === 'cancelling' ? 'Cancelling preparation…' : `Preparation ${workspace.state}`}</p>
@@ -78,5 +79,6 @@ export function NativeWorkspacePanel({ projectId }: { projectId: string }) {
       {running(workspace) ? <Button variant="outline" disabled={busy || workspace.state === 'cancelling'} onClick={() => void perform('cancel', workspace)}>Cancel preparation</Button> : <Button variant="outline" disabled={busy} onClick={() => setRemoving(workspace)}>Remove workspace</Button>}
       {removing?.id === workspace.id && <div className="native-workspace-remove"><p>Remove this prepared copy and its exports? The original app stays unchanged.</p><Button disabled={busy} onClick={() => void perform('remove', removing)}>Confirm removal</Button><Button variant="ghost" disabled={busy} onClick={() => setRemoving(undefined)}>Keep workspace</Button></div>}
     </article>)}</div>}
+    {capabilities.localPaths && <NativeDeliveryPanel key={projectId} projectId={projectId} workspaces={workspaces} />}
   </section>;
 }

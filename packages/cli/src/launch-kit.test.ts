@@ -72,7 +72,7 @@ it('shares Studio-created metadata and each allowlisted file with MCP, including
   expect(provider).not.toHaveBeenCalled();
 });
 it('creates via MCP, lists and removes through Studio, and advertises exact mutation boundaries', async () => {
-  const tools = (await client.listTools()).tools; expect(tools).toHaveLength(65);
+  const tools = (await client.listTools()).tools; expect(tools).toHaveLength(74);
   for (const name of ['launch_kit_list', 'launch_kit_read']) expect(tools.find(t => t.name === name)?.annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
   expect(tools.find(t => t.name === 'launch_kit_create')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false });
   expect(tools.find(t => t.name === 'launch_kit_remove')?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });

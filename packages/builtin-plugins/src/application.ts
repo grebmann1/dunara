@@ -24,6 +24,7 @@ import { RecipeUpgrades } from "../../core/src/recipe-upgrades.js";
 import { serviceConfiguration, secretProtection, type ServiceConfig } from "../../core/src/service-config.js";
 import { NativeBuilds } from "../../core/src/native-builds.js";
 import { NativeBuildWorkspaces } from "../../core/src/native-build-workspaces.js";
+import { NativeDeliveries } from './features/native-deliveries.js';
 import { z } from 'zod';
 import { PluginRuntime } from "../../plugin-runtime/src/runtime.js";
 import { bundledPlugins } from "./catalog.js";
@@ -51,6 +52,7 @@ export class Engine extends BuilderKernel {
   readonly recipeUpgrades: RecipeUpgrades;
   readonly nativeBuilds: NativeBuilds;
   readonly nativeWorkspaces: NativeBuildWorkspaces;
+  readonly nativeDeliveries: NativeDeliveries;
   constructor(projects: Projects, trusted: boolean, lan = false, imageProvider?: ImageProvider, providerOptions: ProviderOptions = {}, backendOptions: BackendOptions = {}, accountProvider?: AccountProvider, services: ServiceConfig = serviceConfiguration(), runtime: {
     hosted?: boolean;
     previews?: (environment: (id: string) => Promise<import('../../core/src/runtime-environment.js').AppEnvironment>, beforeStart: (id: string) => Promise<void>, diagnostics: Engine['diagnostics'], projects: Projects) => PreviewDriver;
@@ -74,6 +76,7 @@ export class Engine extends BuilderKernel {
       const binding = selection.environment === 'none' ? null : await this.backends.binding(id, selection.environment);
       return { app: binding ? { EXPO_PUBLIC_SUPABASE_URL: binding.url, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: binding.publishableKey, EXPO_PUBLIC_BUILDER_ENVIRONMENT: binding.environment } : {}, revision: revision(JSON.stringify({ binding, previewConfiguration: await this.previews.configurationRevision(id) })) };
     }, async id => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); }, id => this.diagnostics.emit('change', id));
+    this.nativeDeliveries = new NativeDeliveries(projects, this.nativeWorkspaces, trusted, !runtime.hosted, id => this.diagnostics.emit('change', id));
     this.serviceRecipe = new ServiceRecipe(this.files, this.previews);
     this.boardCaptures = new BoardCaptures(this.captures, this.files);
     this.launchKits = new LaunchKits(projects, this.captures, this.assets);
@@ -96,6 +99,7 @@ export class Engine extends BuilderKernel {
       setCredential: async (id, name, value) => { const store = credentials(id), values = store.load() ?? {}; if (value === null) delete values[name]; else values[name] = value; if (Object.keys(values).length) store.save(values); else store.remove(); },
       recordRecipe: (id, record) => this.projects.recordRecipe(id, record),
       beforeChange: async id => {
+        if (id === 'builder.expo' && this.nativeDeliveries.busy()) throw new Error('Wait for the native build or phone operation to finish before changing its Expo plugin.');
         if (this.actions?.busy(id) || this.backends.status().busy || this.mediaJobs.providerStatus().busy) throw new Error('Finish active Dunara operations before changing plugins.');
         if (id === 'builder.expo') for (const project of await this.projects.list()) {
           if (['starting', 'ready'].includes(this.previews.status(project.id).status)) throw new Error('Stop this app’s preview before changing its Expo plugin.');
@@ -138,5 +142,5 @@ export class Engine extends BuilderKernel {
     });
   }
   close() { return this.shutdown ??= this.dispose(); }
-  private async dispose() { await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
+  private async dispose() { await this.nativeDeliveries.close(); await this.plugins.close(); this.account.clear(); await this.nativeWorkspaces.close(); await this.launchKits.close(); await this.appIcons.close(); await this.mediaJobs.close(); await this.assets.close(); await this.captures.close(); await this.previews.close(); await this.backends.close(); }
 }

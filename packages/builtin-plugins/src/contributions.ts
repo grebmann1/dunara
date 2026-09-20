@@ -1,6 +1,6 @@
 export const featureCatalog = [
   { id: 'builder.account', name: 'Dunara Account', description: 'Account connection and continuity.', requires: [] },
-  { id: 'builder.expo', name: 'Expo & Phone Preview', description: 'App templates, live previews, phone setup and native preparation.', requires: [] },
+  { id: 'builder.expo', name: 'Expo & Phone Preview', description: 'App templates, live previews, native preparation and local iPhone installation.', requires: [] },
   { id: 'builder.supabase', name: 'Supabase', description: 'Backend setup, Auth, Storage, functions and private environment variables.', requires: ['builder.account'] },
   { id: 'builder.media', name: 'Media & OpenAI', description: 'Asset library, image generation and shared provider settings.', requires: [] },
   { id: 'builder.icons', name: 'App Icons', description: 'Prepare, review and apply app icons.', requires: ['builder.media'] },

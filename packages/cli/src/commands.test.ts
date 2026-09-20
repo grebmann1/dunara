@@ -45,7 +45,7 @@ it('loads a Dunara-specific env file without Node importing arbitrary dotenv set
   }
 }, 20_000);
 it('runs JSON CLI commands against the same authenticated Studio and Engine', async () => {
-  expect((await command('tools')).tools).toHaveLength(65);
+  expect((await command('tools')).tools).toHaveLength(74);
   const { project } = (await command('call', 'project_create', '--input', JSON.stringify({ name: 'Command', slug: 'command' }))).structuredContent;
   const initial = (await command('call', 'studio_inspect')).structuredContent;
   const id = randomUUID();

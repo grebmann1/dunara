@@ -138,6 +138,16 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (req.method === 'POST') return json(res, await engine.serviceRecipe.apply(id, await body(req, 8192)));
         return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
+      const deliveryRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/native-deliveries(?:\/(preflight|plan|build|install-plan|install|launch|cancel|remove))?$/);
+      if (deliveryRoute) {
+        const id = z.uuid().parse(deliveryRoute[1]), action = deliveryRoute[2];
+        if (req.method === 'GET' && !action) return json(res, await engine.actions.value('native_delivery_list', { projectId: id }));
+        if (req.method === 'POST' && action) {
+          const input = await body(req, 8192);
+          return json(res, await engine.actions.value(`native_delivery_${action.replace('-', '_')}`, { projectId: id, ...(action === 'plan' ? { selection: input } : action === 'preflight' ? {} : { input }) }));
+        }
+        return json(res, { error: { message: 'Method not allowed' } }, 405);
+      }
       const workspaceRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/native-workspaces(?:\/(plan|prepare|cancel|remove))?$/);
       if (workspaceRoute) {
         const id = z.uuid().parse(workspaceRoute[1]), action = workspaceRoute[2];

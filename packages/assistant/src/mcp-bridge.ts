@@ -80,6 +80,14 @@ export class McpGateway implements AssistantGateway {
     if (name === 'backend_recipe_apply') return metadata(await this.invoke('backend_recipe_preview', { projectId: args.projectId }, signal));
     const projectId = this.binding.projectId;
     const input = z.record(z.string(), z.unknown()).parse(args.input ?? {});
+    if (name === 'native_delivery_build') return metadata(await this.invoke('native_delivery_plan', { projectId, selection: input.selection }, signal));
+    if (name === 'native_delivery_install') return metadata(await this.invoke('native_delivery_install_plan', { projectId, input: { deliveryId: input.deliveryId, expectedRevision: input.expectedRevision } }, signal));
+    if (name === 'native_delivery_launch' || name === 'native_delivery_cancel' || name === 'native_delivery_remove') {
+      const value = metadata(await this.invoke('native_delivery_list', { projectId }, signal));
+      const delivery = z.array(z.object({ id: z.uuid() }).passthrough()).parse(value.deliveries).find(value => value.id === input.deliveryId);
+      if (!delivery) throw new Error('Native delivery is unavailable. Refresh before reviewing.');
+      return { delivery, action: name === 'native_delivery_launch' ? 'Open this app on the selected iPhone; restart only this app if it is already running.' : name === 'native_delivery_remove' ? 'Delete this retained build and its artifact. The original source and installed phone app stay unchanged.' : 'Stop this owned build. Existing provisioning effects and retained files are not rolled back.' };
+    }
     if (name === 'native_build_apply') return metadata(await this.invoke('native_build_plan', { projectId, configuration: input.configuration }, signal));
     if (name === 'native_workspace_prepare') return metadata(await this.invoke('native_workspace_plan', { projectId, selection: input.selection }, signal));
     if (name === 'native_workspace_cancel' || name === 'native_workspace_remove') {

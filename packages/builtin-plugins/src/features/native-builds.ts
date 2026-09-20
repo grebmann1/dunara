@@ -46,9 +46,10 @@ export const nativeBuildGuide = {
     'Review the exact local file changes and save the setup. The preview stops when configuration changes; restart it when ready.',
     'In Build setup, choose the build profile, platforms and backend under Prepare a build workspace. Review the copied files and public backend target, then prepare the workspace. Development requires a qualified Expo development-client profile.',
     'Follow the preparation checks through dependency installation, TypeScript and web/native JavaScript export. Failed or interrupted work stays available to inspect or remove; a new preparation requires a fresh review. The original app and preview stay unchanged.',
-    'Connect the intended Expo account and verify its project ownership. Review signing credentials and register physical iOS devices before an internal iOS build.',
-    'Configure the correct public Supabase URL and publishable key for each EAS environment. Dunara’s local backend selection is not automatically copied to EAS. Never put management tokens, service-role keys or function secrets in a mobile app.',
-    'Build development for native debugging with Metro, or preview for an installed app with bundled JavaScript. Test preview with Metro and the laptop stopped before recording success.',
+    'For a local iPhone build, prepare Preview → iOS → No backend. Under Install on iPhone, check the phone and signing team, review automatic Apple provisioning, then build the signed app with Xcode. No Expo account is required for this path.',
+    'After the signed app is ready, review installation on the selected iPhone. Existing apps with the same bundle identifier are replaced. Unlock the phone, enable Developer Mode and trust this Mac when iOS asks. Open on iPhone after installation is verified.',
+    'Check the installed app’s screens and main interactions with the preview server stopped. A launch receipt proves the OS started the app, not that its screen is correct.',
+    'Cloud/EAS builds remain separate: verify Expo ownership, signing and public environment configuration before uploading. Never put management tokens, service-role keys or function secrets in a mobile app.',
   ],
   agent: [
     'Use native_build_inspect to read the app identity, dependency revision, and prerequisites. Obtain intended identifiers and Expo ownership from the user; do not guess ownership or reuse another app’s IDs.',
@@ -58,6 +59,8 @@ export const nativeBuildGuide = {
     'Call native_workspace_plan with an explicit profile, platform and backend environment. Review its manifest, overlays, target and consequences; native_workspace_prepare requires that proposedRevision, a stable requestId and confirmed:true. Human approval is required in the built-in Assistant. Reuse the same requestId after a lost response; never automatically replay interrupted work.',
     'Read native_workspace_list for durable checks and export receipts. Cancel or remove with the selected workspace ID and its current revision; removal also requires confirmed:true. Source or backend changes invalidate unexecuted plans.',
     'Preparation installs pinned dependencies and checks JavaScript exports in a separate local directory. It does not authenticate Expo, generate native projects, upload source, sign, build or distribute an app. Never report a binary or physical-device test from a setup or preparation result.',
+    'For local iOS delivery, use native_delivery_preflight and native_delivery_plan with an exact ready Preview/No backend workspace, device and Apple signing team. Review automatic provisioning effects; native_delivery_build requires the proposal revision, stable requestId and confirmed:true. Poll native_delivery_list for signed artifact receipts. Built-in Assistant mutations require human approval.',
+    'After build success, call native_delivery_install_plan with the delivery ID and current revision. Review device, artifact and existing-app replacement before native_delivery_install. Inspect again, then native_delivery_launch opens only that app. Never retry uncertain installation automatically; never claim visual or interaction success from a launch process ID.',
   ],
 };
 export type NativeBuildPlan = {

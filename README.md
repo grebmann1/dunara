@@ -134,7 +134,7 @@ Install the coordinated archives from [GitHub releases](https://github.com/grebm
 | Test on a phone | [Phone testing and environments](docs/phone-and-environment-guide.md) |
 | Configure backend services | [Supabase configuration](docs/supabase-configuration.md) |
 | Make artwork and app icons | [Media workflow](docs/media-workflow.md) |
-| Prepare native builds | [Native build setup](docs/native-build-setup.md) |
+| Build and install on iPhone | [Local native delivery](docs/native-build-setup.md) |
 | Understand the implementation | [Architecture](docs/architecture.md) |
 | Contribute a change | [Contributing](CONTRIBUTING.md) |
 

@@ -1,6 +1,6 @@
 # Prepare an installable app
 
-Dunara provides reviewed **local build setup and isolated preparation** in **Preview tools → Build setup**, shared with Assistant and MCP. Setup prepares `app.json` and `eas.json`; preparation checks a separate source/dependency copy. Hosted builds remain pending.
+Dunara provides **local setup, preparation, signed iPhone builds and installation** in **Preview tools → Build setup**, shared with Assistant and MCP. The local iPhone path uses Xcode on your Mac and a connected physical phone. It requires neither an Expo account nor Supabase. Hosted builds and Android installation remain separate work.
 
 ## User steps
 
@@ -10,9 +10,12 @@ Dunara provides reviewed **local build setup and isolated preparation** in **Pre
 4. Choose **Review build setup**. Inspect the consequences and before/after content for each file. Custom development/preview profiles, dynamic Expo configuration and generated `ios/` or `android/` directories require manual integration. Existing production profiles and unrelated settings are preserved.
 5. Choose **Save build setup**. Dunara stops the preview, writes only the reviewed local configuration and leaves dependencies unchanged. Restart the preview when you need it. Edits after review require a fresh review.
 6. Under **Prepare a build workspace**, choose **Preview**, the platforms, and an explicit backend (**No backend**, **Development**, or **Staging**). Choose **Review preparation**, inspect the source list and target, then **Prepare reviewed workspace**. The copied app receives only the selected public backend connection; **No backend** clears its saved fallback. A linked target is required for Development/Staging. Your normal app and preview remain unchanged. Follow dependency installation, TypeScript and web/native JavaScript exports in **Preparations**. Closing the drawer does not stop the work.
-7. Connect the intended Expo account, verify the EAS project and review signing/device prerequisites. Internal iOS distribution needs the appropriate signing setup and registered devices. Android preview is configured as an APK. Dunara does not currently run these provider operations. See [Expo internal distribution](https://docs.expo.dev/build/internal-distribution/).
-8. Configure the public Supabase URL and publishable key in the intended EAS environment. Local Dunara backend selection and private Supabase Edge Function variables are separate from EAS build variables. Never bundle management tokens, service-role keys or function secrets in the app.
-9. Build, install and test the selected profile using your reviewed build tooling. Verify a preview binary with Metro and the laptop stopped before recording an installed-device result. Actual builds, native authentication callbacks, and EAS Update are subsequent roadmap work.
+7. For local iPhone delivery, select **Preview → iOS → No backend** in preparation. Under **Install on iPhone**, choose **Check phone and signing**. Install Xcode and CocoaPods if prompted. In Xcode → Settings → Accounts, connect your Apple account and create an Apple Development certificate. Connect and unlock the iPhone, trust this Mac, and enable Developer Mode in iOS Settings → Privacy & Security.
+8. Select the prepared app, phone and signing team. Choose **Review iPhone build**, inspect the identifier and automatic provisioning effects, then **Build signed iPhone app**. Xcode may contact Apple to register the app/device and create a provisioning profile. Source is built locally in a separate copy. Watch progress through dependencies, native project generation, CocoaPods, signing and artifact verification.
+9. When **Signed app ready** appears, choose **Review installation**. The review states whether an existing app with this identifier will be replaced. Confirm **Install on iPhone**, wait for **Installation verified**, then choose **Open on iPhone**. Launch restarts only this app if it is already running. Unlock the phone or complete developer trust when iOS requests it.
+10. Check the actual phone's screens and main interactions. Stop the preview server, close and reopen the phone app, and repeat its main action. A launch receipt is OS evidence, not visual evidence. The testing provisioning profile can expire; rebuild if the device subsequently refuses to open the app.
+
+Cloud/EAS distribution is separate: verify Expo ownership and signing before upload, then configure the appropriate public environment. Never bundle management tokens, service-role keys or function secrets. See [Expo local builds](https://docs.expo.dev/guides/local-app-development/) and [internal distribution](https://docs.expo.dev/build/internal-distribution/).
 
 ## Profiles
 
@@ -38,6 +41,11 @@ Read `nativeBuildGuide` in `builder://guide`, then:
 7. After review, call `native_workspace_prepare({projectId, input: {selection, proposedRevision, requestId, confirmed: true}})`. Use a fresh UUID for new preparation and the **same** UUID after a lost response. Repeated requests cannot start duplicate work. The Assistant requires human review and revalidates the canonical plan afterward.
 8. Read `native_workspace_list({projectId})` for durable state, completed checks and export receipts. `ready` means local checks succeeded, not that a binary was built. A runtime restart marks unfinished work `interrupted` without replay.
 9. `native_workspace_cancel({projectId, input: {workspaceId, expectedRevision}})` cancels an owned running preparation. `native_workspace_remove` accepts the same input plus `confirmed: true` and removes only a terminal copy. Refresh before either action; stale revisions fail safely. The original app stays unchanged.
+10. `native_delivery_preflight({projectId})` reports Xcode, CocoaPods, physical iPhones and valid Apple Development signing teams. `native_delivery_plan({projectId, selection: {workspaceId, deviceId, teamId}})` reviews a ready iOS Preview/No backend copy, its exact identity and automatic signing effects.
+11. `native_delivery_build({projectId, input: {selection, proposedRevision, requestId, confirmed: true}})` starts that local Release build. Reuse its UUID after a lost response. Poll `native_delivery_list`; only `ready` with an artifact means a signed app was verified. Restart never replays an interrupted operation.
+12. `native_delivery_install_plan({projectId, input: {deliveryId, expectedRevision}})` rehashes/verifies the signed bundle and checks the selected phone for an existing app. Pass its `proposedRevision`, `expectedRevision`, `deliveryId` and `confirmed: true` to `native_delivery_install`. A failed response can still have installed the app; inspect and review before retrying.
+13. After an installation receipt, `native_delivery_launch({projectId, input: {deliveryId, expectedRevision, confirmed: true}})` opens the app and records its OS process ID. Check the phone visually and interactively; do not treat a process ID as a passed app test.
+14. `native_delivery_cancel` takes `{deliveryId, expectedRevision}` and cancels only an owned active build. `native_delivery_remove` also requires `confirmed: true` and deletes only terminal retained build files. Neither uninstalls the phone app nor revokes Apple provisioning.
 
 The plan binds the project directory identity, configuration contents, manifest/lockfile revision, requested identifiers, and registered app identities. Relevant edits invalidate the plan. Merely inspecting/planning does not stop a preview or write files.
 
@@ -50,8 +58,8 @@ Open **Build setup → Review recovery** and review the restoration, then choose
 ## Remaining P5 work
 
 - Add secure Expo/EAS account connection and verified project ownership.
-- Add reviewed asynchronous build submission, signing/device checks, artifact authorization and revision evidence.
-- Qualify installed iOS/Android builds, native callbacks and compatible updates.
+- Add hosted build submission and Android delivery.
+- Qualify native authentication callbacks and compatible updates.
 
 No provider account, source upload, dependency installation, signing action or build is triggered by local setup.
 
@@ -62,3 +70,7 @@ Preparation supports the curated Supabase Expo profile with reviewed static buil
 Pinned installation uses `npm ci --ignore-scripts`; TypeScript and Expo exports execute trusted app tooling with the bounded app environment. A separate directory is not a security sandbox. Preparation requires Dunara execution trust. Prepared source/configuration changes invalidate a review; installed tooling may not alter reviewed inputs.
 
 After `pnpm build`, `pnpm test:native-workspace` runs real pinned installs, TypeScript and web/iOS/Android exports in disposable workspaces, for an explicit public backend and no backend. It checks the bundles for intended public values, excludes private/fallback canaries, and verifies the original source is unchanged. Evidence is written under `.builder/qualification/`. This test makes no Supabase or Expo account API requests and does not produce signed binaries.
+
+Local delivery consumes the preparation's immutable input manifest, copies it again, installs pinned JavaScript dependencies, runs Expo prebuild/CocoaPods, and runs Xcode in Release configuration for the selected physical iPhone. It verifies the bundle identifier, signing team, code signature, provisioning profile and bundled JavaScript, and hashes the entire artifact before review and installation. One native operation runs at a time; ten completed builds can be retained. Builds can run for up to 45 minutes in Xcode, with shorter bounded dependency steps. This executes trusted project/native tooling and uses the Mac's existing signing access; it is not a sandbox. Hosted runtimes reject delivery operations server-side.
+
+Durable receipts live under `<Dunara home>/native-deliveries/<project>/<delivery>/record.json`. Failed compiler output stays in a bounded private `diagnostic.txt` in that directory; it is not exposed to Assistant, MCP or HTTP. User-facing errors provide specific unlock/signing guidance where recognized. Keep raw diagnostics private. Removing a build deletes its derived files and artifact while preserving the prepared workspace, original app and installed phone app.

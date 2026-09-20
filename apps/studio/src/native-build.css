@@ -23,3 +23,7 @@
 .native-workspace-files { max-height: 200px; overflow: auto; font-size: 12px; }
 .native-workspace-files code, .native-workspace-target { overflow-wrap: anywhere; }
 .native-workspaces button { white-space: normal; height: auto; min-height: 36px; }
+.native-delivery { display: grid; gap: 14px; min-width: 0; border-top: 1px solid var(--border); padding-top: 22px; }
+.native-delivery p, .native-delivery code { overflow-wrap: anywhere; }
+.native-delivery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.native-delivery-identity { font-size: 12px; color: var(--muted-foreground); }

@@ -23,7 +23,7 @@ it('shares one Engine across reconnecting MCP clients without closing it on disc
   expect((await stat(endpoint.socketPath)).mode & 0o777).toBe(0o600);
   expect((await stat(path.dirname(endpoint.socketPath))).mode & 0o777).toBe(0o700);
   const first = await client();
-  expect((await first.listTools()).tools).toHaveLength(65);
+  expect((await first.listTools()).tools).toHaveLength(74);
   expect((await first.callTool({ name: 'project_create', arguments: { name: 'Café desktop', slug: 'desktop' } })).isError).not.toBe(true);
   const project = (await engine.projects.list())[0]!;
   await first.close();
@@ -40,5 +40,5 @@ it('rejects public socket permissions and malformed peers without damaging the r
   await new Promise<void>((resolve, reject) => { peer.once('connect', resolve); peer.once('error', reject); });
   const closed = new Promise<void>(resolve => peer.once('close', () => resolve()));
   peer.write('not-json\n'); await closed;
-  expect((await (await client()).listTools()).tools).toHaveLength(65);
+  expect((await (await client()).listTools()).tools).toHaveLength(74);
 });
