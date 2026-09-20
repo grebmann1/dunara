@@ -16,6 +16,7 @@ test.beforeEach(async ({ page }) => {
   engine = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), true);
   studio = await startStudio(engine, path.resolve('dist/studio'));
   await page.goto(studio.launchUrl);
+  await expect(page.getByRole('button', { name: '+ New app', exact: true })).toBeEnabled();
 });
 test.afterEach(async ({ page }) => {
   if (process.env.VISUAL) return;
@@ -89,7 +90,8 @@ test('keeps creation cancellable, supports no backend and catches a disconnected
 
 test('keeps the journey out of the canvas, preserves drafts on dismissal and displays compact guidance', async ({ page }, info) => {
   await engine.projects.create({ name: 'Garden notebook', slug: 'garden-notebook' });
-  await page.goto(studio.issueLaunchUrl());
+  // Reconcile the new project in the authenticated session; a fresh hash is not a document reload.
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveText('Garden notebook');
   const trigger = page.locator('.creation-guide-trigger');
   const guide = page.getByRole('dialog', { name: 'Your app journey', exact: true });
   await expect(trigger).toBeVisible();
