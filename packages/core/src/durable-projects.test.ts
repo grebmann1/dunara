@@ -119,3 +119,15 @@ it('restores Assistant checkpoints after cache paths and inode identities change
     expect((await second.files.list(scope!.projectId)).files).not.toContain('src/checkpoint.ts');
   } finally { await second.close(); }
 });
+
+it('avoids no-op remote revisions and keeps a cache usable after a rejected input without writes', async () => {
+  const { store } = remote(), first = await open(store);
+  const project = await first.projects.create({ name: 'Unchanged', slug: 'unchanged' });
+  const before = (await store.load())!.revision;
+  await first.projects.mutations.run(async () => {});
+  expect((await store.load())!.revision).toBe(before);
+  await expect(first.files.write(project.id, [{ path: 'src/rejected.ts', content: 'bad', expectedRevision: 'a'.repeat(64) }])).rejects.toThrow();
+  expect((await first.projects.get(project.id)).id).toBe(project.id);
+  await first.files.write(project.id, [{ path: 'src/accepted.ts', content: 'export {};', expectedRevision: null }]);
+  expect((await store.load())!.revision).not.toBe(before);
+});

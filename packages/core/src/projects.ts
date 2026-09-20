@@ -19,7 +19,7 @@ export class Projects {
   readonly mutations: ProjectTransactions;
   private unmountState?: () => Promise<void>;
   private constructor(readonly workspace: string, readonly home: string, durability?: ProjectDurability) {
-    this.mutations = new ProjectTransactions(durability ? async () => durability.commit(await this.snapshot()) : undefined);
+    this.mutations = new ProjectTransactions(durability ? async () => durability.commit(await this.snapshot()) : undefined, durability ? async () => durability.unchanged(await this.snapshot()) : undefined);
   }
   static async open(workspace: string, home: string, persistence?: ProjectWorkspacePersistence, statePersistence?: HomeStatePersistence) {
     const durability = persistence ? new ProjectDurability(persistence) : undefined;

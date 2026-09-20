@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createSchema, projectSchema, type Project } from './contracts.js';
 import { projectMetadataSchema } from './studio-contracts.js';
 import { sourcePath } from './source.js';
@@ -74,7 +74,7 @@ export async function hydrateProjectWorkspace(workspace: string, home: string, s
 export class ProjectTransactions extends SerialQueue {
   private context = new AsyncLocalStorage<{ active: boolean }>();
   private failed = false;
-  constructor(private readonly commit?: () => Promise<void>) { super(); }
+  constructor(private readonly commit?: () => Promise<void>, private readonly unchanged?: () => Promise<boolean>) { super(); }
   assertAvailable() { if (this.failed) throw Error('Workspace persistence is uncertain. Reopen the workspace to recover saved changes.'); }
   /** Shutdown waits for in-flight work without trying to commit a fenced or unchanged cache. */
   drain() { return super.run(async () => {}); }
@@ -82,16 +82,19 @@ export class ProjectTransactions extends SerialQueue {
     if (this.context.getStore()?.active) { this.assertAvailable(); return fn(); }
     return super.run(async () => {
       this.assertAvailable();
-      const context = { active: true };
+      const context = { active: true }; let attemptedCommit = false;
       try {
         return await this.context.run(context, async () => {
           const result = await fn();
-          await this.commit?.();
+          attemptedCommit = true; await this.commit?.();
           return result;
         });
       } catch (error) {
         // A partial local mutation or an ambiguous remote commit must never be used for further work.
-        if (this.commit) this.failed = true;
+        if (this.commit) {
+          const safe = !attemptedCommit && await this.unchanged?.().catch(() => false);
+          this.failed = !safe;
+        }
         throw error;
       } finally { context.active = false; }
     });
@@ -108,17 +111,31 @@ export class ProjectTransactions extends SerialQueue {
 
 export class ProjectDurability {
   private revision: string | null = null;
+  private fingerprint: string | undefined;
   constructor(readonly persistence: ProjectWorkspacePersistence) {}
   async restore(workspace: string, home: string) {
     const head = await this.persistence.load();
     if (head && !validRevision(head.revision)) throw Error('Invalid durable workspace revision');
     await hydrateProjectWorkspace(workspace, home, head?.snapshot ?? { version: 1, projects: [] });
     this.revision = head?.revision ?? null;
+    this.fingerprint = workspaceFingerprint(head?.snapshot ?? { version: 1, projects: [] });
   }
+  unchanged(snapshot: ProjectWorkspaceSnapshot) { return workspaceFingerprint(validateProjectWorkspace(snapshot)) === this.fingerprint; }
   async commit(snapshot: ProjectWorkspaceSnapshot) {
+    const fingerprint = workspaceFingerprint(validateProjectWorkspace(snapshot));
+    if (fingerprint === this.fingerprint) return;
     const result = await this.persistence.commit({ expectedRevision: this.revision, mutationId: randomUUID(), snapshot: validateProjectWorkspace(snapshot) });
     if (!validRevision(result.revision)) throw Error('Invalid durable commit receipt');
-    this.revision = result.revision;
+    this.revision = result.revision; this.fingerprint = fingerprint;
   }
 }
 function validRevision(value: unknown): value is string { return typeof value === 'string' && /^[a-zA-Z0-9_-]{1,100}$/.test(value); }
+
+function workspaceFingerprint(snapshot: ProjectWorkspaceSnapshot) {
+  const hash = createHash('sha256');
+  for (const entry of [...snapshot.projects].sort((a,b) => a.project.id < b.project.id ? -1 : 1)) {
+    hash.update(JSON.stringify(entry.project)).update('\0');
+    for (const file of [...entry.files].sort((a,b) => a.path < b.path ? -1 : 1)) hash.update(file.path).update('\0').update(String(file.content.length)).update('\0').update(file.content);
+  }
+  return hash.digest('hex');
+}
