@@ -1,4 +1,4 @@
-import { useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { Activity, Database, FolderPlus, Image, LayoutGrid, Puzzle, Settings, Smartphone } from 'lucide-react';
 import type { Project } from '../../../../../packages/core/src/contracts';
 import { SidebarProjects } from './SidebarProjects';
@@ -27,11 +27,25 @@ type Props = {
 };
 
 export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
+  const compactQuery = '(max-width: 760px)';
   const [sidebarOpen, setSidebarOpen] = useState(true), [sidebarWidth, setSidebarWidth] = useState(248);
   const drag = useRef<{ x: number; width: number } | null>(null);
+  const sidebarTouched = useRef(false);
   const resize = (width: number) => setSidebarWidth(Math.max(200, Math.min(360, Math.round(width))));
   const { capabilities } = useStudioClient();
   const project = projects.find(project => project.id === selected);
+  useEffect(() => {
+    if (typeof matchMedia !== 'function') return;
+    const media = matchMedia(compactQuery);
+    const sync = () => {
+      if (sidebarTouched.current) return;
+      setSidebarOpen(!(media.matches && connectionLabel === 'Cloud workspace'));
+    };
+    sync();
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [connectionLabel]);
+  const toggleSidebar = () => { sidebarTouched.current = true; setSidebarOpen(open => !open); };
   function navigateWithKeyboard(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([aria-disabled="true"])'));
@@ -48,8 +62,8 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
     event.preventDefault();
     buttons[next]?.focus();
   }
-  return <div className="studio">
-    <WorkspaceHeader connectionLabel={connectionLabel} usable={usable} sidebarOpen={sidebarOpen} onToggleSidebar={() => setSidebarOpen(open => !open)} projects={projects} selected={selected} onSelect={onSelect} projectStatus={projectStatus} assistantControl={assistantControl} isPreview={workspace === 'preview'} />
+  return <div className="studio" data-hosted={connectionLabel === 'Cloud workspace' ? 'true' : undefined}>
+    <WorkspaceHeader connectionLabel={connectionLabel} usable={usable} sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} projects={projects} selected={selected} onSelect={onSelect} projectStatus={projectStatus} assistantControl={assistantControl} isPreview={workspace === 'preview'} />
     {banners}
     <div className="workspace" data-sidebar-open={sidebarOpen} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
       <aside id="studio-sidebar" className="sidebar" hidden={!sidebarOpen}>
