@@ -14,6 +14,8 @@ import type { AssistantSetupRequest } from '../../../../packages/assistant/src/c
 import { continuationPrompt } from '../assistant-history';
 import '../assistant-images.css';
 import '../assistant-connections.css';
+import { useOverlayViewport } from '../useOverlayViewport';
+import '../assistant-mobile.css';
 import { DockGrip, DockMenu, useDock } from './layout/WorkspaceDock';
 
 type Props = { controller: AssistantController; open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; backendEnabled: boolean; onBackend(): void; onSettings(): void };
@@ -25,6 +27,8 @@ const starters = [
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
 export function AssistantPanel({ controller: a, open, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
   const dock = useDock(), narrow = !dock.desktop;
+  const viewport = useOverlayViewport(open && narrow);
+  const [preferencesOpen, setPreferencesOpen] = useState(false);
   const { capabilities } = useStudioClient();
   const storageLocation = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
   const [manualSetup, setManualSetup] = useState<AssistantSetupRequest>();
@@ -72,7 +76,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   return <Dialog.Root open={open} onOpenChange={onOpenChange} modal={narrow}>
     <Dialog.Portal container={dock.desktop ? dock.hosts.assistant : undefined}>
       {narrow && <Dialog.Overlay className="assistant-scrim" />}
-      <Dialog.Content id="assistant-panel" className="assistant-panel" data-image-drop={draggingImages || undefined}
+      <Dialog.Content id="assistant-panel" className="assistant-panel" style={viewport.style} data-short-viewport={viewport.short || undefined} data-image-drop={draggingImages || undefined}
         onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); imageDragDepth.current++; setDraggingImages(true); } }}
         onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = a.working || a.loading ? 'none' : 'copy'; } }}
         onDragLeave={event => { if (event.dataTransfer.types.includes('Files') && --imageDragDepth.current <= 0) { imageDragDepth.current = 0; setDraggingImages(false); } }}
@@ -137,11 +141,14 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
             <textarea ref={input} id="assistant-message" rows={2} placeholder={a.status?.configured ? a.status.busy ? 'Write your next message…' : 'Ask anything about your app…' : 'Describe your idea…'} value={a.draft} onChange={event => a.setDraft(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void a.addImages(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} maxLength={maxBytes} readOnly={a.working || a.loading || a.persistence.loading} aria-describedby="assistant-composer-hint" />
             <div className="assistant-composer-toolbar"><AssistantAttachments key={a.conversation?.id ?? a.projectId ?? 'new'} controller={a} /><span className="assistant-composer-hint" id="assistant-composer-hint">{promptBytes > maxBytes * .8 ? `${promptBytes.toLocaleString()} / ${maxBytes.toLocaleString()} bytes` : 'Drop or paste images · Enter to send'}</span>{a.status?.busy ? <Button className="assistant-send" variant="outline" aria-label="Stop turn" title="Stop turn" disabled={a.working} onClick={() => void a.stop()}><Square size={16} aria-hidden /></Button> : <Button className="assistant-send" type="submit" aria-label="Send message" title="Send message" disabled={!canSend}><ArrowUp size={18} aria-hidden /></Button>}</div>
           </form>
+          <button type="button" className="assistant-preferences-toggle" hidden={!viewport.short} aria-expanded={preferencesOpen} aria-controls="assistant-preferences" onClick={() => setPreferencesOpen(value => !value)}>Model & settings<ChevronRight size={14} aria-hidden /></button>
+          <div id="assistant-preferences" className="assistant-preferences" hidden={viewport.short && !preferencesOpen}>
           {a.status?.connections && <div className="assistant-model-picker"><select aria-label="Chat model" value={`${a.status.providerId}:${a.status.model}`} disabled={a.working || a.status.busy || a.status.signIn?.state === 'waiting'} onChange={event => { const [provider, ...model] = event.target.value.split(':'); void a.selectModel(provider!, model.join(':')); }}>
             {a.status.connections.filter(connection => connection.configured || connection.id === a.status?.providerId).map(connection => <optgroup key={connection.id} label={connection.name}>{connection.models.map(model => <option key={model.id} value={`${connection.id}:${model.id}`} disabled={!connection.configured}>{connection.name} · {model.label}</option>)}</optgroup>)}
           </select><Button variant="ghost" onClick={() => { onOpenChange(false); onSettings(); }}>Connections</Button></div>}
           <details className="assistant-disclosure"><summary>Draft storage</summary><label className="assistant-review-check"><input type="checkbox" checked={a.persistence.enabled} disabled={!a.persistence.available || a.persistence.loading || a.working} onChange={event => void a.persistence.configure(event.target.checked)} />Remember drafts {storageLocation}</label><p role="status">{a.persistence.notice}</p><p>Unsent text and attachment references are stored privately {storageLocation}. Turning this off forgets saved drafts for this Dunara account.</p></details>
           <details className="assistant-disclosure"><summary><span className="assistant-model-dot" data-connected={a.status?.configured || undefined} />{a.status?.model ?? 'Assistant'}<span>Usage & privacy</span></summary><p>Your message, recent context and requested tool results go to {a.status?.provider ?? 'your selected provider'}. Sending may incur charges. Each turn is limited to {a.status?.limits?.tools ?? 40} actions and {Math.ceil((a.status?.limits?.turnMs ?? 600_000) / 60_000)} minutes. Image generation has a separate approval.</p><p>History is saved {storageLocation}. Stop ends the turn; completed changes remain. Messages are never automatically resent.</p></details>
+          </div>
         </footer>
       </Dialog.Content>
     </Dialog.Portal>

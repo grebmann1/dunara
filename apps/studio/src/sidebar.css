@@ -1,13 +1,13 @@
 /* A quiet navigation rail with a separately scrollable project list. */
 .studio .workspace[data-sidebar-open=true] { grid-template-columns: var(--sidebar-width, 248px) minmax(0, 1fr); }
-.studio .sidebar { position: relative; display: flex; flex-direction: column; padding: 12px 10px 8px; gap: 4px; background: #f5f6f8; overflow: visible; }
-.studio .sidebar .sidebar-action { display: flex; width: 100%; justify-content: flex-start; gap: 10px; border: 0; padding: 8px 10px; font-size: 13px; font-weight: 450; color: #30343b; border-radius: 7px; min-height: 38px; background: transparent; box-shadow: none; }
-.studio .sidebar .sidebar-action svg { width: 18px; height: 18px; color: #606977; stroke-width: 1.7; flex-shrink: 0; }
-.studio .sidebar .sidebar-action:hover { background: #eaecef; }
-.studio .sidebar .sidebar-action[aria-current=page] { background: #e4e7eb; color: #252931; font-weight: 600; box-shadow: none; }
-.studio .sidebar .sidebar-action::before { display: none; }
-.studio .sidebar .workspace-nav { flex: none; display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; }
-.studio .sidebar .workspace-nav button:last-child { margin-top: 0; }
+:is(.studio .sidebar, .sidebar-drawer) { position: relative; display: flex; flex-direction: column; padding: 12px 10px 8px; gap: 4px; background: #f5f6f8; overflow: visible; }
+:is(.studio .sidebar, .sidebar-drawer) .sidebar-action { display: flex; width: 100%; justify-content: flex-start; gap: 10px; border: 0; padding: 8px 10px; font-size: 13px; font-weight: 450; color: #30343b; border-radius: 7px; min-height: 38px; background: transparent; box-shadow: none; }
+:is(.studio .sidebar, .sidebar-drawer) .sidebar-action svg { width: 18px; height: 18px; color: #606977; stroke-width: 1.7; flex-shrink: 0; }
+:is(.studio .sidebar, .sidebar-drawer) .sidebar-action:hover { background: #eaecef; }
+:is(.studio .sidebar, .sidebar-drawer) .sidebar-action[aria-current=page] { background: #e4e7eb; color: #252931; font-weight: 600; box-shadow: none; }
+:is(.studio .sidebar, .sidebar-drawer) .sidebar-action::before { display: none; }
+:is(.studio .sidebar, .sidebar-drawer) .workspace-nav { flex: none; display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; }
+:is(.studio .sidebar, .sidebar-drawer) .workspace-nav button:last-child { margin-top: 0; }
 .sidebar-count { margin-left: auto; font-size: 11px; min-width: 20px; padding: 1px 5px; border-radius: 5px; color: #fff; background: #3977ce; }
 .sidebar-projects { display: flex; flex: 1 1 100px; min-height: 100px; flex-direction: column; margin-top: 22px; }
 .sidebar-project-heading { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; margin-bottom: 6px; }
@@ -29,8 +29,8 @@
 .sidebar-project-name small { font-size: 10px; color: #656e7a; overflow-wrap: anywhere; }
 .sidebar-project-empty { padding: 8px 12px; font-size: 12px; color: #656e7a; }
 .sidebar-project-empty button { display: block; margin-top: 4px; }
-.studio .sidebar-footer { display: grid; flex-shrink: 0; gap: 2px; padding-top: 8px; border-top: 1px solid #dce0e6; margin-top: 8px; }
-.studio .sidebar-footer .project-download-trigger { justify-content: flex-start; font-size: 12px; color: #606977; padding-inline: 10px; }
+:is(.studio, .sidebar-drawer) .sidebar-footer { display: grid; flex-shrink: 0; gap: 2px; padding-top: 8px; border-top: 1px solid #dce0e6; margin-top: 8px; }
+:is(.studio, .sidebar-drawer) .sidebar-footer .project-download-trigger { justify-content: flex-start; font-size: 12px; color: #606977; padding-inline: 10px; }
 .sidebar-resizer { position: absolute; right: -3px; top: 0; bottom: 0; width: 6px; z-index: 8; cursor: col-resize; touch-action: none; }
 .sidebar-resizer:hover, .sidebar-resizer:focus-visible { background: #3977ce55; outline: none; }
 .topbar .header-project { overflow: visible; max-width: 440px; }
@@ -58,4 +58,28 @@
     .studio .sidebar { overflow-y: auto; }
     .sidebar-projects { flex: 1 0 160px; }
   }
+}
+
+/* Hosted navigation is a modal drawer; it never consumes a workspace column. */
+.studio[data-hosted="true"] { height: 100%; min-height: 0; overflow: hidden; }
+.studio .workspace[data-sidebar-drawer="true"] { display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; }
+.studio .workspace[data-sidebar-drawer="true"] .workspace-content { overflow: auto; overscroll-behavior-y: contain; }
+.sidebar-scrim { position: fixed; inset: 0; z-index: 49; background: #20233350; }
+.sidebar.sidebar-drawer {
+  position: fixed; inset: 0 auto 0 0; z-index: 50;
+  width: min(330px, calc(100% - 44px)); height: 100dvh;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: max(10px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+  overflow-y: auto; overscroll-behavior: contain; background: #f5f6f8;
+  box-shadow: 12px 0 36px #11182724;
+}
+.sidebar-drawer-heading { display: flex; align-items: center; justify-content: space-between; padding-left: 10px; margin-bottom: 8px; }
+.sidebar-drawer-heading h2 { font-size: 15px; letter-spacing: -.2px; }
+.sidebar.sidebar-drawer .sidebar-action, .sidebar-drawer .sidebar-project-row { min-height: 44px; }
+.sidebar.sidebar-drawer .workspace-nav { display: flex; flex-direction: column; }
+.sidebar-drawer .sidebar-projects { display: flex; flex: 1 0 160px; margin-top: 18px; }
+.sidebar-drawer .sidebar-project-list { overflow: visible; }
+.sidebar-drawer .sidebar-resizer { display: none; }
+@container studio (max-width: 760px) {
+  .studio[data-hosted="true"] .topbar .connection.online { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }

@@ -403,35 +403,3 @@ summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .assistant-toggle > i[data-state="waiting"] { background: #9b701c; }
 .assistant-toggle > i[data-state="error"] { background: var(--danger); }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
-
-@container studio (max-width: 760px) {
-  .studio[data-hosted="true"] { height: 100dvh; min-height: 0; overflow: hidden; }
-  .studio[data-hosted="true"] .workspace { position: relative; display: grid; grid-template-columns: minmax(0, 1fr); flex: 1; min-height: 0; }
-  .studio[data-hosted="true"] .workspace[data-sidebar-open="false"] { grid-template-columns: minmax(0, 1fr); }
-  .studio[data-hosted="true"] .workspace-content { overflow: auto; overscroll-behavior-y: contain; }
-  .studio[data-hosted="true"] .sidebar {
-    position: absolute;
-    z-index: 40;
-    inset: 0 auto 0 0;
-    width: min(330px, calc(100% - 44px));
-    max-width: 100%;
-    padding: 14px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    overflow: auto;
-    overscroll-behavior-y: contain;
-    border-right: 1px solid var(--line);
-    box-shadow: 12px 0 36px #11182724;
-  }
-  .studio[data-hosted="true"] .sidebar-resizer { display: none; }
-  .studio[data-hosted="true"] .new-project { align-self: stretch; justify-content: flex-start; }
-  .studio[data-hosted="true"] .workspace-nav { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 6px; flex: 0 0 auto; }
-  .studio[data-hosted="true"] .workspace-nav button { justify-content: flex-start; min-width: 0; padding: 8px 9px; font-size: 12px; gap: 7px; }
-  .studio[data-hosted="true"] .workspace-nav svg { flex-shrink: 0; }
-  .studio[data-hosted="true"] .workspace-nav-label,
-  .studio[data-hosted="true"] .workspace-nav-item span:not(.sidebar-count) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-}
-@container studio (max-width: 360px) {
-  .studio[data-hosted="true"] .workspace-nav { grid-template-columns: minmax(0, 1fr); }
-}

@@ -33,7 +33,7 @@ export function SidebarProjects({ projects, selected, disabled, onSelect, onCrea
     <div id={id} className="sidebar-project-body" hidden={!expanded}>
       <label className="sidebar-project-search"><Search size={15} aria-hidden /><input type="search" placeholder="Filter projects" aria-label="Filter projects" value={query} onChange={event => setQuery(event.target.value)} /></label>
       <ul className="sidebar-project-list" onKeyDown={move}>
-        {visible.map(project => <li key={project.id}><button className="sidebar-project-row" data-project-id={project.id} aria-pressed={selected === project.id} title={`${project.name} · ${project.slug}`} disabled={disabled} onClick={() => { if (selected !== project.id) onSelect(project.id); }}>
+        {visible.map(project => <li key={project.id}><button className="sidebar-project-row" data-project-id={project.id} aria-pressed={selected === project.id} title={`${project.name} · ${project.slug}`} disabled={disabled} onClick={() => onSelect(project.id)}>
           <span className="sidebar-project-dot" style={{ background: projectColor(project.id) }} aria-hidden />
           <span className="sidebar-project-name"><strong>{project.name}</strong>{counts.get(project.name)! > 1 && <small>{project.slug}</small>}</span>
         </button></li>)}

@@ -60,3 +60,8 @@
   .settings-section .settings-error { color: var(--destructive); }
   .settings-section [role=status]:empty { display: none; }
 }
+
+/* Keep phone text entry readable without triggering focus zoom in mobile Safari. */
+@media (max-width: 760px) {
+  :is(.studio, [role="dialog"]) :is(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="color"]), textarea, select) { font-size: 16px; }
+}

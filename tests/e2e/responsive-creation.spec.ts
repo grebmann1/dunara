@@ -133,9 +133,11 @@ test('chat history and privacy details remain usable in a short viewport', async
   await panel.getByRole('button', { name: 'Conversation history', exact: true }).click();
   await targetVisible(panel.getByRole('button', { name: 'Send message' }));
   await panel.getByRole('button', { name: 'Close assistant' }).click({ trial: true });
-  await expect(panel.locator('.assistant-disclosure').last()).toBeInViewport({ ratio: 1 });
+  await expect(panel.getByRole('button', { name: 'Model & settings' })).toBeInViewport({ ratio: 1 });
+  await expect(panel.getByRole('combobox', { name: 'Chat model' })).toBeHidden();
   await page.screenshot({ path: info.outputPath('history-short.png') });
   await panel.getByRole('button', { name: 'Conversation history', exact: true }).click();
+  await panel.getByRole('button', { name: 'Model & settings' }).click();
   await panel.locator('.assistant-disclosure > summary').filter({ hasText: 'Draft storage' }).click();
   await panel.locator('.assistant-disclosure > summary').filter({ hasText: 'Usage & privacy' }).click();
   for (const size of [{ width: 375, height: 450 }, { width: 812, height: 375 }]) {
@@ -143,7 +145,9 @@ test('chat history and privacy details remain usable in a short viewport', async
     await targetVisible(panel.getByRole('button', { name: 'Send message' }));
     await panel.getByRole('button', { name: 'Close assistant' }).click({ trial: true });
     for (const disclosure of await panel.locator('.assistant-disclosure[open]').all()) {
-      await expect(disclosure).toBeInViewport({ ratio: 1 });
+      await disclosure.scrollIntoViewIfNeeded();
+      // Nested scroll positions round to whole pixels while dvh can be fractional.
+      await expect(disclosure).toBeInViewport({ ratio: .99 });
       expect(await disclosure.evaluate(node => { node.scrollTop = node.scrollHeight; return node.scrollTop; })).toBeGreaterThan(0);
     }
     await page.screenshot({ path: info.outputPath(`privacy-${size.width}x${size.height}.png`) });
