@@ -2,6 +2,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { createBuilderRuntime } from '@mobile-builder/runtime';
 import { studioAssets, templateAssets, pluginAssets } from '@mobile-builder/runtime/resources';
 import { startStudio } from '@mobile-builder/runtime/http';
@@ -41,3 +42,25 @@ try {
   await transport.close(); transport = undefined;
   console.log('Installed runtime: resources, offline scaffold, plugin discovery, execution trust, HTTP protocol, MCP and cleanup passed.');
 } finally { await transport?.close(); await mcp?.close(); await studio?.close(); await Promise.all([engine.close(), engine.close()]); }
+
+const imageModel = 'gpt-image-2.5-sunburst-2026-09-08', astraModel = 'gpt-6-astra';
+const managed = await createBuilderRuntime({ home: path.resolve('state/managed-home'), workspace: path.resolve('state/managed-apps'), host: {
+  managedImages: { label: 'Fixture credits', apiKey: 'fixture-token', baseUrl: 'http://127.0.0.1:45678/v1', models: [{ id: imageModel, label: 'GPT Image' }] },
+} });
+try {
+  const jobs = managed.mediaJobs, project = await managed.projects.create({ name: 'Managed package', slug: 'managed-package' });
+  const request = { model: astraModel, requestId: randomUUID(), expectedRevision: null, prompt: 'Fixture', label: 'Fixture', operation: 'generate' };
+  const select = action => jobs.configureProvider({ action, expectedRevision: jobs.providerStatus().revision });
+  assert.deepEqual(jobs.capabilities().models.map(model => model.id), [imageModel]);
+  await assert.rejects(jobs.request(project.id, request), /No provider call/);
+  await jobs.configureProvider({ action: 'replace', key: 'fixture-personal-key', expectedRevision: jobs.providerStatus().revision });
+  assert.equal(jobs.providerStatus().source, 'managed');
+  await select('personal');
+  assert.deepEqual(jobs.capabilities().models.map(model => model.id), [astraModel, imageModel]);
+  const staged = await jobs.request(project.id, request);
+  await select('managed');
+  await assert.rejects(jobs.approve(project.id, staged.id, jobs.providerStatus().revision), /No provider call/);
+  assert.equal((await jobs.get(project.id, staged.id)).state, 'awaiting-approval');
+  assert.equal((await jobs.get(project.id, staged.id)).creditEstimate, undefined);
+  console.log('Installed managed images: model allowlists, explicit funding selection and blocked historical approvals passed without provider calls.');
+} finally { await managed.close(); }

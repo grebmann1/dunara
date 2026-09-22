@@ -61,6 +61,38 @@ it('keeps missing-key operation offline, isolates jobs and validates duplicate I
   await expect(jobs.get(other.id, job.id)).rejects.toThrow();
   expect((await jobs.cancel(id, job.id)).state).toBe('cancelled');
 });
+
+it('checks managed models at staging and approval while preserving old requests across funding changes and restart', async () => {
+  const run = vi.fn(async () => [bytes]);
+  const managed = { label: 'Included credits', apiKey: 'fixture-token', baseUrl: 'http://127.0.0.1:45678/v1', models: [{ id: IMAGE_MODEL, label: 'GPT Image' }], estimate: vi.fn(() => 5) };
+  const options = { home: assets.projects.home, managed };
+  jobs = new MediaJobs(assets, { run }, 180_000, options);
+  const old = await jobs.request(id, request({ model: ASTRA_MODEL }));
+  const personalRevision = jobs.providerStatus().revision;
+  await jobs.configureProvider({ action: 'managed', expectedRevision: personalRevision });
+  expect(jobs.capabilities().models.map(model => model.id)).toEqual([IMAGE_MODEL]);
+  await expect(jobs.request(id, request({ model: ASTRA_MODEL }))).rejects.toThrow('No provider call');
+  await expect(jobs.approve(id, old.id, personalRevision)).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
+  await expect(jobs.approve(id, old.id, jobs.providerStatus().revision)).rejects.toThrow('No provider call');
+  expect((await jobs.get(id, old.id)).creditEstimate).toBeUndefined();
+  expect(managed.estimate).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled();
+  expect((await jobs.request(id, request())).creditEstimate).toBe(5);
+  await jobs.close(); jobs = new MediaJobs(assets, { run }, 180_000, options);
+  expect(jobs.providerStatus().source).toBe('managed');
+  expect((await jobs.get(id, old.id)).state).toBe('awaiting-approval');
+  await expect(jobs.approve(id, old.id, jobs.providerStatus().revision)).rejects.toThrow('No provider call');
+  await jobs.configureProvider({ action: 'personal', expectedRevision: jobs.providerStatus().revision });
+  await jobs.approve(id, old.id, jobs.providerStatus().revision);
+  await vi.waitFor(async () => expect((await jobs.get(id, old.id)).state).toBe('succeeded'));
+  expect(run).toHaveBeenCalledOnce();
+  expect(run.mock.calls[0]).toEqual(expect.arrayContaining([expect.objectContaining({ model: ASTRA_MODEL })]));
+});
+
+it('fails closed when a managed connection advertises no supported image models', async () => {
+  jobs = new MediaJobs(assets, undefined, 180_000, { managed: { label: 'Included credits', apiKey: 'fixture-token', baseUrl: 'http://127.0.0.1:45678/v1', models: [{ id: 'unknown-model', label: 'Unknown' }] } });
+  expect(jobs.capabilities()).toMatchObject({ available: false, models: [] });
+  await expect(jobs.request(id, request())).rejects.toThrow('No provider call');
+});
 it('requires approved edit references, retains originals and rejects stale approval', async () => {
   const first = await assets.import(id, { expectedRevision: null, label: 'Original', mediaType: 'image/png' }, bytes);
   const asset = first.assets[0]!;

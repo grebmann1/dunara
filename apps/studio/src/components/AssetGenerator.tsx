@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { ArrowUpRight, Check, ImagePlus, Palette, Sparkles, WandSparkles, X } from 'lucide-react';
-import { ASTRA_MODEL, mediaModelSchema, type JobRequest } from '../../../../packages/core/src/media-job-contracts';
+import { ASTRA_MODEL, IMAGE_MODEL, mediaModelSchema, type JobRequest } from '../../../../packages/core/src/media-job-contracts';
 import type { MediaState, StudioState } from '../api';
 import { creativePrompt, creativePurposes, creativeStyles, type CreativeDraft, type CreativePurpose, type CreativeSeed, type CreativeStyle } from '../creative';
 import { AssetImage } from './AssetImage';
@@ -13,7 +13,7 @@ import { FieldSelect } from './ui/field-select';
 type Props = { projectId: string; data: MediaState; state?: StudioState; busy: boolean; active: boolean; iconOnly?: boolean; seed?: CreativeSeed; savedDraft?: CreativeDraft; onDraft?(draft: CreativeDraft): void; onClose(): void; onSettings(): void; onStage(request: JobRequest): Promise<boolean> };
 export function AssetGenerator({ projectId, data, state, busy, active, iconOnly = false, seed, savedDraft, onDraft, onClose, onSettings, onStage }: Props) {
   const id = useId();
-  const [draft, setDraft] = useState<CreativeDraft>(() => savedDraft ?? { model: ASTRA_MODEL, operation: 'generate', referenceIds: [], quality: 'high', size: '1024x1024', count: 1, label: iconOnly ? 'New app icon' : 'New illustration', prompt: '', purpose: iconOnly ? 'app-icon' : 'illustration', style: iconOnly ? 'minimal' : 'art-direction', useAppDirection: true });
+  const [draft, setDraft] = useState<CreativeDraft>(() => savedDraft ?? { model: data.capabilities.models.some(model => model.id === ASTRA_MODEL) ? ASTRA_MODEL : IMAGE_MODEL, operation: 'generate', referenceIds: [], quality: 'high', size: '1024x1024', count: 1, label: iconOnly ? 'New app icon' : 'New illustration', prompt: '', purpose: iconOnly ? 'app-icon' : 'illustration', style: iconOnly ? 'minimal' : 'art-direction', useAppDirection: true });
   const [advanced, setAdvanced] = useState(false);
   const draftListener = useRef(onDraft); draftListener.current = onDraft;
   useEffect(() => { draftListener.current?.(draft); }, [draft]);
@@ -27,7 +27,8 @@ export function AssetGenerator({ projectId, data, state, busy, active, iconOnly 
   const purpose = creativePurposes[draft.purpose], prompt = creativePrompt(draft, data.brief, state);
   const references = data.assets.filter(asset => asset.status === 'approved');
   const invalidReferences = draft.referenceIds.some(ref => !references.some(asset => asset.id === ref));
-  const valid = draft.prompt.trim() && draft.label.trim() && prompt.length <= 8000 && !invalidReferences && (draft.operation !== 'edit' || draft.referenceIds.length > 0);
+  const modelAvailable = data.capabilities.models.some(model => model.id === draft.model);
+  const valid = modelAvailable && draft.prompt.trim() && draft.label.trim() && prompt.length <= 8000 && !invalidReferences && (draft.operation !== 'edit' || draft.referenceIds.length > 0);
   if (!active) return null;
   return <form hidden={!active} className="media-card creative-generator" aria-label={iconOnly ? 'Icon generation' : 'Image generation'} onSubmit={event => {
     event.preventDefault(); if (!valid || busy) return;
@@ -35,6 +36,8 @@ export function AssetGenerator({ projectId, data, state, busy, active, iconOnly 
   }}>
     <div className="creative-heading"><div><span className="creative-eyebrow"><Sparkles size={14} aria-hidden />Create with AI</span><h2>{iconOnly ? 'An icon that feels like your app.' : 'Generate or edit'}</h2><p>{iconOnly ? 'One memorable mark. Built around your idea and your visual style.' : 'From a rough idea to artwork that belongs in your app.'}</p></div><Button variant="ghost" aria-label="Close generation" title="Close generation" onClick={onClose}><X aria-hidden /></Button></div>
     <fieldset className="creative-fields" disabled={busy}>
+      {data.capabilities.provider.source === 'managed' && data.capabilities.models.some(model => model.id === IMAGE_MODEL) && !data.capabilities.models.some(model => model.id === ASTRA_MODEL) && <p>Included credits use GPT Image direct. Astra-assisted images require a personal image key selected in Settings.</p>}
+      {!modelAvailable && <p role="alert">Your draft’s model is unavailable with the selected connection. Choose a model in advanced settings or explicitly select a personal image key. Your draft has not been changed.</p>}
       {!iconOnly && <div className="creative-purpose-grid" role="group" aria-label="Asset type">{Object.entries(creativePurposes).map(([key, value]) => <button type="button" key={key} aria-pressed={draft.purpose === key} onClick={() => update({ purpose: key as CreativePurpose, size: value.size, label: `New ${value.label.toLowerCase()}` })}><span className={`creative-purpose-symbol ${key}`} aria-hidden><ImagePlus size={18} /></span><strong>{value.label}</strong><small>{value.subtitle}</small></button>)}</div>}
       <div className="creative-main"><div className="creative-description"><Label htmlFor={`${id}-prompt`}>{iconOnly ? 'Describe your icon' : 'What should we create?'}</Label><Textarea id={`${id}-prompt`} aria-label="Image prompt" required maxLength={7000} rows={4} placeholder={purpose.starter} value={draft.prompt} onChange={event => update({ prompt: event.target.value })} /><Button className="creative-inspiration" variant="ghost" onClick={() => update({ prompt: purpose.starter })}><WandSparkles size={14} aria-hidden />Try a starting idea</Button></div>
       <div className="creative-style-section"><Label>Visual style</Label><div className="creative-styles" role="group" aria-label="Visual style">{Object.entries(creativeStyles).map(([key, value]) => <button type="button" key={key} className={`creative-style ${key}`} aria-pressed={draft.style === key} onClick={() => update({ style: key as CreativeStyle })}><span className="creative-style-swatch" aria-hidden><i /><b />{draft.style === key && <Check size={13} />}</span><span>{value.label}</span></button>)}</div></div></div>

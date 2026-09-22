@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises';
 import { z } from 'zod';
 import { Assets } from "../../../core/src/assets.js";
 import { BuilderError } from "../../../core/src/contracts.js";
-import { ASTRA_MODEL, IMAGE_MODEL, mediaModelLabel, jobGuidance, jobRequestSchema, jobSchema, type MediaJob } from "../../../core/src/media-job-contracts.js";
+import { IMAGE_MODEL, mediaModelLabel, jobGuidance, jobRequestSchema, jobSchema, type MediaJob } from "../../../core/src/media-job-contracts.js";
 import { type ImageProvider, ProviderFailure } from "../../../core/src/openai-images.js";
 import { ProviderSettings, type ProviderOptions } from "../../../core/src/provider-settings.js";
 import { atomicWrite, exists, noSymlinks, readText, SerialQueue } from "../../../core/src/storage.js";
@@ -28,7 +28,10 @@ export class MediaJobs {
   async configureProvider(input: unknown) {
     return this.queue.run(async () => { this.active(); await this.load(); this.active(); const result = this.#settings.update(input, this.providerStatus().busy); await this.assets.projects.flushState(); return result; });
   }
-  capabilities() { return { provider: this.providerStatus(), available: this.providerStatus().configured && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models: [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }], qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : this.providerStatus().configured ? null : 'OpenAI image generation is not configured. Open Settings → Image generation; offline assets remain available.' }; }
+  capabilities() {
+    const provider = this.providerStatus(), models = this.#settings.models();
+    return { provider, available: provider.configured && models.length > 0 && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models, qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : !models.length ? 'No image models are available with the selected connection. Choose a personal image key in Settings.' : provider.configured ? null : 'OpenAI image generation is not configured. Open Settings → Image generation; offline assets remain available.' };
+  }
   private file() { return path.join(this.assets.projects.home, 'media-jobs.json'); }
   private async load() {
     if (this.loaded) return;
@@ -80,6 +83,7 @@ export class MediaJobs {
         if (JSON.stringify(duplicate.request) !== JSON.stringify(request)) throw new BuilderError('INVALID_INPUT', 'Request ID already used with different settings');
         return this.result(duplicate);
       }
+      this.#settings.assertModel(request.model);
       if (this.jobs.filter(pending).length >= 10) throw new BuilderError('LIMIT_EXCEEDED', 'At most ten pending media requests are allowed');
       const job: MediaJob = { id: randomUUID(), projectId, ...await this.identity(projectId), request, model: request.model, state: 'awaiting-approval', createdAt: new Date().toISOString(), resultIds: [] };
       await this.validate(job); this.active();
@@ -96,6 +100,7 @@ export class MediaJobs {
       this.#settings.assertRevision(expectedConfigurationRevision);
       const job = this.jobs.find(j => j.id === jobId && j.projectId === projectId);
       if (!job || job.state !== 'awaiting-approval') throw new BuilderError('INVALID_INPUT', 'Job is not awaiting approval');
+      this.#settings.assertModel(job.request.model);
       if (!this.providerStatus().configured) throw new BuilderError('INVALID_INPUT', 'OpenAI image generation is not configured. Connect an image key in Settings → Image generation; OPENAI_API_KEY is an optional startup fallback. No provider call was made.');
       await this.validate(job); this.active(); job.state = 'queued'; job.approvedAt = new Date().toISOString();
       try { await this.persist(); } catch (error) { job.state = 'awaiting-approval'; delete job.approvedAt; throw error; }
