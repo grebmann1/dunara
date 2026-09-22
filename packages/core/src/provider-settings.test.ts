@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Engine } from './engine.js';
 import { Projects } from './projects.js';
 import { ProviderSettings } from './provider-settings.js';
+import { ASTRA_MODEL, IMAGE_MODEL, jobRequestSchema } from './media-job-contracts.js';
 
 let dir: string, engine: Engine;
 const run = vi.fn();
@@ -97,4 +98,23 @@ it('defaults to included images, preserves a saved personal key, and never switc
   expect(new ProviderSettings(undefined,options).status(false)).toMatchObject({ configured: false, source: 'none' });
   update({ action: 'managed' });
   expect(JSON.stringify(settings.status(false))).not.toMatch(/token-sentinel|45678/);
+});
+
+it('enforces managed model allowlists at dispatch without falling back to a saved personal key', async () => {
+  const fetcher = vi.fn<typeof fetch>(); vi.stubGlobal('fetch', fetcher);
+  try {
+    const estimate = vi.fn(() => 5);
+    const settings = new ProviderSettings(undefined, { createProvider: factory, managed: { label: 'Included credits', apiKey: 'fixture-token', baseUrl: 'http://127.0.0.1:45678/v1', models: [{ id: IMAGE_MODEL, label: 'GPT Image' }], estimate } });
+    const request = jobRequestSchema.parse({ model: ASTRA_MODEL, requestId: randomUUID(), expectedRevision: null, prompt: 'Fixture', label: 'Fixture', operation: 'generate' });
+    settings.update({ action: 'replace', key: sentinel, expectedRevision: settings.status(false).revision }, false);
+    expect(settings.models().map(model => model.id)).toEqual([IMAGE_MODEL]);
+    expect(settings.estimate(request)).toBeUndefined(); expect(estimate).not.toHaveBeenCalled();
+    expect(() => settings.run(request, [], new AbortController().signal)).toThrow('No provider call');
+    expect(fetcher).not.toHaveBeenCalled(); expect(run).not.toHaveBeenCalled();
+    settings.update({ action: 'personal', expectedRevision: settings.status(false).revision }, false);
+    expect(settings.models().map(model => model.id)).toEqual([ASTRA_MODEL, IMAGE_MODEL]);
+    await settings.run(request, [], new AbortController().signal);
+    expect(run).toHaveBeenCalledOnce(); expect(run.mock.calls[0]![0].model).toBe(ASTRA_MODEL);
+    settings.close();
+  } finally { vi.unstubAllGlobals(); }
 });

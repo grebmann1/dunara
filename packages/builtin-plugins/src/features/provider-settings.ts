@@ -5,7 +5,7 @@ import { providerUpdateSchema, type ProviderStatus } from "../../../core/src/pro
 import { PrivateSettingsStore, type CredentialStore } from "../../../core/src/credentials.js";
 import { z } from 'zod';
 import { managedAiEndpoint, type ManagedAiConnection } from '../../../core/src/managed-ai.js';
-import type { JobRequest } from '../../../core/src/media-job-contracts.js';
+import { ASTRA_MODEL, IMAGE_MODEL, type JobRequest } from '../../../core/src/media-job-contracts.js';
 
 export type ManagedImageConnection = ManagedAiConnection & { estimate?: (request: JobRequest) => number | undefined };
 
@@ -55,7 +55,14 @@ export class ProviderSettings {
   status(busy: boolean): ProviderStatus {
     return { configured: this.#funding === 'managed' ? !!this.#managed : this.#funding === 'personal' && !!this.#provider, source: this.#funding === 'managed' ? 'managed' : this.#funding === 'none' ? 'none' : this.#source, revision: this.#revision, busy, environmentAvailable: !!this.#startup, storage: this.#locked ? 'locked' : this.options.credentials?.protection?.kind ?? 'session', rememberAvailable: !this.#locked && !!this.options.credentials?.protection, ...(this.options.managed ? { managed: { label: this.options.managed.label, selected: this.#funding === 'managed', personalConfigured: !!this.#provider, balance: this.options.managed.balance?.() } } : {}) };
   }
-  estimate(request: JobRequest) { return this.#funding === 'managed' ? this.options.managed?.estimate?.(request) : undefined; }
+  models() {
+    const models = [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }];
+    return this.#funding === 'managed' ? models.filter(model => this.options.managed?.models.some(allowed => allowed.id === model.id)) : models;
+  }
+  assertModel(model: string) {
+    if (!this.models().some(allowed => allowed.id === model)) throw new BuilderError('INVALID_INPUT', 'This image model is unavailable with the selected connection. Choose an allowed model or explicitly select a personal image key. No provider call was made.');
+  }
+  estimate(request: JobRequest) { return this.#funding === 'managed' && this.models().some(model => model.id === request.model) ? this.options.managed?.estimate?.(request) : undefined; }
   assertRevision(revision: unknown) {
     if (revision !== this.#revision) throw new BuilderError('REVISION_CONFLICT', 'OpenAI configuration changed. Refresh and review the current configuration before approving or saving again.');
   }
@@ -93,6 +100,7 @@ export class ProviderSettings {
     return this.status(false);
   }
   run(...args: Parameters<ImageProvider['run']>) {
+    this.assertModel(args[0].model);
     if (this.#funding === 'managed') {
       if (!this.#managed) throw new BuilderError('INVALID_INPUT', 'Included credits are unavailable. Choose another connection.');
       return this.#managed.run(...args);
