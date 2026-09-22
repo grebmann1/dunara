@@ -10,6 +10,7 @@ import { AssistantTasks } from './AssistantTasks';
 import { AssistantHistory } from './AssistantHistory';
 import { AssistantChanges } from './AssistantChanges';
 import { AssistantSetupCard } from './AssistantSetupCard';
+import { AiCredits } from './AiCredits';
 import type { AssistantSetupRequest } from '../../../../packages/assistant/src/contracts';
 import { continuationPrompt } from '../assistant-history';
 import '../assistant-images.css';
@@ -98,6 +99,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
             <Dialog.Close asChild><Button variant="ghost" aria-label="Close assistant" title="Close assistant"><X aria-hidden /></Button></Dialog.Close>
           </div>
         </header>
+        {a.status?.providerId === 'managed' && <AiCredits balance={a.status.credits} />}
         {showHistory && <AssistantHistory key={a.projectId ?? 'new'} controller={a} onSelect={() => setShowHistory(false)} onDelete={() => { setDeleting(true); setShowHistory(false); followLatest(); }} />}
         <div className="assistant-conversation">
           <div className="assistant-transcript" ref={scroll} aria-label="Conversation" onScroll={() => { if (scroll.current) { const near = scroll.current.scrollHeight - scroll.current.scrollTop - scroll.current.clientHeight < 60; following.current = near; lastScroll.current = { element: scroll.current, top: scroll.current.scrollTop }; setAtBottom(near); } }}>

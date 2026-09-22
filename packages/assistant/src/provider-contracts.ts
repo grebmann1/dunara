@@ -1,8 +1,9 @@
 import { z } from 'zod';
 
-export const assistantProviderSchema = z.enum(['openai', 'chatgpt', 'grok', 'xai', 'anthropic', 'google', 'mistral']);
+export const assistantProviderSchema = z.enum(['openai', 'chatgpt', 'grok', 'xai', 'anthropic', 'google', 'mistral', 'managed']);
 export type AssistantProvider = z.infer<typeof assistantProviderSchema>;
 export const assistantProviders = [
+  { id: 'managed', name: 'Included credits', runtime: 'openai', kind: 'managed', baseUrl: '' },
   { id: 'chatgpt', name: 'ChatGPT', runtime: 'openai-codex', kind: 'oauth', baseUrl: 'https://chatgpt.com/backend-api' },
   { id: 'grok', name: 'Grok', runtime: 'xai', kind: 'oauth', baseUrl: 'https://api.x.ai/v1' },
   { id: 'openai', name: 'OpenAI', runtime: 'openai', kind: 'api_key', baseUrl: 'https://api.openai.com/v1' },

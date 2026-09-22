@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
 import '../assistant-connections.css';
+import { AiCredits } from './AiCredits';
 
 export function AssistantSettings({ disabled, revision }: { disabled: boolean; revision?: string }) {
   const { api, capabilities } = useStudioClient();
@@ -48,7 +49,9 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
     {status?.available && <p>The interface has been updated, but the running backend does not provide the connection list. Save unsent drafts, then fully quit and relaunch Dunara. Refreshing this page does not restart the backend.</p>}
   </section>;
   return <section className="settings-section ai-connections" aria-label="Assistant configuration">
-    <div className="ai-connections-heading"><KeyRound size={18} aria-hidden /><div><h2>AI connections</h2><p>Connect your accounts, then choose a model for the Assistant.</p></div></div>
+    <div className="ai-connections-heading"><KeyRound size={18} aria-hidden /><div><h2>AI connections</h2><p>{status.credits ? 'Start with included credits, or choose your own connection.' : 'Connect your accounts, then choose a model for the Assistant.'}</p></div></div>
+    <AiCredits balance={status.credits} />
+    {status.credits && <p>Credits cover Assistant work and images. Your own API key or ChatGPT connection uses that account’s allowance for Assistant work. Images have a separate connection below.</p>}
     <div className="ai-subscriptions">{connections.filter(item => item.kind === 'oauth').map(item => <section className="ai-connection-card" key={item.id} aria-label={`${item.name} connection`}>
       <div className="ai-connection-title"><strong>{item.name}</strong><span>{item.configured ? <><Check size={13} aria-hidden />Connected</> : item.locked ? 'Locked' : 'Subscription'}</span></div>
       <p>{item.configured ? `${item.source === 'saved' ? 'Remembered' : 'This session'} · ready to select below` : `Sign in with your ${item.name} account.`}</p>
@@ -80,7 +83,7 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
       <fieldset disabled={locked || waiting}>
         <div className="ai-model-fields"><label>Assistant provider<select aria-label="Assistant provider" value={provider} onChange={event => choose(event.target.value)}>{connections.map(item => <option key={item.id} value={item.id}>{item.name}{item.configured ? '' : ' · not connected'}</option>)}</select></label>
           <label>Assistant model<select aria-label="Assistant model" value={model} onChange={event => { selectionDirty.current = true; setModel(event.target.value); }}>{model && !selected?.models.some(item => item.id === model) && <option value={model} disabled>{model} (unavailable)</option>}{selected?.models.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label></div>
-        <Button type="submit" disabled={!selected?.configured || !selected.models.some(item => item.id === model) || provider === status?.providerId && model === status?.model}>Save assistant model</Button>
+        <Button type="submit" disabled={!selected?.configured || !selected.models.some(item => item.id === model) || provider === status?.providerId && model === status?.model}>{status.credits ? 'Use this connection' : 'Save assistant model'}</Button>
       </fieldset>
     </form>}
     <small>Messages and requested app content go to the selected provider. Model access depends on your account.</small>

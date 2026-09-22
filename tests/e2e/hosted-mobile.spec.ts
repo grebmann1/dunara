@@ -42,6 +42,8 @@ for (const [width, height] of [[375, 812], [430, 932]]) {
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await expect(page.locator('#studio-sidebar')).toBeHidden();
     await fits(page);
+    // This scenario expects focus on an enabled destination, not the loading drawer.
+    await expect(page.locator('.connection')).toHaveClass(/online/);
     await page.screenshot({ path: info.outputPath(`workspace-${width}.png`) });
     await toggle.click();
     const drawer = page.getByRole('dialog', { name: 'Workspace', exact: true });

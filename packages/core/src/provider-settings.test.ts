@@ -79,3 +79,22 @@ it('replacement wins before a queued approval and factory failures never reveal 
   expect(() => settings.update({ action: 'replace', key: sentinel, expectedRevision: settings.status(false).revision }, false)).toThrow('Provider configuration failed');
   await engine.close(); await expect(change('replace', sentinel)).rejects.toThrow('closed');
 });
+
+it('defaults to included images, preserves a saved personal key, and never switches funding when saving another key', async () => {
+  const { CredentialStore } = await import('./credentials.js');
+  const credentials = new CredentialStore(path.join(dir,'managed-home'), 'openai-images', { kind: 'configured', key: 'a'.repeat(64) });
+  const managed = { label: 'Dunara credits', apiKey: 'managed-token-sentinel', baseUrl: 'http://127.0.0.1:45678/v1', models: [] };
+  const options = { home: path.join(dir,'managed-home'), credentials, managed, createProvider: factory };
+  const settings = new ProviderSettings(undefined,options);
+  expect(settings.status(false)).toMatchObject({ configured: true, source: 'managed' });
+  const update = (value: object) => settings.update({ ...value, expectedRevision: settings.status(false).revision },false);
+  update({ action: 'replace', key: sentinel, remember: true });
+  expect(settings.status(false).source).toBe('managed');
+  expect(settings.credential().key).toBe(sentinel);
+  update({ action: 'personal' });
+  expect(new ProviderSettings(undefined,options).status(false).source).toBe('saved');
+  update({ action: 'disconnect' });
+  expect(new ProviderSettings(undefined,options).status(false)).toMatchObject({ configured: false, source: 'none' });
+  update({ action: 'managed' });
+  expect(JSON.stringify(settings.status(false))).not.toMatch(/token-sentinel|45678/);
+});

@@ -55,6 +55,7 @@ export class Engine extends BuilderKernel {
   readonly nativeDeliveries: NativeDeliveries;
   constructor(projects: Projects, trusted: boolean, lan = false, imageProvider?: ImageProvider, providerOptions: ProviderOptions = {}, backendOptions: BackendOptions = {}, accountProvider?: AccountProvider, services: ServiceConfig = serviceConfiguration(), runtime: {
     hosted?: boolean;
+    managedImages?: import('./features/provider-settings.js').ManagedImageConnection;
     computePaused?: boolean;
     previews?: (environment: (id: string) => Promise<import('../../core/src/runtime-environment.js').AppEnvironment>, beforeStart: (id: string) => Promise<void>, diagnostics: Engine['diagnostics'], projects: Projects) => PreviewDriver;
     capture?: (id: string, route: string, viewport: {width: number; height: number}, signal?: AbortSignal) => Promise<Buffer>;
@@ -62,7 +63,7 @@ export class Engine extends BuilderKernel {
     super(projects);
     this.designs = new Designs(this.files); this.assets = new Assets(projects);
     this.appIcons = new AppIcons(this.assets, this.files);
-    this.mediaJobs = new MediaJobs(this.assets, imageProvider, 180_000, { credentials: sharedOpenAIStore(projects.home, secretProtection(services)), ...providerOptions });
+    this.mediaJobs = new MediaJobs(this.assets, imageProvider, 180_000, { home: projects.home, managed: runtime.managedImages, credentials: sharedOpenAIStore(projects.home, secretProtection(services)), ...providerOptions });
     const protection = secretProtection(services), accountStore = new EncryptedSettingsStore(projects.home, 'builder-account', savedAccountSchema, protection);
     this.account = new AccountSession(accountProvider ?? (services.account ? new AccountProvider(services.account) : undefined), Date.now, { available: !!protection, load: () => accountStore.load(), save: value => accountStore.save(value), remove: () => accountStore.remove() });
     this.backendOAuth = new BackendOAuth(this.account, services.oauthBrokerOrigin, backendOptions.fetch);

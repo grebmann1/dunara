@@ -79,3 +79,25 @@ it('keeps locked ciphertext until explicit disconnect', async () => {
   locked.update({ action: 'disconnect', provider: 'google', expectedRevision: locked.status(legacy).connectionRevision });
   expect(locked.status(legacy).connections.find(item => item.id === 'google')?.locked).toBe(false);
 });
+
+it.each(['browser', 'device_code'] as const)('uses the host-selected ChatGPT %s flow', async method => {
+  const { home } = await setup();
+  const login = vi.fn(async (interaction: ProviderAuthInteraction) => {
+    expect(await interaction.prompt({ type: 'select', message: 'Login', options: [{ id: 'browser', label: 'Browser' },{ id: 'device_code', label: 'Device' }] })).toBe(method);
+    interaction.notify({ type: 'device_code', verificationUri: 'https://auth.openai.com/codex/device', userCode: 'FIXTURE' });
+    return { type: 'oauth' as const, access, refresh, expires: Date.now()+3600000 };
+  });
+  const manager = new AssistantConnections(home, protection, () => {}, () => {}, () => ({ name: 'Fixture', login, async refresh(value) { return value; }, async toAuth(value) { return { apiKey: value.access }; } }), { chatgptLogin: method }); connections.push(manager);
+  await manager.begin({ provider: 'chatgpt', remember: true, expectedRevision: manager.status(legacy).connectionRevision });
+  await vi.waitFor(() => expect(manager.status(legacy).signIn?.state).toBe('connected'));
+  expect(login).toHaveBeenCalledOnce(); expect(JSON.stringify(manager.status(legacy))).not.toContain(access);
+});
+
+it('keeps host credentials out of metadata and disallows client replacement of the managed connection', async () => {
+  const { home } = await setup();
+  const manager = new AssistantConnections(home, protection, () => {}, () => {}, undefined, { managed: { label: 'Included credits', apiKey: 'managed-secret-sentinel', baseUrl: 'http://127.0.0.1:54321/v1', models: [{ id: 'gpt-6-astra', label: 'Astra' }] } }); connections.push(manager);
+  const status = manager.status(legacy);
+  expect(status.connections.find(item => item.id === 'managed')).toMatchObject({ configured: true, kind: 'managed', baseUrl: '' });
+  expect(JSON.stringify(status)).not.toMatch(/managed-secret|54321/);
+  expect(() => manager.update({ action: 'disconnect', provider: 'managed', expectedRevision: status.connectionRevision })).toThrow('managed by this host');
+});

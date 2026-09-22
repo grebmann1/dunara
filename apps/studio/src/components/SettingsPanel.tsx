@@ -8,6 +8,7 @@ import { Label } from './ui/label';
 import { SupabaseSettings } from './BackendPanel';
 import { AssistantSettings } from './AssistantSettings';
 import { AccountSettings } from './AccountSettings';
+import { AiCredits } from './AiCredits';
 
 export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, project }: { enabledPlugins?: string[]; project?: Project; settings?: ProviderStatus; onSettings: (value: ProviderStatus) => void; disabled: boolean }) {
   const { api, capabilities } = useStudioClient();
@@ -44,9 +45,10 @@ export function SettingsPanel({ enabledPlugins, settings, onSettings, disabled, 
     {project && <section className="settings-section project-settings" aria-label="Project details"><h2>Project details</h2><dl><div><dt>Name</dt><dd>{project.name}</dd></div><div><dt>Project ID</dt><dd><code>{project.id}</code></dd></div>{capabilities.localPaths && <div><dt>Source folder</dt><dd><code>{project.root}</code></dd></div>}</dl></section>}
     {enabled('builder.media') && <><h2>Image generation</h2>
     <section className="settings-section" aria-label="OpenAI configuration">
-      <div className="flex items-center gap-3"><KeyRound size={20} aria-hidden="true" /><h2 className="m-0">{settings?.configured ? 'Configured · not verified' : 'Not configured'}</h2></div>
+      <div className="flex items-center gap-3"><KeyRound size={20} aria-hidden="true" /><h2 className="m-0">{settings?.managed?.selected ? settings.managed.label : settings?.configured ? 'Configured · not verified' : 'Not configured'}</h2></div>
+      {settings?.managed && <><AiCredits balance={settings.managed.balance} /><div className="flex flex-wrap gap-2"><Button disabled={disabled || busy || settings.busy || settings.managed.selected} onClick={() => void update('managed')}>Use {settings.managed.label}</Button><Button variant="outline" disabled={disabled || busy || settings.busy || !settings.managed.personalConfigured || !settings.managed.selected && settings.configured} onClick={() => void update('personal')}>Use personal image key</Button></div><p>Saving a personal key keeps your selected funding source. Use the buttons above to switch. ChatGPT does not fund image generation.</p></>}
       <p>Image generation uses OpenAI. Assistant messages use the provider and model selected in AI connections. Credential source for images: <strong>{settings?.source ?? 'Loading…'}</strong>.</p>
-      <details className="provider-startup-details"><summary>OpenAI fallback and startup settings</summary><p>The OpenAI Assistant connection can reuse this image key when it has no separate key. Other Assistant providers use their own connections and do not require <code>OPENAI_API_KEY</code>.</p><p>An optional <code>OPENAI_API_KEY</code> in the startup environment or Dunara .env file supplies this image key. A saved image key takes precedence. Disconnect disables this fallback until you reconnect or restart; it never edits your environment or .env file. Separate Assistant connections are unchanged.</p></details>
+      {!settings?.managed && <details className="provider-startup-details"><summary>OpenAI fallback and startup settings</summary><p>The OpenAI Assistant connection can reuse this image key when it has no separate key. Other Assistant providers use their own connections and do not require <code>OPENAI_API_KEY</code>.</p><p>An optional <code>OPENAI_API_KEY</code> in the startup environment or Dunara .env file supplies this image key. A saved image key takes precedence. Disconnect disables this fallback until you reconnect or restart; it never edits your environment or .env file. Separate Assistant connections are unchanged.</p></details>}
       <form autoComplete="off" onSubmit={event => { event.preventDefault(); void update('replace'); }}>
         <fieldset className="m-0 min-w-0 border-0 p-0" disabled={disabled || busy || !settings || settings.busy || settings.storage === 'locked'}>
           <Label htmlFor="openai-session-key">OpenAI API key</Label>

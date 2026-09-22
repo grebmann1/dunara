@@ -20,6 +20,7 @@ let session: AgentSession | undefined;
 let ownedDirectory: string | undefined;
 let started = false;
 let closed = false;
+let managedFailure: string | undefined;
 const pending = new Map<string, { resolve: (value: HarnessResult) => void; reject: (reason: Error) => void }>();
 const send = (message: unknown) => { if (process.connected && !closed) process.send?.(message, () => {}); };
 async function close() {
@@ -51,7 +52,7 @@ process.on('message', (raw: unknown) => {
     if (envelope.type !== 'start' || started) throw new Error('Invalid worker message');
     started = true;
     const value = z.object({ type: z.literal('start'), input: inputSchema, fixture: z.object({ baseUrl: z.string().url(), model: z.string().max(100) }).strict().optional() }).strict().parse(raw);
-    void run(value.input, value.fixture).then(() => send({ type: 'done' })).catch(() => send({ type: 'failed' }));
+    void run(value.input, value.fixture).then(() => send({ type: 'done' })).catch(() => send({ type: 'failed', ...(managedFailure ? { notice: managedFailure } : {}) }));
   } catch { send({ type: 'failed' }); void close(); }
 });
 async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: string; model: string }) {
@@ -73,6 +74,10 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
       return (object.type === 'input_image' && typeof object.image_url === 'string' && object.image_url.startsWith('data:image/png;base64,')) || (object.type === 'image' && typeof object.source === 'object') || (typeof object.inlineData === 'object') || (object.type === 'image_url' && typeof object.image_url === 'object') || Object.values(object).some(hasImage);
     };
     const response = await nativeFetch(request, { ...init, redirect: 'error' });
+    if (!response.ok && input.provider === 'managed') {
+      const error = z.object({ error: z.object({ type: z.literal('dunara_ai'), message: z.string().max(300) }) }).safeParse(await response.clone().json().catch(() => null));
+      if (error.success) managedFailure = error.data.error.message;
+    }
     if (response.ok && hasImage(payload)) send({ type: 'image-accepted' });
     return response;
   };

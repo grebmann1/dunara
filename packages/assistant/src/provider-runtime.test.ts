@@ -11,7 +11,7 @@ it('routes all seven connections through the installed adapters and only the sup
   for (const name of ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'XAI_API_KEY', 'GEMINI_API_KEY', 'GOOGLE_API_KEY', 'MISTRAL_API_KEY', 'BUILDER_ASSISTANT_API_KEY']) vi.stubEnv(name, 'UNTRUSTED-AMBIENT-KEY');
   const home = await mkdtemp(path.join(os.tmpdir(), 'assistant-runtime-')); roots.push(home);
   const connections = new AssistantConnections(home, undefined, () => {}, () => {}); await connections.initialize();
-  for (const provider of assistantProviders) {
+  for (const provider of assistantProviders.filter(provider => provider.kind !== 'managed')) {
     const model = connections.models(provider.id)[0]!.id;
     const { runtime, model: selected } = await createAssistantRuntime({ provider: provider.id, model, apiKey: 'fixture-selected-credential' });
     expect(selected.provider).toBe(provider.runtime); expect(selected.id).toBe(model);
