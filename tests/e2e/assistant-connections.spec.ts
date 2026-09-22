@@ -100,7 +100,7 @@ test('compact composer persists supported reasoning, keeps keyboard access and s
   for (const [width, height] of [[1440, 1000], [375, 812], [430, 932], [375, 450]] as const) {
     await page.setViewportSize({ width, height });
     await expect(message).toBeEditable();
-    expect((await chat.locator('.assistant-input-box').boundingBox())!.height).toBeLessThanOrEqual(110);
+    await expect.poll(async () => (await chat.locator('.assistant-input-box').boundingBox())?.height ?? Infinity).toBeLessThanOrEqual(110);
     await expect(chat.getByRole('combobox', { name: 'Assistant mode' })).toBeInViewport({ ratio: 1 });
     await expect(chat.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: info.outputPath(`composer-${width}x${height}.png`) });
