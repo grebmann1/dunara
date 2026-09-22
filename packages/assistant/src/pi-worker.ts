@@ -1,4 +1,4 @@
-import { assistantProviderSchema } from './provider-contracts.js';
+import { assistantProviderSchema, reasoningEffortSchema } from './provider-contracts.js';
 import { createAssistantRuntime } from './provider-runtime.js';
 import { setupGuidance } from './setup.js';
 import { randomUUID } from 'node:crypto';
@@ -14,6 +14,7 @@ const inputSchema = z.object({
   epoch: z.uuid(), runId: z.uuid(), conversationId: z.uuid(), projectId: z.uuid().nullable(),
   prompt: assistantText(ASSISTANT_LIMITS.promptBytes), context: assistantText(64 * 1024), apiKey: z.string().max(16384), provider: assistantProviderSchema.default('openai'), baseUrl: z.string().url().optional(), model: z.string().min(1).max(100).optional(),
   mode: assistantModeSchema.default('build'), inspector: inspectorAttachmentSchema.optional(), images: z.array(harnessImageSchema).max(2).optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
   tools: z.array(z.object({ name: z.string().max(160), description: z.string().optional(), inputSchema: z.object({ type: z.literal('object'), properties: z.record(z.string(), z.unknown()).optional(), required: z.array(z.string()).optional() }).catchall(z.unknown()) })).max(100),
 }).strict();
 let session: AgentSession | undefined;
@@ -51,11 +52,11 @@ process.on('message', (raw: unknown) => {
     }
     if (envelope.type !== 'start' || started) throw new Error('Invalid worker message');
     started = true;
-    const value = z.object({ type: z.literal('start'), input: inputSchema, fixture: z.object({ baseUrl: z.string().url(), model: z.string().max(100) }).strict().optional() }).strict().parse(raw);
+    const value = z.object({ type: z.literal('start'), input: inputSchema, fixture: z.object({ baseUrl: z.string().url(), model: z.string().max(100), reasoning: z.boolean().optional() }).strict().optional() }).strict().parse(raw);
     void run(value.input, value.fixture).then(() => send({ type: 'done' })).catch(() => send({ type: 'failed', ...(managedFailure ? { notice: managedFailure } : {}) }));
   } catch { send({ type: 'failed' }); void close(); }
 });
-async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: string; model: string }) {
+async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: string; model: string; reasoning?: boolean }) {
   const directory = await realpath(process.cwd());
   const info = await lstat(directory);
   if (!path.basename(directory).startsWith('mb-assistant-') || directory !== await realpath(process.env.HOME ?? '') || !info.isDirectory() || (info.mode & 0o077) || info.uid !== process.getuid?.()) throw new Error('Assistant requires an owned private scratch directory');
@@ -96,6 +97,8 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
     extendResources() { throw new Error('Resources cannot be extended'); }, async reload() {},
   };
   const { runtime, model } = await createAssistantRuntime(input, fixture);
+  const { getSupportedThinkingLevels } = await import('@earendil-works/pi-ai');
+  if (input.reasoningEffort && !getSupportedThinkingLevels(model).includes(input.reasoningEffort)) throw new Error('Unsupported reasoning level');
   network.origin = new URL(model.baseUrl).origin;
   const errors = new Map<string, boolean>();
   const tools = input.tools.map(tool => ({
@@ -112,7 +115,7 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
       return { content: result.content, details: result.details };
     },
   }));
-  const created = await createAgentSession({ cwd: process.cwd(), agentDir: process.env.PI_CODING_AGENT_DIR, model, modelRuntime: runtime, noTools: 'all', tools: tools.map(tool => tool.name), customTools: tools, resourceLoader: loader,
+  const created = await createAgentSession({ cwd: process.cwd(), agentDir: process.env.PI_CODING_AGENT_DIR, model, modelRuntime: runtime, thinkingLevel: input.reasoningEffort, noTools: 'all', tools: tools.map(tool => tool.name), customTools: tools, resourceLoader: loader,
     sessionManager: SessionManager.inMemory(process.cwd()), settingsManager: SettingsManager.inMemory({ transport: 'sse', retry: { enabled: false, maxRetries: 0, provider: { maxRetries: 0, timeoutMs: 180000 } }, compaction: { enabled: false }, enableAnalytics: false, enableInstallTelemetry: false, enableSkillCommands: false, images: { autoResize: false, blockImages: false } }),
   });
   session = created.session;

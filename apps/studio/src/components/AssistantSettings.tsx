@@ -6,6 +6,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import '../assistant-connections.css';
 import { AiCredits } from './AiCredits';
+import type { DraftSnapshot } from '../../../../packages/assistant/src/drafts';
 
 export function AssistantSettings({ disabled, revision }: { disabled: boolean; revision?: string }) {
   const { api, capabilities } = useStudioClient();
@@ -86,8 +87,27 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
         <Button type="submit" disabled={!selected?.configured || !selected.models.some(item => item.id === model) || provider === status?.providerId && model === status?.model}>{status.credits ? 'Use this connection' : 'Save assistant model'}</Button>
       </fieldset>
     </form>}
-    <small>Messages and requested app content go to the selected provider. Model access depends on your account.</small>
+    <small>Messages, recent context and requested tool results go to the selected provider. Sending may incur charges. History stays {capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer'}. Stop ends the turn; completed changes remain.</small>
+    <DraftPreference disabled={locked || waiting} />
     {status?.busy && <p role="status">Wait for the current turn to finish or stop it before changing connections.</p>}
     {error && <p role="alert" className="settings-error">{error}</p>}{notice && <p role="status">{notice}</p>}
   </section>;
+}
+
+function DraftPreference({ disabled }: { disabled: boolean }) {
+  const { api, capabilities } = useStudioClient();
+  const [snapshot, setSnapshot] = useState<DraftSnapshot>();
+  const [busy, setBusy] = useState(false);
+  const location = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
+  useEffect(() => {
+    let alive = true;
+    void api<DraftSnapshot>('/assistant/drafts/read', { scope: { projectId: null, conversationId: null } }).then(value => { if (alive) setSnapshot(value); }).catch(() => {});
+    return () => { alive = false; };
+  }, [api]);
+  if (!snapshot) return null;
+  return <label className="ai-remember"><input type="checkbox" checked={snapshot.enabled} disabled={disabled || busy} onChange={event => {
+    const enabled = event.target.checked;
+    setBusy(true);
+    void api<DraftSnapshot>('/assistant/drafts/configure', { scope: { projectId: null, conversationId: null }, update: { context: snapshot.context, preferenceRevision: snapshot.preferenceRevision, enabled } }).then(setSnapshot).finally(() => setBusy(false));
+  }} />Remember drafts {location}</label>;
 }

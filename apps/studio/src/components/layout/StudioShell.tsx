@@ -23,14 +23,16 @@ type Props = {
   children: ReactNode; banners: ReactNode; overlays: ReactNode; footer?: ReactNode; contentRef: Ref<HTMLDivElement>;
   projects: Project[]; selected: string; workspace: Workspace; usable: boolean; busy: boolean;
   connectionLabel: string; pendingReview: number; projectStatus: ReactNode; assistantControl?: ReactNode;
+  assistant?: { open: boolean; desktop: boolean; render(host: HTMLDivElement | null): ReactNode };
   hiddenDestinations?: string[];
   onSelect: (id: string) => void; onNavigate: (workspace: Workspace) => void; onCreate: () => void;
 };
 
-export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
+export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, assistant, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
   const { capabilities } = useStudioClient();
   const hosted = capabilities.connectionLabel === 'Cloud workspace';
   const shell = useRef<HTMLDivElement>(null), sidebarTrigger = useRef<HTMLButtonElement>(null);
+  const [assistantHost, setAssistantHost] = useState<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true), [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const drawer = hosted && compact, sidebarOpen = drawer ? mobileSidebarOpen : desktopSidebarOpen;
@@ -92,6 +94,7 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
         }} onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); drag.current = { x: event.clientX, width: sidebarWidth }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (drag.current) resize(drag.current.width + event.clientX - drag.current.x); }} onPointerUp={event => { drag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onLostPointerCapture={() => { drag.current = null; }} />
       </aside>;
   return <div ref={shell} className="studio" data-hosted={hosted ? 'true' : undefined}>
+    <div className="studio-main">
     <WorkspaceHeader sidebarTrigger={sidebarTrigger} connectionLabel={connectionLabel} usable={usable} sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} projects={projects} selected={selected} onSelect={select} projectStatus={projectStatus} assistantControl={assistantControl} isPreview={workspace === 'preview'} />
     {banners}
     <div className="workspace" data-sidebar-open={sidebarOpen} data-sidebar-drawer={drawer || undefined} style={{ '--sidebar-width': `${sidebarWidth}px` } as CSSProperties}>
@@ -111,6 +114,9 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
       <DockWorkspace><div ref={contentRef} id="workspace-content" className="workspace-content" data-workspace={workspace} tabIndex={-1}>{children}</div></DockWorkspace>
     </div>
     {footer}
+    </div>
+    <div ref={setAssistantHost} className="studio-assistant" hidden={!assistant?.open || !assistant.desktop} />
+    {assistant?.render(assistantHost)}
     {overlays}
   </div>;
 }

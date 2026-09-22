@@ -16,6 +16,15 @@ async function setup(auth?: OAuthAuth, protectedStorage = true) {
   return { manager, home, changed, idle, status, update };
 }
 afterEach(async () => { connections.splice(0).forEach(value => value.close()); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+it('advertises reasoning from installed model capabilities, including managed and ChatGPT models', async () => {
+  const { manager, home } = await setup(); await manager.initialize();
+  expect(manager.models('openai').find(model => model.id === 'gpt-6-astra')?.reasoningLevels).toContain('high');
+  expect(manager.models('chatgpt').find(model => model.id === 'gpt-6-astra')?.reasoningLevels).not.toContain('off');
+  expect(manager.models('openai').find(model => model.id === 'gpt-4.1')?.reasoningLevels).toEqual([]);
+  const managed = new AssistantConnections(home, undefined, () => {}, () => {}, undefined, { managed: { label: 'Included', apiKey: 'fixture-token', baseUrl: 'http://127.0.0.1:9999/v1', models: [{ id: 'gpt-6-astra', label: 'Included Astra' }] } });
+  connections.push(managed); await managed.initialize();
+  expect(managed.models('managed')).toEqual([{ id: 'gpt-6-astra', label: 'Included Astra', reasoningLevels: manager.models('openai').find(model => model.id === 'gpt-6-astra')?.reasoningLevels }]);
+});
 it('retains several isolated connections, encrypts remembered keys, and falls back to the legacy OpenAI key', async () => {
   const { manager, update, status, home } = await setup();
   const anthropic = 'fake-anthropic-key-sentinel', xai = 'fake-xai-key-sentinel';

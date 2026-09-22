@@ -19,8 +19,8 @@
 .console-panel .media-workspace-footer { padding-block: 6px; }
 .console-panel .media-workspace-footer button { min-height: 36px; padding: 6px 10px; }
 @container studio (max-width: 760px) {
-  .studio:has(> .studio-console) { padding-bottom: 44px; }
-  .studio:has(> .studio-console[data-open=true]) { padding-bottom: calc(44px + clamp(220px, 34dvh, 360px)); }
+  .studio:has(> .studio-main > .studio-console) { padding-bottom: 44px; }
+  .studio:has(> .studio-main > .studio-console[data-open=true]) { padding-bottom: calc(44px + clamp(220px, 34dvh, 360px)); }
   .studio-console { position: fixed; inset: auto 0 0; }
   .console-bar { padding-inline: 8px; gap: 2px; }
   .console-bar .console-toggle { gap: 6px; padding-inline: 6px; }

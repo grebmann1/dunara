@@ -52,7 +52,9 @@ test('one masked OpenAI key configures both features and the selected model reac
   behavior = async (input, callbacks) => { expect(input.apiKey).toBe(secret); expect(input.model).toBe('gpt-5.6-sol'); callbacks.text('Selected model used.'); };
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
-  await expect(panel.locator('.assistant-disclosure summary').filter({ hasText: 'gpt-5.6-sol' })).toContainText('gpt-5.6-sol');
+  await panel.getByLabel('Model and reasoning', { exact: true }).click();
+  await expect(panel.getByRole('combobox', { name: 'Chat model' })).toHaveValue('openai:gpt-5.6-sol');
+  await panel.getByLabel('Model and reasoning', { exact: true }).click();
   await panel.getByLabel('Message assistant').fill('Use my chosen model'); await panel.getByRole('button', { name: 'Send message' }).click();
   await expect(panel.getByText('Selected model used.')).toBeVisible();
   await panel.getByRole('button', { name: 'Close assistant' }).click();
@@ -145,7 +147,7 @@ test('panel requires exact human review for project creation and supports stoppi
   await expect(panel.getByText(/Stopped. Completed writes remain visible/)).toBeVisible(); expect(await engine.projects.list()).toHaveLength(1); expect(calls).toBe(2);
 });
 
-test('assistant docks beside the canvas and preserves exact phones and keyboard access at mobile and zoom layouts', async ({ page }) => {
+test('assistant stays beside the entire page and preserves exact phones and keyboard access at mobile and zoom layouts', async ({ page }) => {
   const project = await engine.projects.create({ name: 'Assistant Canvas', slug: 'assistant-canvas' });
   await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
   await page.route('**/*', route => route.request().isNavigationRequest() && route.request().frame().parentFrame()
@@ -163,10 +165,12 @@ test('assistant docks beside the canvas and preserves exact phones and keyboard 
   await page.getByLabel('Corner radius').fill('31');
   await toggle.click();
   await expect(page.getByRole('dialog', { name: 'Assistant', exact: true })).toBeVisible();
-  await expect(design).toHaveAttribute('aria-expanded', 'false');
+  await expect(design).toHaveAttribute('aria-expanded', 'true');
+  await expect(designHeading).toBeVisible();
+  await design.click();
+  await expect(page.getByRole('dialog', { name: 'Assistant', exact: true })).toBeVisible();
   await expect(designHeading).toBeHidden();
   await design.click();
-  await expect(page.getByRole('dialog', { name: 'Assistant', exact: true })).toBeHidden();
   await expect(design).toHaveAttribute('aria-expanded', 'true');
   await expect(designHeading).toBeVisible();
   await expect(page.getByLabel('Corner radius')).toHaveValue('31');
@@ -372,31 +376,31 @@ test('Plan and Build modes preserve drafts, enforce read-only planning and imple
   };
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
-  const plan = panel.getByRole('button', { name: 'Plan mode', exact: true }), build = panel.getByRole('button', { name: 'Build mode', exact: true });
-  await expect(build).toHaveAttribute('aria-pressed', 'true');
-  await message.fill('Plan a new screen.'); await plan.click(); await expect(message).toHaveValue('Plan a new screen.');
+  const mode = panel.getByRole('combobox', { name: 'Assistant mode' });
+  await expect(mode).toHaveValue('build');
+  await message.fill('Plan a new screen.'); await mode.selectOption('plan'); await expect(message).toHaveValue('Plan a new screen.');
   await panel.getByRole('button', { name: 'Close assistant' }).click(); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
-  await expect(plan).toHaveAttribute('aria-pressed', 'true'); await expect(message).toHaveValue('Plan a new screen.'); expect(calls).toBe(0);
+  await expect(mode).toHaveValue('plan'); await expect(message).toHaveValue('Plan a new screen.'); expect(calls).toBe(0);
   await message.press('Enter');
   await expect(panel.getByRole('heading', { name: 'Proposed screen' })).toBeVisible();
-  await expect(plan).toBeDisabled(); await expect(build).toBeDisabled();
+  await expect(mode).toBeDisabled();
   await expect(readFile(path.join(project.root, 'app/planned.tsx'))).rejects.toMatchObject({ code: 'ENOENT' });
   expect(assistant.status().active).toMatchObject({ mode: 'plan' });
   finishPlan(); await expect(panel.getByRole('button', { name: 'Build this plan' })).toBeEnabled();
   await panel.getByRole('button', { name: 'Close assistant' }).click();
   await page.goto('about:blank');
   await page.goto(studio.issueLaunchUrl()); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
-  await expect(plan).toHaveAttribute('aria-pressed', 'true');
+  await expect(mode).toHaveValue('plan');
   await expect(panel.locator('.assistant-mode-tag')).toHaveText(['Plan']);
   for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     await page.setViewportSize({ width, height });
-    await expect(plan).toBeInViewport(); await expect(build).toBeInViewport();
+    await expect(mode).toBeInViewport();
     await expect(panel.getByRole('button', { name: 'Send message' })).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`assistant-plan-${width}.png`) });
   }
   await panel.getByRole('button', { name: 'Build this plan' }).click();
-  await expect(build).toHaveAttribute('aria-pressed', 'true'); await expect(message).toHaveValue(/Implement the plan/); expect(calls).toBe(1);
+  await expect(mode).toHaveValue('build'); await expect(message).toHaveValue(/Implement the plan/); expect(calls).toBe(1);
   await expect(readFile(path.join(project.root, 'app/planned.tsx'))).rejects.toMatchObject({ code: 'ENOENT' });
   await message.press('Enter'); await expect(panel.getByText('Implemented the planned screen.')).toBeVisible();
   await expect(panel.locator('.assistant-mode-tag')).toHaveText(['Plan', 'Build']);
@@ -411,9 +415,9 @@ test('a failed Plan send keeps its mode and draft when retried explicitly', asyn
   await page.route('**/api/assistant/turns/start', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Offline mode fixture' } }) }));
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
-  await panel.getByRole('button', { name: 'Plan mode' }).click(); await message.fill('Plan without editing'); await message.press('Enter');
+  await panel.getByRole('combobox', { name: 'Assistant mode' }).selectOption('plan'); await message.fill('Plan without editing'); await message.press('Enter');
   await expect(panel.getByRole('alert')).toContainText('Offline mode fixture');
-  await expect(panel.getByRole('button', { name: 'Plan mode' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('combobox', { name: 'Assistant mode' })).toHaveValue('plan');
   await expect(message).toHaveValue('Plan without editing'); expect(calls).toBe(0);
   await page.unroute('**/api/assistant/turns/start'); await message.press('Enter');
   await expect(panel.getByText('Plan preserved.')).toBeVisible(); expect(calls).toBe(1);
@@ -439,7 +443,7 @@ test('task checklists update live, survive stopping and reload, and Continue sta
   };
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Assistant', exact: true }), message = panel.getByLabel('Message assistant');
-  await panel.getByRole('button', { name: 'Plan mode' }).click(); await message.fill('Plan a layout improvement'); await message.press('Enter');
+  await panel.getByRole('combobox', { name: 'Assistant mode' }).selectOption('plan'); await message.fill('Plan a layout improvement'); await message.press('Enter');
   await expect(panel.locator('.assistant-tasks')).toContainText('0 of 3 complete');
   await expect(panel.getByRole('button', { name: 'Build this plan' })).toBeEnabled();
   await panel.getByRole('button', { name: 'Build this plan' }).click(); await message.press('Enter');
@@ -456,7 +460,7 @@ test('task checklists update live, survive stopping and reload, and Continue sta
   await expect(panel.locator('.assistant-tasks').last().getByText('Paused', { exact: true })).toBeVisible(); expect(calls).toBe(2);
   const resume = panel.getByRole('button', { name: 'Continue', exact: true });
   await message.fill('Keep this unsent thought'); await expect(resume).toBeDisabled(); await message.fill(''); await resume.click();
-  await expect(message).toHaveValue(/Keep completed changes/); await expect(panel.getByRole('button', { name: 'Build mode' })).toHaveAttribute('aria-pressed', 'true'); expect(calls).toBe(2);
+  await expect(message).toHaveValue(/Keep completed changes/); await expect(panel.getByRole('combobox', { name: 'Assistant mode' })).toHaveValue('build'); expect(calls).toBe(2);
   await message.press('Enter'); await expect(panel.getByText('Finished the remaining verification.')).toBeVisible();
   await expect(panel.locator('.assistant-tasks').last()).toContainText('3 of 3 complete');
   await expect(panel.locator('.assistant-tasks').last().getByRole('progressbar')).toHaveAttribute('value', '3');

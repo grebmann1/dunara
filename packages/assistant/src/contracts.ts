@@ -1,4 +1,4 @@
-import { assistantProviderSchema, type AssistantProvider } from './provider-contracts.js';
+import { assistantProviderSchema, reasoningEffortSchema, type AssistantProvider, type ReasoningEffort } from './provider-contracts.js';
 import { z } from 'zod';
 import { selectionSchema } from '../../core/src/preview-selection.js';
 import { routeSchema, viewportSchema } from '../../core/src/contracts.js';
@@ -35,6 +35,7 @@ export const storedSetupRequestSchema = setupRequestSchema.extend({ projectId: z
 export type AssistantSetupRequest = z.infer<typeof storedSetupRequestSchema>;
 export const storedTurnSchema = z.object({
   id: z.uuid(), epoch: z.uuid(), state: turnStateSchema, provider: assistantProviderSchema.optional(), model: z.string().max(100).optional(), mode: assistantModeSchema.optional(),
+  reasoningEffort: reasoningEffortSchema.optional(),
   projectId: z.uuid().nullable().optional(),
   prompt: assistantText(ASSISTANT_LIMITS.promptBytes), response: assistantText(ASSISTANT_LIMITS.responseBytes),
   startedAt: z.iso.datetime(), endedAt: z.iso.datetime().optional(),
@@ -58,7 +59,7 @@ export type AssistantEvent = RunBinding & { sequence: number; type: 'state' | 't
 export type HarnessTool = { name: string; description?: string; _meta?: Record<string, unknown>; inputSchema: { type: 'object'; properties?: Record<string, unknown>; required?: string[]; [key: string]: unknown } };
 export type HarnessResult = { content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>; details?: unknown; isError?: boolean };
 export const harnessImageSchema = imageReferenceSchema.extend({ data: z.string().max(4 * 1024 * 1024).regex(/^[A-Za-z0-9+/]+={0,2}$/), mimeType: z.literal('image/png'), description: z.string().max(2048) }).strict();
-export type HarnessInput = RunBinding & { prompt: string; context: string; apiKey: string; provider?: AssistantProvider; baseUrl?: string; model?: string; mode?: AssistantMode; tools: HarnessTool[]; inspector?: InspectorAttachment; images?: z.infer<typeof harnessImageSchema>[] };
+export type HarnessInput = RunBinding & { prompt: string; context: string; apiKey: string; provider?: AssistantProvider; baseUrl?: string; model?: string; reasoningEffort?: ReasoningEffort; mode?: AssistantMode; tools: HarnessTool[]; inspector?: InspectorAttachment; images?: z.infer<typeof harnessImageSchema>[] };
 export type HarnessCallbacks = { text(value: string): void; imageAccepted?(): void; tool(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<HarnessResult> };
 export interface RunHarness {
   run(input: HarnessInput, callbacks: HarnessCallbacks, signal: AbortSignal): Promise<void>;

@@ -2,6 +2,10 @@ import { z } from 'zod';
 
 export const assistantProviderSchema = z.enum(['openai', 'chatgpt', 'grok', 'xai', 'anthropic', 'google', 'mistral', 'managed']);
 export type AssistantProvider = z.infer<typeof assistantProviderSchema>;
+export const reasoningEffortSchema = z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']);
+export const reasoningPreferenceSchema = z.union([z.literal('auto'), reasoningEffortSchema]);
+export type ReasoningEffort = z.infer<typeof reasoningEffortSchema>;
+export type ReasoningPreference = z.infer<typeof reasoningPreferenceSchema>;
 export const assistantProviders = [
   { id: 'managed', name: 'Included credits', runtime: 'openai', kind: 'managed', baseUrl: '' },
   { id: 'chatgpt', name: 'ChatGPT', runtime: 'openai-codex', kind: 'oauth', baseUrl: 'https://chatgpt.com/backend-api' },

@@ -125,7 +125,7 @@ test('Supabase setup and connection forms reflow without hiding actions', async 
   }
 });
 
-test('chat history and privacy details remain usable in a short viewport', async ({ page }, info) => {
+test('chat history and the in-composer model stay usable in a short viewport', async ({ page }, info) => {
   await page.setViewportSize({ width: 375, height: 450 });
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
@@ -133,34 +133,14 @@ test('chat history and privacy details remain usable in a short viewport', async
   await panel.getByRole('button', { name: 'Conversation history', exact: true }).click();
   await targetVisible(panel.getByRole('button', { name: 'Send message' }));
   await panel.getByRole('button', { name: 'Close assistant' }).click({ trial: true });
-  await expect(panel.getByRole('button', { name: 'Model & settings' })).toBeInViewport({ ratio: 1 });
-  await expect(panel.getByRole('combobox', { name: 'Chat model' })).toBeHidden();
+  await expect(panel.getByLabel('Model and reasoning', { exact: true })).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: info.outputPath('history-short.png') });
   await panel.getByRole('button', { name: 'Conversation history', exact: true }).click();
-  await panel.getByRole('button', { name: 'Model & settings' }).click();
-  await panel.locator('.assistant-disclosure > summary').filter({ hasText: 'Draft storage' }).click();
-  await panel.locator('.assistant-disclosure > summary').filter({ hasText: 'Usage & privacy' }).click();
-  for (const size of [{ width: 375, height: 450 }, { width: 812, height: 375 }]) {
-    await page.setViewportSize(size);
-    await targetVisible(panel.getByRole('button', { name: 'Send message' }));
-    await panel.getByRole('button', { name: 'Close assistant' }).click({ trial: true });
-    for (const disclosure of await panel.locator('.assistant-disclosure[open]').all()) {
-      await disclosure.scrollIntoViewIfNeeded();
-      // Nested scroll positions round to whole pixels while dvh can be fractional.
-      await expect(disclosure).toBeInViewport({ ratio: .99 });
-      expect(await disclosure.evaluate(node => { node.scrollTop = node.scrollHeight; return node.scrollTop; })).toBeGreaterThan(0);
-    }
-    await page.screenshot({ path: info.outputPath(`privacy-${size.width}x${size.height}.png`) });
-  }
-  for (const size of [{ width: 375, height: 812 }, { width: 430, height: 932 }, { width: 1440, height: 1000 }]) {
+  for (const size of [{ width: 375, height: 450 }, { width: 812, height: 375 }, { width: 375, height: 812 }, { width: 430, height: 932 }, { width: 1440, height: 1000 }]) {
     await page.setViewportSize(size);
     await expect(panel.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
-    await panel.getByRole('button', { name: 'Send message' }).click({ trial: true });
-    for (const disclosure of await panel.locator('.assistant-disclosure').all()) {
-      if (await disclosure.getAttribute('open') === null) await disclosure.locator('summary').click();
-    }
-    await expect(panel.locator('.assistant-disclosure[open]')).toHaveCount(2);
-    for (const disclosure of await panel.locator('.assistant-disclosure[open]').all()) await expect(disclosure).toBeInViewport({ ratio: 1 });
+    await expect(panel.getByLabel('Model and reasoning', { exact: true })).toBeInViewport({ ratio: 1 });
+    await panel.getByRole('button', { name: 'Close assistant' }).click({ trial: true });
     await page.screenshot({ path: info.outputPath(`privacy-${size.width}x${size.height}.png`) });
   }
 });
@@ -174,6 +154,6 @@ test('planning from the guide carries the brief into an unsent Assistant draft',
   await expect(guide).toHaveCount(0);
   const assistant = page.getByRole('dialog', { name: 'Assistant', exact: true });
   await expect(assistant.getByLabel('Message assistant')).toHaveValue(/My app idea: Help neighbors share garden notes/);
-  await expect(assistant.getByRole('button', { name: 'Plan mode', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(assistant.getByRole('combobox', { name: 'Assistant mode' })).toHaveValue('plan');
   await expect(assistant.getByRole('button', { name: 'Stop turn', exact: true })).toHaveCount(0);
 });

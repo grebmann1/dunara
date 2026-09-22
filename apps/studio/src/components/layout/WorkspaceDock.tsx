@@ -3,12 +3,12 @@ import { GripVertical, PanelBottom, PanelLeft, PanelRight, RotateCcw } from 'luc
 import { Button } from '../ui/button';
 import '../../workspace-dock.css';
 
-export type DockId = 'assistant' | 'design' | 'console';
+export type DockId = 'design' | 'console';
 type Position = 'left' | 'right' | 'bottom';
 type Layout = { positions: Record<DockId, Position>; left: number; right: number; bottom: number };
 export type DockPane = { id: DockId; label: string; open: boolean };
-const defaults: Layout = { positions: { assistant: 'right', design: 'right', console: 'bottom' }, left: 380, right: 400, bottom: 300 };
-const ids: DockId[] = ['assistant', 'design', 'console'];
+const defaults: Layout = { positions: { design: 'right', console: 'bottom' }, left: 380, right: 400, bottom: 300 };
+const ids: DockId[] = ['design', 'console'];
 const storageKey = 'builder.workspace-layout.v1';
 const query = '(min-width: 1280px) and (min-height: 650px)';
 function readLayout(): Layout {
@@ -37,7 +37,7 @@ export function useWorkspaceLayout() {
   useEffect(() => { try { localStorage.setItem(storageKey, JSON.stringify(layout)); } catch { /* Layout remains usable for this session. */ } }, [layout]);
   useEffect(() => {
     if (!dragging) return;
-    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); setDragging(null); } };
+    const cancel = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setDragging(null); } };
     const clear = () => setDragging(null);
     window.addEventListener('keydown', cancel, true); window.addEventListener('blur', clear);
     return () => { window.removeEventListener('keydown', cancel, true); window.removeEventListener('blur', clear); };
@@ -46,7 +46,7 @@ export function useWorkspaceLayout() {
   const move = (id: DockId, position: Position) => {
     if (position === 'bottom' && id !== 'console') return;
     setLayout(current => ({ ...current, positions: { ...current.positions, [id]: position } })); activate(id, position); setDragging(null);
-    announce(`${id === 'assistant' ? 'Assistant' : id === 'design' ? 'Design' : 'Console'} moved to the ${position}.`);
+    announce(`${id === 'design' ? 'Design' : 'Console'} moved to the ${position}.`);
   };
   const reset = () => { setLayout(structuredClone(defaults)); setActive({}); setDragging(null); announce('Default workspace layout restored.'); };
   return { layout, setLayout, desktop, active, activate, dragging, setDragging, announcement, hosts, hostRefs: hostRefs.current, move, reset };
@@ -108,7 +108,7 @@ function DockResize({ position, value, max }: { position: Position; value: numbe
   const [resizing, setResizing] = useState(false), min = position === 'bottom' ? 180 : 280;
   const update = (size: number) => dock.setLayout(current => ({ ...current, [position]: Math.round(Math.max(min, Math.min(max, size))) }));
   return <><div role="separator" tabIndex={0} aria-label={`Resize ${position} panel`} aria-orientation={position === 'bottom' ? 'horizontal' : 'vertical'} aria-valuemin={min} aria-valuemax={Math.round(max)} aria-valuenow={Math.round(value)} className="dock-resize" data-position={position} onDoubleClick={() => update(defaults[position])} onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); event.currentTarget.focus(); initial.current = { x: event.clientX, y: event.clientY, value, pointer: event.pointerId }; event.currentTarget.setPointerCapture(event.pointerId); setResizing(true); }} onPointerMove={event => { const start = initial.current; if (start && start.pointer === event.pointerId) update(start.value + (position === 'bottom' ? start.y - event.clientY : (event.clientX - start.x) * (position === 'left' ? 1 : -1))); }} onPointerUp={event => { initial.current = null; setResizing(false); if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onPointerCancel={() => { if (initial.current) update(initial.current.value); initial.current = null; setResizing(false); }} onLostPointerCapture={() => { initial.current = null; setResizing(false); }} onKeyDown={event => {
-    if (event.key === 'Escape' && initial.current) { update(initial.current.value); const pointer = initial.current.pointer; initial.current = null; setResizing(false); event.currentTarget.releasePointerCapture(pointer); event.preventDefault(); }
+    if (event.key === 'Escape' && initial.current) { update(initial.current.value); const pointer = initial.current.pointer; initial.current = null; setResizing(false); event.currentTarget.releasePointerCapture(pointer); event.preventDefault(); event.stopPropagation(); }
     const direction = position === 'bottom' ? event.key === 'ArrowUp' ? 1 : event.key === 'ArrowDown' ? -1 : 0 : event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
     if (direction) { event.preventDefault(); update(value + direction * (position === 'right' ? -20 : 20)); }
     if (event.key === 'Home' || event.key === 'End') { event.preventDefault(); update(event.key === 'Home' ? min : max); }

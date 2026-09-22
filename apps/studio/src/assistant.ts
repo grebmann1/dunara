@@ -213,6 +213,9 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   async function selectModel(provider: string, model: string) {
     await operate(async () => { const next = await api<AssistantStatus>('/assistant/configure', { action: 'model', provider, model }); if (mounted.current) { setStatus(next); snapshot.current = next; } });
   }
+  async function selectReasoning(reasoningEffort: NonNullable<AssistantStatus['reasoningEffort']>) {
+    await operate(async () => { const next = await api<AssistantStatus>('/assistant/configure', { action: 'reasoning', reasoningEffort }); if (mounted.current) { setStatus(next); snapshot.current = next; } });
+  }
   async function stop() {
     const active = status?.active; if (!active) return;
     await operate(async () => { await api('/assistant/turns/stop', { epoch: active.epoch, conversationId: active.conversationId, runId: active.runId }); });
@@ -229,6 +232,6 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   async function approve(review: AssistantPacket['approvals'][number], approve: boolean) {
     await operate(async () => { await api('/assistant/approvals', { id: review.id, epoch: review.epoch, runId: review.runId, conversationId: review.conversationId, projectId: review.projectId, approve }); });
   }
-  return { selectModel, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
+  return { selectModel, selectReasoning, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
 }
 export type AssistantController = ReturnType<typeof useAssistant>;

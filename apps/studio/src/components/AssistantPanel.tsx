@@ -1,13 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
-import { ArrowDown, ArrowUp, Check, ChevronRight, Hammer, History, ListTodo, LoaderCircle, Play, Plus, Sparkles, Square, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronRight, Hammer, History, LoaderCircle, Play, Plus, Sparkles, Square, X } from 'lucide-react';
 import { Button } from './ui/button';
-import { useStudioClient } from '../api';
 import type { AssistantController } from '../assistant';
 import { AssistantAttachments, AttachmentImage } from './AssistantAttachments';
 import { AssistantMarkdown, CopyMessage } from './AssistantMarkdown';
 import { AssistantTasks } from './AssistantTasks';
 import { AssistantHistory } from './AssistantHistory';
+import { AssistantModelMenu } from './AssistantModelMenu';
 import { AssistantChanges } from './AssistantChanges';
 import { AssistantSetupCard } from './AssistantSetupCard';
 import { AiCredits } from './AiCredits';
@@ -17,21 +17,17 @@ import '../assistant-images.css';
 import '../assistant-connections.css';
 import { useOverlayViewport } from '../useOverlayViewport';
 import '../assistant-mobile.css';
-import { DockGrip, DockMenu, useDock } from './layout/WorkspaceDock';
 
-type Props = { controller: AssistantController; open: boolean; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; backendEnabled: boolean; onBackend(): void; onSettings(): void };
+type Props = { controller: AssistantController; open: boolean; desktop: boolean; container: HTMLDivElement | null; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; backendEnabled: boolean; onBackend(): void; onSettings(): void };
 const starters = [
   { title: 'Refine this screen', detail: 'Make the details feel right', prompt: 'Review the current screen and suggest improvements to its layout, spacing, and typography.' },
   { title: 'Build something new', detail: 'Turn an idea into a working app', prompt: 'Help me plan a new mobile app. Ask me about the idea, who it is for, and the visual direction.' },
   { title: 'Find and fix an issue', detail: 'Get things working again', prompt: 'Review this project for errors and help me fix what is not working.' },
 ];
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
-export function AssistantPanel({ controller: a, open, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
-  const dock = useDock(), narrow = !dock.desktop;
+export function AssistantPanel({ controller: a, open, desktop, container, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
+  const narrow = !desktop;
   const viewport = useOverlayViewport(open && narrow);
-  const [preferencesOpen, setPreferencesOpen] = useState(false);
-  const { capabilities } = useStudioClient();
-  const storageLocation = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
   const [manualSetup, setManualSetup] = useState<AssistantSetupRequest>();
   const [setupGeneration, setSetupGeneration] = useState(0);
   const manualSetupElement = useRef<HTMLDivElement>(null);
@@ -64,7 +60,7 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
     else if (following.current) element.scrollTop = element.scrollHeight;
     lastScroll.current = { element, top: element.scrollTop };
   }, [a.conversation?.turns, a.approvals, a.working, a.error, a.connectionError, deleting, showHistory, count, open, narrow]);
-  useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open]);
+  useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open, desktop]);
   const active = a.status?.active, here = !!active && active.conversationId === a.conversation?.id;
   const reviews = a.approvals.filter(review => review.conversationId === a.conversation?.id);
   const lastTurn = a.conversation?.turns.at(-1);
@@ -74,28 +70,27 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
   const canSend = !a.working && !a.loading && !a.persistence.loading && !a.historyError && !!a.status?.epoch && a.status.configured && a.status.available && !a.status.busy && a.status.signIn?.state !== 'waiting' && !!a.draft.trim() && promptBytes <= maxBytes;
   const progress = reviews.length ? 'Waiting for your review' : runningTool ? `Working · ${toolLabel(runningTool)}` : active?.state === 'starting' ? 'Getting started…' : lastTurn?.response ? 'Writing…' : 'Thinking…';
   const send = () => { if (canSend) { followLatest(); setAtBottom(true); input.current?.focus(); void a.send(); } };
+  const Surface = desktop ? PageSidebar : Dialog.Content;
+  if (desktop && !container) return null;
   return <Dialog.Root open={open} onOpenChange={onOpenChange} modal={narrow}>
-    <Dialog.Portal container={dock.desktop ? dock.hosts.assistant : undefined}>
+    <Dialog.Portal container={desktop ? container : undefined}>
       {narrow && <Dialog.Overlay className="assistant-scrim" />}
-      <Dialog.Content id="assistant-panel" className="assistant-panel" style={viewport.style} data-short-viewport={viewport.short || undefined} data-image-drop={draggingImages || undefined}
+      <Surface id="assistant-panel" className="assistant-panel" aria-modal={narrow || undefined} style={viewport.style} data-short-viewport={viewport.short || undefined} data-image-drop={draggingImages || undefined}
+        onKeyDown={event => { if (desktop && event.key === 'Escape' && !event.defaultPrevented) { event.preventDefault(); onOpenChange(false); } }}
         onDragEnter={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); imageDragDepth.current++; setDraggingImages(true); } }}
         onDragOver={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); event.dataTransfer.dropEffect = a.working || a.loading ? 'none' : 'copy'; } }}
         onDragLeave={event => { if (event.dataTransfer.types.includes('Files') && --imageDragDepth.current <= 0) { imageDragDepth.current = 0; setDraggingImages(false); } }}
         onDrop={event => { if (event.dataTransfer.types.includes('Files')) { event.preventDefault(); imageDragDepth.current = 0; setDraggingImages(false); void a.addImages(Array.from(event.dataTransfer.files)); } }}
         onEscapeKeyDown={event => {
-        if (dock.desktop && event.target instanceof Element && !event.target.closest('#assistant-panel')) { event.preventDefault(); return; }
-        const menu = document.querySelector<HTMLDetailsElement>('#assistant-panel .dock-menu[open]');
-        if (dock.dragging) { event.preventDefault(); dock.setDragging(null); }
-        else if (menu) { event.preventDefault(); menu.open = false; menu.querySelector('summary')?.focus(); }
+        if (event.target instanceof Element && event.target.closest('.assistant-model-menu[open]')) event.preventDefault();
+        if (desktop && event.target instanceof Element && !event.target.closest('#assistant-panel')) event.preventDefault();
       }} onInteractOutside={event => event.preventDefault()} onOpenAutoFocus={event => { event.preventDefault(); if (!narrow && a.status?.configured) input.current?.focus(); else title.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); trigger.current?.focus(); }}>
         {draggingImages && <div className="assistant-image-drop" role="status"><strong>Drop images into your message</strong><span>PNG, JPEG or WebP · up to two images</span></div>}
         <header className="assistant-header">
-          <DockGrip id="assistant" />
           <div className="assistant-identity"><span className="assistant-mark" aria-hidden><Sparkles size={19} /></span><div><Dialog.Title ref={title} tabIndex={-1}>Assistant</Dialog.Title><Dialog.Description title={projectName}>{projectName ?? 'Your next app'}</Dialog.Description></div></div>
           <div className="assistant-header-actions">
             <Button variant="ghost" aria-label="Conversation history" title="Conversation history" aria-expanded={showHistory} aria-controls="assistant-history" onClick={() => setShowHistory(value => !value)}><History aria-hidden /></Button>
             <Button variant="ghost" aria-label="New conversation" title="New conversation" disabled={a.working || a.loading || a.status?.busy || !a.status?.available} onClick={() => { setShowHistory(false); void a.create(); }}><Plus aria-hidden /></Button>
-            <DockMenu id="assistant" />
             <Dialog.Close asChild><Button variant="ghost" aria-label="Close assistant" title="Close assistant"><X aria-hidden /></Button></Dialog.Close>
           </div>
         </header>
@@ -135,26 +130,33 @@ export function AssistantPanel({ controller: a, open, onOpenChange, trigger, pro
           {a.attachmentError && <p className="assistant-upload-notice" role="alert">{a.attachmentError}</p>}
           {a.uploading && <p className="assistant-upload-notice" role="status">Adding images…</p>}
           <form className="assistant-input-box" onSubmit={event => { event.preventDefault(); send(); }}>
-            <div className="assistant-mode-bar"><div className="assistant-mode-switch" role="group" aria-label="Assistant mode" aria-describedby="assistant-mode-description">
-              <button type="button" aria-label="Plan mode" aria-pressed={a.mode === 'plan'} disabled={a.working || a.loading || a.status?.busy} onClick={() => a.setMode('plan')}><ListTodo size={14} aria-hidden />Plan</button>
-              <button type="button" aria-label="Build mode" aria-pressed={a.mode === 'build'} disabled={a.working || a.loading || a.status?.busy} onClick={() => a.setMode('build')}><Hammer size={14} aria-hidden />Build</button>
-            </div><span id="assistant-mode-description">{a.mode === 'plan' ? 'Explore and plan. No app changes.' : 'Make changes and verify them.'}</span></div>
             <label htmlFor="assistant-message" className="sr-only">Message assistant</label>
-            <textarea ref={input} id="assistant-message" rows={2} placeholder={a.status?.configured ? a.status.busy ? 'Write your next message…' : 'Ask anything about your app…' : 'Describe your idea…'} value={a.draft} onChange={event => a.setDraft(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void a.addImages(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} maxLength={maxBytes} readOnly={a.working || a.loading || a.persistence.loading} aria-describedby="assistant-composer-hint" />
-            <div className="assistant-composer-toolbar"><AssistantAttachments key={a.conversation?.id ?? a.projectId ?? 'new'} controller={a} /><span className="assistant-composer-hint" id="assistant-composer-hint">{promptBytes > maxBytes * .8 ? `${promptBytes.toLocaleString()} / ${maxBytes.toLocaleString()} bytes` : 'Drop or paste images · Enter to send'}</span>{a.status?.busy ? <Button className="assistant-send" variant="outline" aria-label="Stop turn" title="Stop turn" disabled={a.working} onClick={() => void a.stop()}><Square size={16} aria-hidden /></Button> : <Button className="assistant-send" type="submit" aria-label="Send message" title="Send message" disabled={!canSend}><ArrowUp size={18} aria-hidden /></Button>}</div>
+            <textarea ref={input} id="assistant-message" rows={1} placeholder={a.status?.configured ? a.status.busy ? 'Write your next message…' : 'Ask anything about your app…' : 'Describe your idea…'} value={a.draft} onChange={event => a.setDraft(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void a.addImages(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} maxLength={maxBytes} readOnly={a.working || a.loading || a.persistence.loading} aria-describedby="assistant-composer-hint" />
+            <div className="assistant-composer-toolbar">
+              <select className="assistant-mode-select" aria-label="Assistant mode" aria-describedby="assistant-mode-description" title={a.mode === 'plan' ? 'Plan · explore without changing your app' : 'Build · make and verify changes'} value={a.mode} disabled={a.working || a.loading || a.status?.busy} onChange={event => a.setMode(event.target.value === 'plan' ? 'plan' : 'build')}><option value="plan">Plan</option><option value="build">Build</option></select>
+              <span id="assistant-mode-description" className="sr-only">{a.mode === 'plan' ? 'Explore and plan. No app changes.' : 'Make changes and verify them.'}</span>
+              <AssistantModelMenu controller={a} />
+              <AssistantAttachments key={a.conversation?.id ?? a.projectId ?? 'new'} controller={a} /><span className="sr-only" id="assistant-composer-hint">Drop or paste images. Enter to send. Shift+Enter for a new line.</span>{a.status?.busy ? <Button className="assistant-send" variant="outline" aria-label="Stop turn" title="Stop turn" disabled={a.working} onClick={() => void a.stop()}><Square size={16} aria-hidden /></Button> : <Button className="assistant-send" type="submit" aria-label="Send message" title="Send message" disabled={!canSend}><ArrowUp size={18} aria-hidden /></Button>}
+            </div>
           </form>
-          <button type="button" className="assistant-preferences-toggle" hidden={!viewport.short} aria-expanded={preferencesOpen} aria-controls="assistant-preferences" onClick={() => setPreferencesOpen(value => !value)}>Model & settings<ChevronRight size={14} aria-hidden /></button>
-          <div id="assistant-preferences" className="assistant-preferences" hidden={viewport.short && !preferencesOpen}>
-          {a.status?.connections && <div className="assistant-model-picker"><select aria-label="Chat model" value={`${a.status.providerId}:${a.status.model}`} disabled={a.working || a.status.busy || a.status.signIn?.state === 'waiting'} onChange={event => { const [provider, ...model] = event.target.value.split(':'); void a.selectModel(provider!, model.join(':')); }}>
-            {a.status.connections.filter(connection => connection.configured || connection.id === a.status?.providerId).map(connection => <optgroup key={connection.id} label={connection.name}>{connection.models.map(model => <option key={model.id} value={`${connection.id}:${model.id}`} disabled={!connection.configured}>{connection.name} · {model.label}</option>)}</optgroup>)}
-          </select><Button variant="ghost" onClick={() => { onOpenChange(false); onSettings(); }}>Connections</Button></div>}
-          <details className="assistant-disclosure"><summary>Draft storage</summary><label className="assistant-review-check"><input type="checkbox" checked={a.persistence.enabled} disabled={!a.persistence.available || a.persistence.loading || a.working} onChange={event => void a.persistence.configure(event.target.checked)} />Remember drafts {storageLocation}</label><p role="status">{a.persistence.notice}</p><p>Unsent text and attachment references are stored privately {storageLocation}. Turning this off forgets saved drafts for this Dunara account.</p></details>
-          <details className="assistant-disclosure"><summary><span className="assistant-model-dot" data-connected={a.status?.configured || undefined} />{a.status?.model ?? 'Assistant'}<span>Usage & privacy</span></summary><p>Your message, recent context and requested tool results go to {a.status?.provider ?? 'your selected provider'}. Sending may incur charges. Each turn is limited to {a.status?.limits?.tools ?? 40} actions and {Math.ceil((a.status?.limits?.turnMs ?? 600_000) / 60_000)} minutes. Image generation has a separate approval.</p><p>History is saved {storageLocation}. Stop ends the turn; completed changes remain. Messages are never automatically resent.</p></details>
-          </div>
+          {promptBytes > maxBytes * .8 && <small className="assistant-byte-count" role="status">{promptBytes.toLocaleString()} / {maxBytes.toLocaleString()} bytes</small>}
         </footer>
-      </Dialog.Content>
+      </Surface>
     </Dialog.Portal>
   </Dialog.Root>;
+}
+// A non-modal Radix Dialog still loops Tab at its edges. A page sidebar must
+// instead participate in the ordinary document tab order; mobile stays modal.
+function PageSidebar({ onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, onInteractOutside, ...props }: ComponentProps<typeof Dialog.Content>) {
+  const focus = useRef({ onOpenAutoFocus, onCloseAutoFocus });
+  focus.current = { onOpenAutoFocus, onCloseAutoFocus };
+  useLayoutEffect(() => {
+    focus.current.onOpenAutoFocus?.(new Event('openAutoFocus', { cancelable: true }));
+    return () => { focus.current.onCloseAutoFocus?.(new Event('closeAutoFocus', { cancelable: true })); };
+  }, []);
+  // Dismissable-layer events apply only to the modal mobile surface.
+  void onEscapeKeyDown; void onInteractOutside;
+  return <div {...props} role="dialog" aria-label="Assistant" />;
 }
 function ApprovalCard({ review, busy, onAnswer }: { review: AssistantController['approvals'][number]; busy: boolean; onAnswer(approve: boolean): void }) {
   const [reviewed, setReviewed] = useState(false);

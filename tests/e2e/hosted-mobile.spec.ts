@@ -132,12 +132,9 @@ test('chat keeps typing and sending inside the visible viewport', async ({ page 
     await page.screenshot({ path: info.outputPath(`chat-${width}.png`) });
   }
   await page.setViewportSize({ width: 375, height: 460 });
-  await expect(panel.getByRole('button', { name: 'Model & settings' })).toBeVisible();
-  expect((await panel.locator('.assistant-conversation').boundingBox())!.height).toBeGreaterThan(100);
+  await expect(panel.getByLabel('Model and reasoning', { exact: true })).toBeVisible();
+  await expect.poll(async () => (await panel.locator('.assistant-conversation').boundingBox())?.height ?? 0).toBeGreaterThan(100);
   await page.screenshot({ path: info.outputPath('chat-short.png') });
-  await panel.getByRole('button', { name: 'Model & settings' }).click();
-  await expect(panel.getByRole('combobox', { name: 'Chat model' })).toBeVisible();
-  await panel.getByRole('button', { name: 'Model & settings' }).click();
   // A software keyboard may shrink only VisualViewport, leaving innerHeight unchanged.
   await page.setViewportSize({ width: 375, height: 812 });
   await page.evaluate(() => {
@@ -157,6 +154,6 @@ test('chat keeps typing and sending inside the visible viewport', async ({ page 
     window.visualViewport!.dispatchEvent(new Event('resize'));
   });
   await expect(panel).not.toHaveAttribute('data-short-viewport');
-  await expect(panel.getByRole('combobox', { name: 'Chat model' })).toBeVisible();
+  await expect(panel.getByLabel('Model and reasoning', { exact: true })).toBeVisible();
   await expect(input).toHaveValue('');
 });
