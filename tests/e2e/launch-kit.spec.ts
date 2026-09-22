@@ -123,7 +123,9 @@ test('saved kits use readable file groups, lazy durable previews and keyboard-ac
     await card.evaluate(element => element.scrollIntoView({ block: 'start' }));
     await expect.poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth))).toBe(0);
     const download = card.getByRole('button', { name: 'Download Readiness checklist', exact: true });
-    await download.focus(); await expect(download).toBeInViewport();
+    await card.getByRole('button', { name: 'Download Credits & attribution', exact: true }).focus();
+    await page.keyboard.press('Tab');
+    await expect(download).toBeFocused(); await expect(download).toBeInViewport();
     await card.evaluate(element => element.scrollIntoView({ block: 'start' }));
     await page.screenshot({ path: `.builder/studio-enhancements-review/saved-kits/saved-${width}.png` });
   }
