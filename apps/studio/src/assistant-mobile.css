@@ -1,0 +1,11 @@
+.assistant-preferences-toggle { display: flex; align-items: center; justify-content: space-between; width: 100%; padding: 8px 4px; border: 0; background: transparent; color: var(--muted); font-size: 12px; }
+.assistant-preferences-toggle[aria-expanded=true] svg { transform: rotate(90deg); }
+.assistant-panel[data-short-viewport] .assistant-header { padding-block: 6px; }
+.assistant-panel[data-short-viewport] .assistant-composer { padding-top: 4px; }
+.assistant-panel[data-short-viewport] .assistant-composer textarea { min-height: 48px; max-height: 64px; }
+.assistant-panel[data-short-viewport] .assistant-mode-bar > span { display: none; }
+.assistant-panel[data-short-viewport] .assistant-mode-switch button { min-height: 36px; padding-block: 4px; }
+.assistant-panel[data-short-viewport] .assistant-setup-menu > summary { min-height: 32px; padding-block: 6px; }
+.assistant-panel[data-short-viewport] .assistant-history { min-height: 0; flex-shrink: 1; overflow-y: auto; }
+.assistant-panel[data-short-viewport] .assistant-preferences { max-height: 110px; overflow-y: auto; overscroll-behavior: contain; }
+.assistant-panel[data-short-viewport] .assistant-empty { padding: 8px 0; }
