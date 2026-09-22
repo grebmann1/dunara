@@ -104,12 +104,12 @@ test('artwork types, exact prompts and generation drafts survive workspace and p
   await page.getByRole('button', { name: 'Generate an icon', exact: true }).click();
   await page.getByRole('form', { name: 'Icon generation' }).getByLabel('Image prompt').fill('My separate icon idea.');
   await closeMediaDrawer(page); await page.getByRole('button', { name: 'Assets', exact: true }).click();
-  if (!(await form.isVisible())) await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await closeMediaDrawer(page); await page.getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(form.getByLabel('Image prompt', { exact: true })).toHaveValue('Layered botanical silhouettes at dusk.');
   await closeMediaDrawer(page); await selectProject(page, other.id); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Assets', exact: true }).click(); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(form.getByLabel('Image prompt', { exact: true })).toHaveValue('');
   await closeMediaDrawer(page); await selectProject(page, projectId); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Assets', exact: true }).click(); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Generate', exact: true }).click();
-  if (!(await form.isVisible())) await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(form).toBeVisible();
   await expect(form.getByLabel('Image prompt', { exact: true })).toHaveValue('Layered botanical silhouettes at dusk.');
   await expect(form.getByRole('button', { name: 'Paper cut', exact: true })).toHaveAttribute('aria-pressed', 'true');
   await form.getByRole('button', { name: 'Stage request for review' }).click();
