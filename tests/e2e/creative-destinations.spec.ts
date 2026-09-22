@@ -206,11 +206,14 @@ test('a populated gallery keeps its toolbar pinned and isolates icon selection f
     await page.setViewportSize(viewport); await closeMediaDrawer(page);
     const toolbar = page.locator('.library-toolbar'), generator = page.getByRole('button', { name: 'Generate', exact: true });
     await expect(toolbar).toBeVisible();
+    await expect(page.locator('.library-scroll img')).toHaveCount(18);
+    await expect.poll(() => page.locator('.library-scroll img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
     const top = (await toolbar.boundingBox())!.y;
     await page.getByRole('button', { name: 'Artwork 18', exact: true }).scrollIntoViewIfNeeded();
     expect((await toolbar.boundingBox())!.y).toBe(top);
     await expect(generator).toBeInViewport();
     expect(await page.evaluate(() => document.documentElement.scrollHeight - innerHeight)).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: testInfo.outputPath(`gallery-scrolled-${viewport.width}.png`) });
     await page.getByRole('searchbox', { name: 'Search assets' }).fill('Artwork 01');
     await expect(page.locator('.asset-tile')).toHaveCount(1);
     await page.getByRole('button', { name: 'Artwork 01', exact: true }).click();

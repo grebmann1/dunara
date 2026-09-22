@@ -49,7 +49,7 @@ test('real starter: inspect, right-click clipboard, revision-edit via MCP and Fa
     const panel = page.getByRole('region', { name: 'Selected preview context' });
     const phone = await page.locator('iframe').elementHandle();
     for (const width of [320, 375, 430, 768, 1280, 1440]) for (const browserZoom of [1, 2]) {
-      await page.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: width === 375 ? 812 : width === 430 ? 932 : 900 });
       await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, browserZoom);
       await page.getByRole('button', { name: 'Fit', exact: true }).click();
       const dimensions = () => page.getByRole('region', { name: 'Phone preview canvas' }).evaluate(node => ({ width: node.clientWidth, height: node.clientHeight, scrollWidth: node.scrollWidth, scrollHeight: node.scrollHeight }));
@@ -62,7 +62,7 @@ test('real starter: inspect, right-click clipboard, revision-edit via MCP and Fa
       await panel.getByLabel('Copyable context').scrollIntoViewIfNeeded();
       await expect(panel.getByLabel('Copyable context')).toBeInViewport();
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
-      if (width === 375 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`context-side-panel-${width}-${browserZoom}.png`), fullPage: true });
+      if (width === 375 || width === 430 || width === 1440) await page.screenshot({ path: testInfo.outputPath(`context-side-panel-${width}-${browserZoom}.png`), fullPage: true });
       await panel.getByLabel('Copyable context').focus(); await page.keyboard.press('Escape');
       await expect(panel).toHaveCount(0); await expect(contextToggle).toBeFocused();
       await expect(inspect).toHaveAttribute('aria-pressed', 'true');
