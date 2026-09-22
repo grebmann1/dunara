@@ -51,6 +51,9 @@ test('project navigation filters names and slugs, keeps focus and selects only o
 test('sidebar width supports dragging, keyboard resizing and reset without losing the selected app', async ({ page }) => {
   for (let index = 0; index < 20; index++) await engine.projects.create({ name: `Project ${index} with a longer name`, slug: `project-${index}` });
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(studio.launchUrl);
+  // Resizing is available during initial reconciliation; measure the complete fixture.
+  await expect(page.locator('.connection')).toHaveClass(/online/);
+  await expect(page.locator('.sidebar-project-list').getByRole('button')).toHaveCount(23);
   const handle = page.getByRole('separator', { name: 'Sidebar width' });
   const sidebar = page.locator('#studio-sidebar');
   await expect(handle).toHaveAttribute('aria-valuenow', '248');
@@ -62,7 +65,7 @@ test('sidebar width supports dragging, keyboard resizing and reset without losin
   expect((await sidebar.boundingBox())!.width).toBe(330);
   await handle.dblclick(); await expect(handle).toHaveAttribute('aria-valuenow', '248');
   const list = page.locator('.sidebar-project-list');
-  expect(await list.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
+  await expect.poll(() => list.evaluate(node => node.scrollHeight > node.clientHeight)).toBe(true);
   // Resizing saves preferences asynchronously and temporarily disables project selection.
   await expect(list.getByRole('button').last()).toBeEnabled();
   await list.getByRole('button').first().focus();
