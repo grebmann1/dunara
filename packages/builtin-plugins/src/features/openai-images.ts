@@ -24,8 +24,8 @@ export function boundedImageFetch(fetcher: typeof fetch): typeof fetch {
     return new Response(Buffer.concat(chunks), { status: response.status, statusText: response.statusText, headers: response.headers });
   };
 }
-export function openAIImages(apiKey: string): ImageProvider {
-  const client = new OpenAI({ apiKey, baseURL: 'https://api.openai.com/v1', organization: null, project: null, maxRetries: 0, timeout: 180_000, fetch: boundedImageFetch(fetch) });
+export function openAIImages(apiKey: string, baseURL = 'https://api.openai.com/v1'): ImageProvider {
+  const client = new OpenAI({ apiKey, baseURL, organization: null, project: null, maxRetries: 0, timeout: 180_000, fetch: boundedImageFetch(fetch) });
   return {
     async run(request, references, signal) {
       try {
@@ -65,6 +65,7 @@ export function openAIImages(apiKey: string): ImageProvider {
         });
       } catch (error) {
         if (error instanceof ProviderFailure) throw error;
+        if (baseURL !== 'https://api.openai.com/v1' && error instanceof OpenAI.APIError && error.error && typeof error.error === 'object' && 'type' in error.error && error.error.type === 'dunara_ai' && 'message' in error.error && typeof error.error.message === 'string') throw new ProviderFailure(error.error.message.slice(0,300));
         if (error instanceof OpenAI.APIError && error.status === 429) throw new ProviderFailure('Provider rate or quota limit reached. No automatic retry was made.');
         if (error instanceof OpenAI.APIError && error.status === 401) throw new ProviderFailure('Provider credentials were rejected.');
         throw new ProviderFailure('Provider request failed, was rejected, or timed out. No automatic retry was made; charges may have occurred.');

@@ -15,6 +15,7 @@ import { taskTool } from './tasks.js';
 import { setupRequestSchema } from './contracts.js';
 import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
+import { ManagedAiUnavailable, type ManagedAiConnection } from '../../core/src/managed-ai.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -29,6 +30,8 @@ type ActiveRun = {
 };
 type ServiceOptions = {
   home: string;
+  managedAi?: ManagedAiConnection;
+  chatgptLogin?: 'browser' | 'device_code';
   startupKey?: string;
   secretProtection?: SecretProtection;
   createHarness?: () => RunHarness;
@@ -96,13 +99,16 @@ export class AssistantService {
     this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict());
     const selection = this.modelSettings.load();
     this.model = selection?.model ?? this.model; this.provider = selection?.provider ?? 'openai';
-    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle());
+    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle(), undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
     this.legacyOpenAIKey = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
     this.source = saved ? 'saved' : this.legacyOpenAIKey ? 'environment' : 'none';
+    if (!selection && !saved && !locked && options.managedAi && !this.connections.status(this.legacyCredential()).connections.some(item => item.id !== 'managed' && (item.configured || item.locked))) {
+      this.provider = 'managed'; this.model = options.managedAi.models[0]?.id ?? this.model;
+    }
   }
-  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: this.provider === 'managed' ? this.options.managedAi?.label ?? 'Included credits' : providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), credits: this.options.managedAi?.balance?.(), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
   /** Compatibility fallback for OpenAI only; connection selection remains independent. */
   async useOpenAI(shared: MediaJobs) {
     this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.legacyOpenAIKey = '';
@@ -348,8 +354,8 @@ export class AssistantService {
         },
       }, run.controller.signal), run.controller.signal);
       this.guard(run); this.text(run, '', true); run.turn.state = 'completed';
-    } catch {
-      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
+    } catch (error) {
+      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
     } finally {
       clearTimeout(run.timer);
       run.controller.abort();

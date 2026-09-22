@@ -40,3 +40,6 @@
 }
 
 .assistant-provider-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 400; color: var(--muted); }
+.ai-credit-balance { display: grid; gap: 4px; padding: 12px 14px; margin: 10px 0; border: 1px solid var(--border); border-radius: 10px; font-size: 12px; overflow-wrap: anywhere; }
+.ai-credit-balance > span, .ai-credit-balance > small { color: var(--muted); }
+.ai-credit-balance p { margin: 4px 0 0; }

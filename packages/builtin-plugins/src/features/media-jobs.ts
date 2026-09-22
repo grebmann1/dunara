@@ -63,7 +63,7 @@ export class MediaJobs {
     }
     return references;
   }
-  private result(job: MediaJob) { return { ...structuredClone(job), guidance: jobGuidance(job) }; }
+  private result(job: MediaJob) { return { ...structuredClone(job), guidance: jobGuidance(job), creditEstimate: this.#settings.estimate(job.request) }; }
   async list(projectId: string) {
     return this.queue.run(async () => { await this.load(); await this.assets.projects.get(projectId); return { capabilities: this.capabilities(), jobs: this.jobs.filter(j => j.projectId === projectId).map(j => this.result(j)) }; });
   }

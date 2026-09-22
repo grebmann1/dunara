@@ -2,11 +2,13 @@ import type { ModelRuntime as Runtime } from '@earendil-works/pi-coding-agent';
 import type { HarnessInput } from './contracts.js';
 import { providerDefinition } from './provider-contracts.js';
 import type { PiFixture } from './pi.js';
+import { managedAiEndpoint } from '../../core/src/managed-ai.js';
 
 /** Each worker receives one frozen credential, with no ambient credentials or refresh tokens. */
 export async function createAssistantRuntime(input: Pick<HarnessInput, 'provider' | 'model' | 'apiKey' | 'baseUrl'>, fixture?: PiFixture) {
   const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
   const definition = providerDefinition(input.provider ?? 'openai');
+  if (definition.kind === 'managed' && !input.baseUrl) throw new Error('Managed AI transport is unavailable');
   const runtime: Runtime = await ModelRuntime.create({ credentials: {
     async read(id) {
       // Codex has OAuth-only auth: supplying a runtime API key cannot authenticate it.
@@ -27,7 +29,8 @@ export async function createAssistantRuntime(input: Pick<HarnessInput, 'provider
   if (!model || !model.input.includes('image')) throw new Error('Selected assistant model is unavailable');
   if (input.baseUrl && !fixture) {
     const url = new URL(input.baseUrl);
-    if (definition.kind !== 'api_key' || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('Invalid provider endpoint');
+    if (definition.kind === 'managed') managedAiEndpoint(input.baseUrl);
+    else if (definition.kind !== 'api_key' || url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('Invalid provider endpoint');
     model = { ...model, baseUrl: url.href.replace(/\/$/, '') };
   }
   if (provider !== 'openai-codex') await runtime.setRuntimeApiKey(provider, input.apiKey);

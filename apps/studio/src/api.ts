@@ -2,7 +2,7 @@ import type { Engine } from '../../../packages/core/src/engine';
 import type { Diagnostics } from '../../../packages/core/src/diagnostics';
 import type { AssistantService } from '../../../packages/assistant/src/service';
 export type AssistantPacket = ReturnType<AssistantService['events']>;
-export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'epoch' | 'sourceChanges' | 'accountContext' | 'provider' | 'providerId' | 'connections' | 'connectionRevision' | 'rememberAvailable' | 'signIn' | 'model' | 'models' | 'limits' | 'source' | 'environmentAvailable'>>;
+export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'credits' | 'epoch' | 'sourceChanges' | 'accountContext' | 'provider' | 'providerId' | 'connections' | 'connectionRevision' | 'rememberAvailable' | 'signIn' | 'model' | 'models' | 'limits' | 'source' | 'environmentAvailable'>>;
 export type AssistantConversation = Awaited<ReturnType<AssistantService['conversation']>>;
 export type AssistantConversationList = Awaited<ReturnType<AssistantService['conversations']>>;
 export type StudioSession = Awaited<ReturnType<Engine['studio']['snapshot']>>;

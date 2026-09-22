@@ -5,6 +5,8 @@ import type { HomeStatePersistence } from '../../core/src/durable-state.js';
 export type { HomeStatePersistence, DurableStateRecord } from '../../core/src/durable-state.js';
 export type { ProjectWorkspacePersistence, ProjectWorkspaceSnapshot, ProjectWorkspaceHead, DurableProject } from '../../core/src/durable-projects.js';
 export { Engine, Projects };
+export type { ManagedAiConnection, AiCreditBalance } from '../../core/src/managed-ai.js';
+export type { ManagedImageConnection } from '../../builtin-plugins/src/features/provider-settings.js';
 export { Diagnostics } from '../../core/src/diagnostics.js';
 export type { PreviewDriver } from '../../core/src/preview-driver.js';
 export type { AppEnvironment } from '../../core/src/runtime-environment.js';

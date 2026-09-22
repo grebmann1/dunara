@@ -4,6 +4,7 @@ import type { AuthInteraction, OAuthAuth, OAuthCredential } from '@earendil-work
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { BuilderError } from '../../core/src/contracts.js';
 import { EncryptedSettingsStore, credentialKeySchema, type SecretProtection } from '../../core/src/credentials.js';
+import { managedAiEndpoint, type ManagedAiConnection } from '../../core/src/managed-ai.js';
 
 import { assistantProviderSchema, assistantProviders, providerDefinition, type AssistantProvider } from './provider-contracts.js';
 export { assistantProviderSchema, providerDefinition, type AssistantProvider } from './provider-contracts.js';
@@ -28,8 +29,10 @@ export class AssistantConnections {
   private flow?: Flow;
   private closed = false;
   private revision = randomUUID();
-  constructor(home: string, private protection: SecretProtection | undefined, private changed: () => void, private idle: () => void, private oauthOverride?: (provider: AssistantProvider) => OAuthAuth) {
+  constructor(home: string, private protection: SecretProtection | undefined, private changed: () => void, private idle: () => void, private oauthOverride?: (provider: AssistantProvider) => OAuthAuth, private host: { managed?: ManagedAiConnection; chatgptLogin?: 'browser' | 'device_code' } = {}) {
+    if (host.managed) managedAiEndpoint(host.managed.baseUrl);
     for (const { id } of assistantProviders) {
+      if (id === 'managed') continue;
       const store = new EncryptedSettingsStore(home, `assistant-connection-${id}`, savedSchema, protection); this.stores.set(id, store);
       try { const value = store.load(); if (value) { this.records.set(id, value); this.sources.set(id, 'saved'); } }
       catch { this.locked.add(id); }
@@ -40,15 +43,18 @@ export class AssistantConnections {
     this.runtime = await ModelRuntime.create({ credentials: { async read() {}, async list() { return []; }, async modify() { throw new Error('Credential persistence disabled'); }, async delete() {} }, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
   }
   models(id: AssistantProvider): AssistantModel[] {
+    if (id === 'managed') return this.host.managed?.models ?? [];
     return this.runtime?.getModels(providerDefinition(id).runtime).filter(model => model.input.includes('image') && !/chat-latest|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name })) ?? (id === 'openai' ? [{ id: 'gpt-6-astra', label: 'GPT-6 Astra' }] : []);
   }
   status(legacy: { key: string; source: string }) {
-    return { connectionRevision: this.revision, rememberAvailable: !!this.protection, signIn: this.flow?.view ?? null, connections: assistantProviders.map(item => {
+    return { connectionRevision: this.revision, rememberAvailable: !!this.protection, signIn: this.flow?.view ?? null, connections: assistantProviders.filter(item => item.id !== 'managed' || this.host.managed).map(item => {
+      if (item.id === 'managed') return { id: item.id, name: this.host.managed!.label, kind: item.kind, inherited: false, configured: true, source: 'managed', locked: false, baseUrl: '', models: this.models(item.id) };
       const record = this.records.get(item.id), useLegacy = item.id === 'openai' && !record && !this.locked.has(item.id);
       return { id: item.id, name: item.name, kind: item.kind, inherited: useLegacy && !!legacy.key, configured: !!record || useLegacy && !!legacy.key, source: record ? this.sources.get(item.id)! : useLegacy ? legacy.source : 'none', locked: this.locked.has(item.id), baseUrl: record?.baseUrl ?? item.baseUrl, models: this.models(item.id) };
     }) };
   }
   credential(id: AssistantProvider, legacy: { key: string; source: string }): { key: string; source: string; baseUrl?: string } {
+    if (id === 'managed') return { key: this.host.managed?.apiKey ?? '', source: 'managed', baseUrl: this.host.managed?.baseUrl };
     const record = this.records.get(id);
     return record ? { key: record.credential.type === 'oauth' ? record.credential.access : record.credential.key, source: this.sources.get(id)!, baseUrl: record.baseUrl } : id === 'openai' && !this.locked.has(id) ? legacy : { key: '', source: 'none' };
   }
@@ -68,6 +74,7 @@ export class AssistantConnections {
       z.object({ action: z.literal('disconnect'), provider: assistantProviderSchema, expectedRevision: z.uuid() }).strict(),
     ]).parse(input);
     this.checkRevision(value.expectedRevision);
+    if (value.provider === 'managed') throw failure('Included credits are managed by this host. Select a personal connection to change funding.');
     if (this.pending()) throw failure('Finish or cancel sign-in before changing connections.');
     if (value.action === 'disconnect') { this.stores.get(value.provider)!.remove(); this.records.delete(value.provider); this.sources.delete(value.provider); this.locked.delete(value.provider); this.publish(); }
     else {
@@ -99,7 +106,11 @@ export class AssistantConnections {
         }
       },
       prompt: async prompt => {
-        if (prompt.type === 'select') { if (prompt.options.some(option => option.id === 'browser')) return 'browser'; throw failure('Unsupported sign-in step.'); }
+        if (prompt.type === 'select') {
+          const method = value.provider === 'chatgpt' ? this.host.chatgptLogin ?? 'browser' : 'browser';
+          if (prompt.options.some(option => option.id === method)) return method;
+          throw failure('This sign-in method is unavailable. Use another connection.');
+        }
         const signal = prompt.signal ? AbortSignal.any([controller.signal, prompt.signal]) : controller.signal; signal.throwIfAborted();
         return new Promise<string>((resolve, reject) => {
           const id = randomUUID(); flow.view = { ...flow.view, prompt: { id, kind: prompt.type } };
@@ -115,7 +126,7 @@ export class AssistantConnections {
       flow.view = { id: flow.view.id, provider: value.provider, state: 'connected' }; this.changed();
     }).catch(() => {
       if (this.flow !== flow || controller.signal.aborted || this.closed) return;
-      flow.view = { id: flow.view.id, provider: value.provider, state: 'failed', message: 'Sign-in did not complete. Try again or use an API key.' }; this.changed();
+      flow.view = { id: flow.view.id, provider: value.provider, state: 'failed', message: value.provider === 'chatgpt' && this.host.chatgptLogin === 'device_code' ? 'Sign-in did not complete. Enable device code login in ChatGPT security settings, then retry, or use another connection.' : 'Sign-in did not complete. Try again or use an API key.' }; this.changed();
     }).finally(() => { clearTimeout(flow.timer); flow.answer = undefined; });
     return this.flow.view;
   }
@@ -139,6 +150,6 @@ export class AssistantConnections {
       this.save(id, { ...record, credential: oauthCredential.parse(credential) }, this.sources.get(id) === 'saved');
     } catch { throw failure('Your subscription session expired. Sign in again in AI connections.'); }
   }
-  secrets() { return [...this.records.values()].flatMap(record => record.credential.type === 'api_key' ? [record.credential.key] : [record.credential.access, record.credential.refresh]).filter(Boolean); }
+  secrets() { return [this.host.managed?.apiKey ?? '', ...[...this.records.values()].flatMap(record => record.credential.type === 'api_key' ? [record.credential.key] : [record.credential.access, record.credential.refresh])].filter(Boolean); }
   close() { this.cancel(); this.closed = true; this.records.clear(); }
 }
