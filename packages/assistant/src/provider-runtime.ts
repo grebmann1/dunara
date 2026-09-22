@@ -23,7 +23,7 @@ export async function createAssistantRuntime(input: Pick<HarnessInput, 'provider
     const url = new URL(fixture.baseUrl);
     if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.username || url.password) throw new Error('Fixture provider must be local');
     provider = 'builder-fixture'; modelId = fixture.model;
-    runtime.registerProvider(provider, { api: 'openai-responses', baseUrl: fixture.baseUrl, models: [{ id: modelId, name: 'Offline fixture', reasoning: false, input: ['text', 'image'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
+    runtime.registerProvider(provider, { api: 'openai-responses', baseUrl: fixture.baseUrl, models: [{ id: modelId, name: 'Offline fixture', reasoning: fixture.reasoning ?? false, input: ['text', 'image'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
   }
   let model = runtime.getModel(provider, modelId);
   if (!model || !model.input.includes('image')) throw new Error('Selected assistant model is unavailable');

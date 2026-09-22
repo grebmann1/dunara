@@ -7,6 +7,7 @@ import { EncryptedSettingsStore, credentialKeySchema, type SecretProtection } fr
 import { managedAiEndpoint, type ManagedAiConnection } from '../../core/src/managed-ai.js';
 
 import { assistantProviderSchema, assistantProviders, providerDefinition, type AssistantProvider } from './provider-contracts.js';
+import type { ReasoningEffort } from './provider-contracts.js';
 export { assistantProviderSchema, providerDefinition, type AssistantProvider } from './provider-contracts.js';
 const token = z.string().min(1).max(16384).regex(/^[\x21-\x7e]+$/);
 const oauthCredential = z.object({ type: z.literal('oauth'), access: token, refresh: z.string().max(16384), expires: z.number().finite() }).catchall(z.unknown());
@@ -14,7 +15,7 @@ const credentialSchema = z.discriminatedUnion('type', [z.object({ type: z.litera
 const endpointSchema = z.string().max(2048).url().refine(value => { const url = new URL(value); return url.protocol === 'https:' && !url.username && !url.password && !url.search && !url.hash; }, 'Use an HTTPS endpoint without credentials, query or fragment');
 const savedSchema = z.object({ credential: credentialSchema, baseUrl: endpointSchema.optional() }).strict();
 type Saved = z.infer<typeof savedSchema>;
-export type AssistantModel = { id: string; label: string };
+export type AssistantModel = { id: string; label: string; reasoningLevels?: ReasoningEffort[] };
 export type SignIn = { id: string; provider: AssistantProvider; state: 'waiting' | 'connected' | 'failed' | 'cancelled'; url?: string; code?: string; prompt?: { id: string; kind: 'manual_code' | 'text' | 'secret' }; message?: string };
 type Flow = { view: SignIn; controller: AbortController; timer: ReturnType<typeof setTimeout>; answer?: (value: string) => void; remember: boolean };
 const failure = (message: string) => new BuilderError('INVALID_INPUT', message);
@@ -26,6 +27,7 @@ export class AssistantConnections {
   private locked = new Set<AssistantProvider>();
   private stores = new Map<AssistantProvider, EncryptedSettingsStore<Saved>>();
   private runtime?: ModelRuntime;
+  private modelChoices = new Map<AssistantProvider, AssistantModel[]>();
   private flow?: Flow;
   private closed = false;
   private revision = randomUUID();
@@ -40,11 +42,13 @@ export class AssistantConnections {
   }
   async initialize() {
     const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+    const { getSupportedThinkingLevels } = await import('@earendil-works/pi-ai');
     this.runtime = await ModelRuntime.create({ credentials: { async read() {}, async list() { return []; }, async modify() { throw new Error('Credential persistence disabled'); }, async delete() {} }, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
+    for (const provider of assistantProviders) this.modelChoices.set(provider.id, this.runtime.getModels(provider.runtime).filter(model => model.input.includes('image') && !/chat-latest|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name, reasoningLevels: model.reasoning ? getSupportedThinkingLevels(model) : [] })));
   }
   models(id: AssistantProvider): AssistantModel[] {
-    if (id === 'managed') return this.host.managed?.models ?? [];
-    return this.runtime?.getModels(providerDefinition(id).runtime).filter(model => model.input.includes('image') && !/chat-latest|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name })) ?? (id === 'openai' ? [{ id: 'gpt-6-astra', label: 'GPT-6 Astra' }] : []);
+    if (id === 'managed') return (this.host.managed?.models ?? []).map(model => ({ ...model, reasoningLevels: this.modelChoices.get(id)?.find(item => item.id === model.id)?.reasoningLevels }));
+    return this.modelChoices.get(id) ?? (id === 'openai' ? [{ id: 'gpt-6-astra', label: 'GPT-6 Astra' }] : []);
   }
   status(legacy: { key: string; source: string }) {
     return { connectionRevision: this.revision, rememberAvailable: !!this.protection, signIn: this.flow?.view ?? null, connections: assistantProviders.filter(item => item.id !== 'managed' || this.host.managed).map(item => {

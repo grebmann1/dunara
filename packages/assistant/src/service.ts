@@ -1,4 +1,5 @@
 import { AssistantConnections, assistantProviderSchema, providerDefinition, type AssistantProvider } from './connections.js';
+import { reasoningPreferenceSchema, type ReasoningPreference } from './provider-contracts.js';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { BuilderError } from '../../core/src/contracts.js';
@@ -67,7 +68,8 @@ export class AssistantService {
   private provider: AssistantProvider = 'openai';
   private connections: AssistantConnections;
   private get models() { return this.connections.models(this.provider); }
-  private modelSettings: PrivateSettingsStore<{ model: string; provider?: AssistantProvider }>;
+  private reasoningEffort: ReasoningPreference = 'auto';
+  private modelSettings: PrivateSettingsStore<{ model: string; provider?: AssistantProvider; reasoningEffort?: ReasoningPreference }>;
   private storePromise?: Promise<AssistantStore>;
   private active?: ActiveRun;
   private starting = false;
@@ -96,9 +98,10 @@ export class AssistantService {
   constructor(private options: ServiceOptions) {
     this.limits = { ...ASSISTANT_LIMITS, ...options.limits }; this.harnessAvailable = !!options.createHarness || piAvailable();
     this.credentials = sharedOpenAIStore(options.home, options.secretProtection);
-    this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict());
+    this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional(), reasoningEffort: reasoningPreferenceSchema.optional() }).strict());
     const selection = this.modelSettings.load();
     this.model = selection?.model ?? this.model; this.provider = selection?.provider ?? 'openai';
+    this.reasoningEffort = selection?.reasoningEffort ?? 'auto';
     this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle(), undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
@@ -108,7 +111,7 @@ export class AssistantService {
       this.provider = 'managed'; this.model = options.managedAi.models[0]?.id ?? this.model;
     }
   }
-  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: this.provider === 'managed' ? this.options.managedAi?.label ?? 'Included credits' : providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), credits: this.options.managedAi?.balance?.(), model: this.model, models: this.models, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: this.provider === 'managed' ? this.options.managedAi?.label ?? 'Included credits' : providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), credits: this.options.managedAi?.balance?.(), model: this.model, models: this.models, reasoningEffort: this.reasoningEffort, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
   /** Compatibility fallback for OpenAI only; connection selection remains independent. */
   async useOpenAI(shared: MediaJobs) {
     this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.legacyOpenAIKey = '';
@@ -119,12 +122,20 @@ export class AssistantService {
   }
   configure(input: unknown) {
     this.idle();
-    const value = z.discriminatedUnion('action', [z.object({ action: z.literal('model'), model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict(), z.object({ action: z.literal('connect'), key: credentialKeySchema, remember: z.boolean().default(false) }).strict(), z.object({ action: z.literal('disconnect') }).strict(), z.object({ action: z.literal('environment') }).strict()]).parse(input);
+    const value = z.discriminatedUnion('action', [z.object({ action: z.literal('model'), model: z.string().min(1).max(100), provider: assistantProviderSchema.optional() }).strict(), z.object({ action: z.literal('reasoning'), reasoningEffort: reasoningPreferenceSchema }).strict(), z.object({ action: z.literal('connect'), key: credentialKeySchema, remember: z.boolean().default(false) }).strict(), z.object({ action: z.literal('disconnect') }).strict(), z.object({ action: z.literal('environment') }).strict()]).parse(input);
+    if (value.action === 'reasoning') {
+      if (this.connections.pending()) throw new BuilderError('INVALID_INPUT', 'Finish or cancel sign-in before changing reasoning.');
+      this.validateReasoning(value.reasoningEffort);
+      this.modelSettings.save({ model: this.model, provider: this.provider, reasoningEffort: value.reasoningEffort });
+      this.reasoningEffort = value.reasoningEffort; this.changed(); return this.status();
+    }
     if (value.action === 'model') {
       if (this.connections.pending()) throw new BuilderError('INVALID_INPUT', 'Finish or cancel sign-in before switching providers.');
       const provider = value.provider ?? this.provider;
       if (!this.connections.models(provider).some(model => model.id === value.model)) throw new BuilderError('INVALID_INPUT', 'Choose a supported assistant model.');
-      this.modelSettings.save({ model: value.model, provider }); this.model = value.model; this.provider = provider; this.changed(); return this.status();
+      const levels = this.connections.models(provider).find(model => model.id === value.model)?.reasoningLevels ?? [];
+      const reasoningEffort = this.reasoningEffort !== 'auto' && levels.includes(this.reasoningEffort) ? this.reasoningEffort : 'auto';
+      this.modelSettings.save({ model: value.model, provider, reasoningEffort }); this.model = value.model; this.provider = provider; this.reasoningEffort = reasoningEffort; this.changed(); return this.status();
     }
     if (this.provider !== 'openai') throw new BuilderError('INVALID_INPUT', 'Manage this provider in Settings → AI connections. Legacy key actions apply only to OpenAI.');
     if (this.shared) throw new BuilderError('INVALID_INPUT', 'Manage Assistant providers in AI connections or the OpenAI image key in Image generation.');
@@ -133,6 +144,9 @@ export class AssistantService {
     this.legacyOpenAIKey = value.action === 'connect' ? value.key : value.action === 'environment' ? this.options.startupKey! : '';
     this.source = value.action === 'connect' ? value.remember ? 'saved' : 'session' : value.action === 'environment' ? 'environment' : 'none';
     this.changed(); return this.status();
+  }
+  private validateReasoning(value: ReasoningPreference) {
+    if (value !== 'auto' && !this.models.find(model => model.id === this.model)?.reasoningLevels?.includes(value)) throw new BuilderError('INVALID_INPUT', 'Choose a supported reasoning level for this model.');
   }
   connectionUpdate(input: unknown) { this.connections.update(input); return this.status(); }
   async signIn(input: unknown) { await this.connections.begin(input); return this.status(); }
@@ -213,6 +227,7 @@ export class AssistantService {
     this.idle();
     if (!this.options.createGateway || !this.key) throw new BuilderError('INVALID_INPUT', 'Configure the available assistant before sending a message');
     if (!this.models.some(model => model.id === this.model)) throw new BuilderError('INVALID_INPUT', 'The saved assistant model is unavailable. Choose a supported model in Settings.');
+    this.validateReasoning(this.reasoningEffort);
     if (this.connections.pending()) throw new BuilderError('INVALID_INPUT', 'Finish or cancel sign-in before sending a message.');
     const value = startTurnSchema.parse(input);
     if (Buffer.byteLength(value.prompt) > this.limits.promptBytes) throw new BuilderError('LIMIT_EXCEEDED', 'Assistant prompt is too large');
@@ -232,6 +247,7 @@ export class AssistantService {
       if (this.closed) throw new BuilderError('PROCESS_FAILED', 'Assistant is closed');
       if (accountChanged()) throw new BuilderError('REVISION_CONFLICT', 'Account changed before the turn started. Review your draft before sending again.');
       const turn: StoredTurn = { id: value.runId, epoch: this.epoch, state: 'starting', model: this.model, provider: this.provider, mode: value.mode, prompt: this.redact(value.prompt), response: '', startedAt: new Date().toISOString(), tools: [] };
+      if (this.reasoningEffort !== 'auto') turn.reasoningEffort = this.reasoningEffort;
       turn.projectId = conversation.projectId;
       if (attachments?.inspector) turn.inspector = { projectId: attachments.inspector.projectId, viewId: attachments.inspector.viewId, route: attachments.inspector.selection.pathname, timestamp: attachments.inspector.selection.timestamp };
       conversation.turns.push(turn); conversation.updatedAt = turn.startedAt;
@@ -306,7 +322,7 @@ export class AssistantService {
       run.turn.state = 'running'; this.publish(run, { type: 'state', state: 'running' });
       const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks, setupRequests: turn.setupRequests })));
       const boundedContext = (Buffer.byteLength(context) <= 58 * 1024 ? context : '[Earlier conversation omitted because it exceeds the context limit. Reinspect the current project. Old approvals never carry forward.]\nLast task checklist (historical context, not verification): ' + JSON.stringify(run.conversation.turns.at(-2)?.tasks ?? [])) + '\nCurrent image attachment metadata (untrusted data): ' + JSON.stringify(resolved.records);
-      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
+      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, reasoningEffort: run.turn.reasoningEffort, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
         imageAccepted: () => { this.guard(run); run.turn.imageContentAccepted = true; for (const image of run.turn.images ?? []) if (image.status === 'requested') image.status = 'adapter-accepted'; this.publish(run, { type: 'state', state: 'running' }); },
         text: text => { this.text(run, text); },
         tool: async (name, args, signal) => {

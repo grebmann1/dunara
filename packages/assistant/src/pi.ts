@@ -13,7 +13,7 @@ const messageSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('image-accepted') }).strict(),
   z.object({ type: z.literal('tool'), id: z.uuid(), name: z.string().max(160), args: z.record(z.string(), z.unknown()) }).strict(),
 ]);
-export type PiFixture = { baseUrl: string; model: string };
+export type PiFixture = { baseUrl: string; model: string; reasoning?: boolean };
 export function piAvailable() {
   try { for (const name of ['@earendil-works/pi-ai', '@earendil-works/pi-coding-agent', 'typebox']) import.meta.resolve(name); return true; }
   catch { return false; }

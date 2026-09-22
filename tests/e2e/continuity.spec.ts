@@ -31,20 +31,26 @@ test.afterEach(async ({ page }) => { if (process.env.VISUAL) return; await page.
 for (const [width, height] of [[375, 812], [430, 932]] as const) {
   test(`opted-in drafts survive restart without sending at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height });
-    await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+    await page.goto(studio.launchUrl);
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const remember = page.getByLabel('Remember drafts on this computer');
+    await expect(remember).toBeEnabled();
+    await remember.click();
+    await expect(remember).toBeChecked();
+    await page.getByRole('button', { name: 'Assistant', exact: true }).click();
     const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
     await expect(panel.getByRole('textbox', { name: 'Message assistant' })).toBeEditable();
-    await panel.getByText('Draft storage', { exact: true }).click();
-    const remember = panel.getByLabel('Remember drafts on this computer'); await expect(remember).toBeEnabled(); await remember.check();
-    await panel.getByRole('button', { name: 'Plan mode' }).click();
+    await panel.getByRole('combobox', { name: 'Assistant mode' }).selectOption('plan');
     await panel.getByRole('textbox', { name: 'Message assistant' }).fill('Keep this unsent fixture idea after restart.');
     await expect.poll(async () => JSON.parse(await readFile(path.join(root, 'home/credentials/assistant-drafts.json'), 'utf8')).rows[0]?.value.text).toBe('Keep this unsent fixture idea after restart.');
     await page.goto('about:blank'); await stop(); await start();
     await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
     await expect(panel.getByRole('textbox', { name: 'Message assistant' })).toHaveValue('Keep this unsent fixture idea after restart.');
-    await expect(panel.getByRole('button', { name: 'Plan mode' })).toHaveAttribute('aria-pressed', 'true'); expect(calls).toBe(0);
-    await panel.getByText('Draft storage', { exact: true }).click();
-    await expect(remember).toBeChecked();
+    await expect(panel.getByRole('combobox', { name: 'Assistant mode' })).toHaveValue('plan'); expect(calls).toBe(0);
+    await panel.getByRole('button', { name: 'Close assistant', exact: true }).click();
+    await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await expect(page.getByLabel('Remember drafts on this computer')).toBeChecked();
+    await page.getByRole('button', { name: 'Assistant', exact: true }).click();
     await mkdir('.builder/continuity-review', { recursive: true });
     await page.screenshot({ path: `.builder/continuity-review/draft-${width}.png` });
     await panel.getByRole('button', { name: 'Send message', exact: true }).click();

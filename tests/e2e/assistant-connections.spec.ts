@@ -43,6 +43,7 @@ test('connects multiple providers, switches the chat model, and routes only expl
   await expect.poll(() => assistant.status().providerId).toBe('xai'); expect(calls).toHaveLength(0);
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const chat = page.getByRole('dialog', { name: /Assistant/ });
+  await chat.getByLabel('Model and reasoning', { exact: true }).click();
   await expect(chat.getByRole('combobox', { name: 'Chat model' })).toHaveValue(`xai:${assistant.status().model}`);
   const anthropic = assistant.status().connections.find(item => item.id === 'anthropic')!.models[0]!.id;
   await chat.getByRole('combobox', { name: 'Chat model' }).selectOption(`anthropic:${anthropic}`);
@@ -53,7 +54,7 @@ test('connects multiple providers, switches the chat model, and routes only expl
   await expect(chat.getByText('Provider fixture completed.', { exact: true })).toBeVisible();
   for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
     await page.setViewportSize({ width, height });
-    await expect(chat.getByRole('combobox', { name: 'Chat model' })).toBeInViewport();
+    await expect(chat.getByLabel('Model and reasoning', { exact: true })).toBeInViewport();
     await page.screenshot({ path: info.outputPath(`chat-model-${width}.png`), animations: 'disabled' });
   }
   expect(calls).toHaveLength(1); expect(calls[0]).toMatchObject({ provider: 'anthropic', model: anthropic, apiKey: 'fixture-anthropic-key-sentinel' });
@@ -76,6 +77,47 @@ test('keeps the connection interface usable at desktop and phone sizes', async (
   await configuration.getByLabel('Anthropic API key').fill('discard-this-unsaved-key');
   await configuration.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await expect(configuration.getByLabel('Google Gemini API key')).toHaveValue('');
+});
+
+test('compact composer persists supported reasoning, keeps keyboard access and sends the chosen effort', async ({ page }, info) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: 'fixture-openai-reasoning-key', expectedRevision: engine.mediaJobs.providerStatus().revision });
+  await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const chat = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  const menu = chat.getByLabel('Model and reasoning', { exact: true });
+  const effort = chat.getByRole('combobox', { name: 'Reasoning level' });
+  const message = chat.getByRole('textbox', { name: 'Message assistant' });
+  await menu.focus(); await menu.press('Enter');
+  await expect(effort).toHaveValue('auto');
+  await expect(effort.locator('option[value=off]')).toHaveCount(0);
+  await effort.selectOption('high');
+  await expect.poll(() => assistant.status().reasoningEffort).toBe('high');
+  await effort.press('Escape'); await expect(menu).toBeFocused(); await expect(chat).toBeVisible();
+  expect(calls).toHaveLength(0);
+  await chat.getByRole('button', { name: 'Close assistant' }).click();
+  await page.goto('about:blank');
+  await page.goto(studio.issueLaunchUrl()); await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932], [375, 450]] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(message).toBeEditable();
+    expect((await chat.locator('.assistant-input-box').boundingBox())!.height).toBeLessThanOrEqual(110);
+    await expect(chat.getByRole('combobox', { name: 'Assistant mode' })).toBeInViewport({ ratio: 1 });
+    await expect(chat.getByRole('button', { name: 'Send message' })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath(`composer-${width}x${height}.png`) });
+    await menu.click(); await expect(effort).toHaveValue('high');
+    await expect(effort).toBeInViewport({ ratio: 1 });
+    await expect(chat.getByRole('combobox', { name: 'Chat model' })).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath(`reasoning-${width}x${height}.png`) });
+    await effort.press('Escape'); await expect(menu).toBeFocused();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  }
+  await message.fill('Explain this app with high reasoning'); await message.press('Enter');
+  await expect(chat.getByText('Provider fixture completed.', { exact: true })).toBeVisible();
+  expect(calls).toHaveLength(1); expect(calls[0]?.reasoningEffort).toBe('high');
+  await menu.click(); await chat.getByRole('combobox', { name: 'Chat model' }).selectOption('openai:gpt-4.1');
+  await expect(effort).toHaveValue('auto'); await expect(effort).toBeDisabled();
+  await expect(chat.getByText('This model does not offer adjustable reasoning.')).toBeVisible();
+  expect(calls).toHaveLength(1);
 });
 
 test('subscription sign-in and cancellation preserve an unsaved API key', async ({ page }) => {

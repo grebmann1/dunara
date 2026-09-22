@@ -41,11 +41,22 @@ async function provider(mode: Mode) {
 }
 function send(res: ServerResponse, event: unknown) { res.write(`data: ${JSON.stringify(event)}\n\n`); }
 function input(): HarnessInput { return { epoch: randomUUID(), runId: randomUUID(), conversationId: randomUUID(), projectId: null, prompt: 'Complete the offline test', context: '', apiKey: 'offline-worker-credential-sentinel', tools: [] }; }
-function harness(baseUrl: string): RunHarness {
-  const value = new built.PiHarness({ fixture: { baseUrl, model: 'fixture' }, startupMs: 10000, shutdownMs: 2000 });
+function harness(baseUrl: string, reasoning = false): RunHarness {
+  const value = new built.PiHarness({ fixture: { baseUrl, model: 'fixture', reasoning }, startupMs: 10000, shutdownMs: 2000 });
   cleanups.push(() => value.close()); return value;
 }
 afterEach(async () => { vi.unstubAllEnvs(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+it.each(['low', 'high'] as const)('sends explicit %s reasoning through the real worker and Responses adapter', async reasoningEffort => {
+  const fixture = await provider('text'), worker = harness(fixture.baseUrl, true);
+  await worker.run({ ...input(), reasoningEffort }, { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal);
+  expect(fixture.requests).toHaveLength(1);
+  expect(fixture.requests[0]?.reasoning).toMatchObject({ effort: reasoningEffort });
+}, 20000);
+it('rejects unsupported reasoning before a provider request', async () => {
+  const fixture = await provider('text'), worker = harness(fixture.baseUrl);
+  await expect(worker.run({ ...input(), reasoningEffort: 'high' }, { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal)).rejects.toThrow();
+  expect(fixture.requests).toHaveLength(0);
+}, 20000);
 it('runs the pinned real worker with no native tools or inherited configuration and streamed text', async () => {
   vi.stubEnv('NODE_OPTIONS', '--require=/INHERITED_POISON.cjs'); vi.stubEnv('OPENAI_API_KEY', 'INHERITED_POISON'); vi.stubEnv('PI_CODING_AGENT_DIR', '/INHERITED_POISON');
   const fixture = await provider('text'); const worker = harness(fixture.baseUrl); let text = '';

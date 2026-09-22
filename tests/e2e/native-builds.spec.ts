@@ -35,6 +35,40 @@ async function fill(page: Page) {
   await page.getByLabel('Android package', { exact: true }).fill('com.acme.still');
   await page.getByLabel('App URL scheme', { exact: true }).fill('acme-still');
 }
+test('both build entry points keep the header and close control visible while only the form scrolls', async ({ page }, info) => {
+  const dialog = page.getByRole('dialog', { name: 'Build setup', exact: true });
+  const title = dialog.getByRole('heading', { name: 'Build setup', exact: true });
+  const close = dialog.getByRole('button', { name: 'Close dialog', exact: true });
+  for (const entry of ['toolbar', 'journey']) {
+    if (entry === 'journey') {
+      await dialog.press('Escape');
+      await page.locator('.creation-guide-trigger').click();
+      const guide = page.getByRole('dialog', { name: 'Your app journey', exact: true });
+      await guide.getByRole('button', { name: /Build To do/ }).click();
+      await guide.getByRole('button', { name: 'Open build setup', exact: true }).click();
+    }
+    await expect(title).toBeFocused();
+    for (const [width, height] of [[1440, 1000], [375, 812], [430, 932], [375, 460], [360, 250]]) {
+      await page.setViewportSize({ width: width!, height: height! });
+      const top = (await title.boundingBox())!.y;
+      await dialog.locator('.preview-tool-body').evaluate(element => { element.scrollTop = element.scrollHeight; });
+      await expect(title).toBeInViewport({ ratio: 1 });
+      await expect(close).toBeInViewport({ ratio: 1 });
+      await close.click({ trial: true });
+      expect((await title.boundingBox())!.y).toBeCloseTo(top, 0);
+      expect(await dialog.evaluate(element => element.scrollWidth - element.clientWidth)).toBe(0);
+      await page.screenshot({ path: info.outputPath(`build-modal-${entry}-${width}-${height}.png`) });
+      await close.focus();
+      await page.keyboard.press('Tab');
+      expect(await dialog.evaluate(element => element.contains(document.activeElement))).toBe(true);
+      await title.focus();
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+  }
+  await close.click();
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.creation-guide-trigger')).toBeFocused();
+});
 test('reviews and saves build setup, preserves dependencies, and explains remaining build prerequisites', async ({ page }, info) => {
   const manifest = await readFile(path.join(appRoot, 'package.json'), 'utf8');
   await fill(page); await capture(page, info, 'identity', '.native-build-setup');

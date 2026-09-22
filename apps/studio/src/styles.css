@@ -40,8 +40,10 @@ summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .primary:hover:not(:disabled) { background: var(--primary-hover); }
 .primary span { margin-left: 8px; }
 #root { container: studio / inline-size; }
-.studio { height: 100dvh; display: flex; flex-direction: column; min-width: 0; }
-.studio > .topbar, .studio > .error-banner { flex-shrink: 0; }
+.studio { height: 100dvh; display: flex; min-width: 0; }
+.studio-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
+.studio-main > .topbar, .studio-main > .error-banner { flex-shrink: 0; }
+.studio-assistant { display: flex; flex: 0 0 424px; min-width: 0; min-height: 0; }
 .skip-link { position: absolute; top: -100px; padding: 12px; background: var(--surface); color: var(--ink); z-index: 20; }
 .skip-link:focus { top: 12px; }
 .topbar { min-height: 56px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 20px; background: var(--surface); border-bottom: 1px solid var(--line); }
@@ -388,16 +390,12 @@ summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .launch-kit-panel { margin-top: 20px; }
 .kit-draft { border: 0; padding: 0; margin: 0; }
 .kit-captures { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(190px, 100%), 1fr)); gap: 16px; }
-.kit-capture, .kit-files li { min-width: 0; overflow-wrap: anywhere; }
+.kit-capture { min-width: 0; overflow-wrap: anywhere; }
 .kit-capture figure { margin: 12px 0; }
 .kit-capture img { max-width: 100%; max-height: 320px; object-fit: contain; }
 .kit-icon { max-width: 240px; margin-top: 12px; }
 .kit-icon img { max-width: 100%; }
 .launch-kit-panel code, .kit-review pre { overflow-wrap: anywhere; white-space: pre-wrap; word-break: break-word; }
-.kit-files { list-style: none; padding: 0; display: grid; gap: 12px; }
-.kit-files li { display: grid; gap: 4px; justify-items: start; }
-.kit-files button { white-space: normal; height: auto; max-width: 100%; text-align: left; }
-.kit-files code { font-size: 11px; }
 .assistant-toggle { position: relative; width: 44px; flex-shrink: 0; padding: 10px; }
 .assistant-toggle > i { position: absolute; right: 6px; top: 7px; width: 7px; height: 7px; border-radius: 50%; background: #38725e; }
 .assistant-toggle > i[data-state="waiting"] { background: #9b701c; }

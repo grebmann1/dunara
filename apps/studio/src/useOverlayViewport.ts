@@ -9,10 +9,11 @@ export function useOverlayViewport(active: boolean) {
     const measure = () => {
       // Leave pinch zoom to the browser rather than resizing the panel around it.
       if (visual && Math.abs(visual.scale - 1) > .01) { setViewport({ short: innerHeight < 600 }); return; }
-      const inset = innerWidth <= 480 ? 0 : 8;
       const height = visual?.height ?? innerHeight;
-      if (innerWidth > 760 && height >= 600 && height >= innerHeight - 1) { setViewport({ short: false }); return; }
-      setViewport({ short: height < 600, style: { top: (visual?.offsetTop ?? 0) + inset, bottom: 'auto', height: Math.max(0, height - inset * 2) } });
+      const visualTop = visual?.offsetTop ?? 0;
+      const keyboard = !!(visual && height < innerHeight - 1);
+      const studioTop = keyboard ? 0 : Math.max(0, document.querySelector('.studio')?.getBoundingClientRect().top ?? 0);
+      setViewport({ short: height < 600, style: { top: visualTop + studioTop, bottom: 'auto', height: Math.max(0, height - studioTop) } });
     };
     measure();
     visual?.addEventListener('resize', measure);

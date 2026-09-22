@@ -8,6 +8,7 @@ import { Input } from './ui/input';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { FieldSelect } from './ui/field-select';
+import { SavedLaunchKit } from './SavedLaunchKit';
 
 export type LaunchKitDraft = { captureIds: string[]; iconId: string; name: string; summary: string; description: string; supportUrl: string; privacyUrl: string; attribution: string };
 export function LaunchKitPanel({ projectId, state, media, active, savedDraft, onDraft }: { projectId: string; state?: StudioState; media: MediaState; active: boolean; savedDraft?: LaunchKitDraft; onDraft: (draft: LaunchKitDraft) => void }) {
@@ -91,10 +92,9 @@ export function LaunchKitPanel({ projectId, state, media, active, savedDraft, on
     </fieldset>
     <section className="kit-history" aria-label="Saved Launch Kits"><div className="asset-section-heading"><h3 ref={history} tabIndex={-1}>Saved local kits</h3><Button variant="outline" disabled={busy} onClick={() => void perform(refresh)}>Refresh kits</Button></div>
       {!kits.length && <p>No saved kits for this project.</p>}
-      {kits.map(kit => <article className="media-card" key={kit.manifest.id}><h4>{kit.manifest.listing.name}</h4><p>{kit.manifest.createdAt}</p><p>Inside your configured Dunara home: <code>{kit.location}</code></p><p>React Native Web · listing and rights drafts · native qualification not implied.</p>
-        <ul className="kit-files">{kit.files.map(file => <li key={file.id}><Button variant="outline" disabled={busy} onClick={() => void perform(async () => { const url = await kitDownload(projectId, kit.manifest.id, file.id); if (!alive.current) { URL.revokeObjectURL(url); return; } const link = document.createElement('a'); link.href = url; link.download = file.name.split('/').pop()!; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); })}>Download {file.name}</Button><span>{file.bytes.toLocaleString()} bytes</span><code>{file.sha256}</code></li>)}</ul>
+      {kits.map(kit => <SavedLaunchKit key={kit.manifest.id} kit={kit} projectId={projectId} active={active} busy={busy} onDownload={file => void perform(async () => { const url = await kitDownload(projectId, kit.manifest.id, file.id); if (!alive.current) { URL.revokeObjectURL(url); return; } const link = document.createElement('a'); link.href = url; link.download = file.name.split('/').pop()!; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000); })}>
         {deleting === kit.manifest.id ? <div role="group" aria-label="Confirm kit deletion"><p>Delete this owned kit and all its files? Captures and app source are not removed. This cannot be undone.</p><Button disabled={busy} onClick={() => void perform(async () => { await api(`${endpoint}/remove`, { bundleId: kit.manifest.id, confirmed: true }); if (!alive.current) return; setKits(current => current.filter(k => k.manifest.id !== kit.manifest.id)); setDeleting(''); setNotice('Local kit deleted.'); history.current?.focus(); })}>Confirm delete kit</Button><Button variant="ghost" disabled={busy} onClick={() => setDeleting('')}>Keep kit</Button></div> : <Button variant="ghost" disabled={busy} onClick={() => setDeleting(kit.manifest.id)}>Delete kit</Button>}
-      </article>)}
+      </SavedLaunchKit>)}
     </section>
   </section>;
 }

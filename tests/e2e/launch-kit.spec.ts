@@ -58,17 +58,19 @@ test('reviews exact contents, downloads unchanged files, retains kits after capt
   expect(kit.manifest.captures.map(c => c.id)).toEqual([retained[0]!.meta.id]);
   expect(kit.manifest.listing.summary).toBe('A user-authored draft');
   const saved = page.getByRole('region', { name: 'Saved Launch Kits' });
+  await saved.locator('.saved-kit-images > summary').click();
   for (const file of kit.files) {
     const downloadPromise = page.waitForEvent('download');
-    await saved.getByRole('button', { name: `Download ${file.name}`, exact: true }).click();
+    await saved.locator(`[data-kit-file-id="${file.id}"]`).getByRole('button', { name: /^Download / }).click();
     const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe(file.name.split('/').pop());
     const bytes = await readFile((await download.path())!); expect(hash(bytes)).toBe(file.sha256);
   }
   retained = [];
   await page.getByRole('button', { name: 'Refresh kits' }).click();
   await expect(saved.getByText('Kit Alpha', { exact: true })).toBeVisible();
   await page.route('**/launch-kits/*/files/*', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Download unavailable; retry' } }) }));
-  await saved.getByRole('button', { name: 'Download manifest.json', exact: true }).click();
+  await saved.getByRole('button', { name: 'Download Kit manifest', exact: true }).click();
   await expect(page.getByRole('alert')).toContainText('Download unavailable; retry');
   await page.unroute('**/launch-kits/*/files/*');
   await saved.getByRole('button', { name: 'Delete kit', exact: true }).click();
@@ -77,6 +79,73 @@ test('reviews exact contents, downloads unchanged files, retains kits after capt
   await saved.getByRole('button', { name: 'Delete kit', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm delete kit' }).click();
   await expect(saved).toContainText('No saved kits'); expect(await engine.launchKits.list(projectId)).toHaveLength(0);
+});
+
+test('saved kits use readable file groups, lazy durable previews and keyboard-accessible technical details at phone and desktop sizes', async ({ page }) => {
+  for (const route of ['/characters', '/saved']) for (const capture of retained.slice(0, 2)) {
+    retained.push({ png: capture.png, meta: { ...capture.meta, id: randomUUID(), route } });
+  }
+  const png = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: '#567b68' } }).png().toBuffer();
+  let library = await engine.assets.import(projectId, { expectedRevision: null, label: 'Approved master', mediaType: 'image/png' }, png);
+  const iconId = library.assets[0]!.id;
+  library = await engine.assets.approve(projectId, iconId, library.revision);
+  const kit = await engine.launchKits.create(projectId, {
+    captureIds: retained.map(capture => capture.meta.id), icon: { assetId: iconId, expectedRevision: library.revision },
+    listing: { name: 'Holocron Atlas', summary: 'Explore the galaxy', description: '' }, attribution: 'Test imagery', confirmed: true,
+  });
+  retained = [];
+  let fileRequests = 0;
+  page.on('request', request => { if (/\/launch-kits\/[^/]+\/files\//.test(request.url())) fileRequests++; });
+  await openKit(page);
+  const card = page.getByRole('article', { name: 'Holocron Atlas' });
+  await expect(card).toContainText('6 screenshots · App icon · 12 files');
+  await expect(card.locator('.saved-kit-technical > code')).toBeHidden();
+  expect(fileRequests).toBe(0);
+  const imageToggle = card.locator('.saved-kit-images > summary');
+  await imageToggle.focus(); await page.keyboard.press('Enter');
+  await expect(card.getByRole('img')).toHaveCount(7);
+  await expect.poll(() => card.getByRole('img').evaluateAll(images => images.every(image => (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+  await expect(card.getByRole('button', { name: 'Download Home · 375 × 812', exact: true })).toBeVisible();
+  await expect(card.getByRole('button', { name: 'Download /characters · 430 × 932', exact: true })).toBeVisible();
+  const src = await card.getByRole('img').first().getAttribute('src');
+  await page.getByRole('button', { name: 'Refresh kits' }).click();
+  await expect(card.getByRole('img').first()).toHaveAttribute('src', src!);
+  expect(fileRequests).toBe(7);
+  const technical = card.locator('.saved-kit-technical > summary');
+  await technical.focus(); await page.keyboard.press('Space');
+  await expect(card.locator('.saved-kit-technical > code')).toHaveText(kit.location);
+  await expect(card.locator('.saved-kit-technical')).toContainText(kit.files[0]!.sha256);
+  await page.keyboard.press('Space');
+  await expect(card.locator('.saved-kit-technical > code')).toBeHidden();
+  await mkdir('.builder/studio-enhancements-review/saved-kits', { recursive: true });
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932], [320, 812]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await card.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await expect.poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth))).toBe(0);
+    const download = card.getByRole('button', { name: 'Download Readiness checklist', exact: true });
+    await download.focus(); await expect(download).toBeInViewport();
+    await card.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await page.screenshot({ path: `.builder/studio-enhancements-review/saved-kits/saved-${width}.png` });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  for (const zoom of [2, 4]) {
+    await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
+    await technical.focus(); await page.keyboard.press('Enter');
+    await expect(card.locator('.saved-kit-technical > code')).toBeVisible();
+    await technical.evaluate(element => element.scrollIntoView({ block: 'start' }));
+    await expect.poll(() => page.evaluate(() => Math.max(0, document.documentElement.scrollWidth - innerWidth))).toBe(0);
+    await page.screenshot({ path: `.builder/studio-enhancements-review/saved-kits/details-zoom-${zoom}.png` });
+    await page.keyboard.press('Enter');
+  }
+  await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
+  await imageToggle.click();
+  await expect(card.getByRole('img')).toHaveCount(0);
+  await page.route('**/launch-kits/*/files/icon', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Unavailable' } }) }));
+  await imageToggle.click();
+  await expect(card.getByRole('button', { name: 'Retry preview of App icon · 1024 × 1024' })).toBeVisible();
+  await page.unroute('**/launch-kits/*/files/icon');
+  await card.getByRole('button', { name: 'Retry preview of App icon · 1024 × 1024' }).click();
+  await expect(card.getByRole('img')).toHaveCount(7);
 });
 
 test('stale icon, invalid URL and expired capture failures keep drafts for deliberate review', async ({ page }) => {

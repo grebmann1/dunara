@@ -7,11 +7,7 @@
 .dock-slot[data-position=right] { border-left: 1px solid var(--line); }
 .dock-slot[data-position=bottom] { border-top: 1px solid var(--line); }
 .dock-host { display: flex; flex: 1; min-width: 0; min-height: 0; }
-.dock-workspace[data-docking=true] .dock-host > .assistant-panel, .dock-host > .dock-design { position: relative; inset: auto; transform: none; border: 0; border-radius: 0; box-shadow: none; width: 100%; max-width: none; height: 100%; z-index: auto; }
-.dock-host .assistant-header { padding: 10px 8px; gap: 4px; }
-.dock-host .assistant-identity { gap: 7px; flex: 1; }
-.dock-host .assistant-mark { display: none; }
-.dock-host .assistant-header-actions button { width: 32px; min-width: 32px; min-height: 32px; height: 32px; padding: 7px; }
+.dock-host > .dock-design { position: relative; inset: auto; transform: none; border: 0; border-radius: 0; box-shadow: none; width: 100%; max-width: none; height: 100%; z-index: auto; }
 .dock-tabs { display: flex; gap: 4px; padding: 4px 8px 0; border-bottom: 1px solid var(--line); background: var(--background); flex-shrink: 0; }
 .dock-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; border-radius: 4px 4px 0 0; padding: 8px; min-height: 36px; font-size: 12px; color: var(--muted); background: transparent; }
 .dock-tabs button[aria-selected=true] { color: var(--primary); border-bottom-color: var(--primary); background: var(--surface); }

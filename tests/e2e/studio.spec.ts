@@ -173,7 +173,7 @@ test('scroll ownership preserves keyboard focus, polling, banners and short-heig
   await page.route('**/design', route => route.fulfill({ status: 400, json: { error: { message: 'Deliberate save failure '.repeat(15) } } }));
   await page.getByRole('button', { name: 'Apply changes' }).click();
   await expect(page.getByRole('alert')).toContainText('Deliberate save failure');
-  const banner = await page.locator('.studio > .error-banner').boundingBox();
+  const banner = await page.locator('.studio-main > .error-banner').boundingBox();
   const workspace = await page.locator('.workspace').boundingBox();
   expect(workspace!.y).toBe(banner!.y + banner!.height);
   expect(Math.round(workspace!.y + workspace!.height)).toBe(Math.round((await page.locator('.studio-console').boundingBox())!.y));

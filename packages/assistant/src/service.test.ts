@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { AssistantLimits, HarnessCallbacks, RunHarness } from './contracts.js';
 import { AssistantStore } from './store.js';
 import { AssistantService } from './service.js';
+import { AssistantConnections } from './connections.js';
 
 function deferred<T>() {
   let resolve: (value: T) => void = () => {};
@@ -25,6 +26,30 @@ async function setup(behavior: RunHarness['run'] = async () => {}, limits: Parti
 }
 async function finished(service: AssistantService) { await vi.waitFor(() => expect(service.status().busy).toBe(false)); }
 afterEach(async () => { await Promise.all(services.splice(0).map(service => service.close())); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+it('validates, persists and freezes reasoning per turn, and resets incompatible model selections', async () => {
+  const models = vi.spyOn(AssistantConnections.prototype, 'models').mockReturnValue([{ id: 'gpt-6-astra', label: 'Astra', reasoningLevels: ['low', 'high'] }, { id: 'plain', label: 'Plain', reasoningLevels: [] }]);
+  const gate = deferred<void>();
+  try {
+    const { service, input, home, harness } = await setup(async () => { await gate.promise; });
+    expect(service.status().reasoningEffort).toBe('auto');
+    expect(() => service.configure({ action: 'reasoning', reasoningEffort: 'ultra' })).toThrow();
+    expect(() => service.configure({ action: 'reasoning', reasoningEffort: 'off' })).toThrow('supported reasoning');
+    service.configure({ action: 'reasoning', reasoningEffort: 'high' });
+    await service.start(input);
+    await vi.waitFor(() => expect(harness.run).toHaveBeenCalled());
+    expect(harness.run.mock.calls[0]![0].reasoningEffort).toBe('high');
+    expect(() => service.configure({ action: 'reasoning', reasoningEffort: 'low' })).toThrow('active');
+    gate.resolve(); await finished(service);
+    expect((await service.conversation(input.conversationId)).turns[0]?.reasoningEffort).toBe('high');
+    await service.close();
+    const restored = new AssistantService({ home }); services.push(restored);
+    expect(restored.status().reasoningEffort).toBe('high');
+    restored.configure({ action: 'model', model: 'plain' });
+    expect(restored.status().reasoningEffort).toBe('auto');
+    expect(() => restored.configure({ action: 'reasoning', reasoningEffort: 'high' })).toThrow('supported reasoning');
+    restored.configure({ action: 'reasoning', reasoningEffort: 'auto' });
+  } finally { gate.resolve(); models.mockRestore(); }
+});
 it('persists only project-bound setup metadata, rejects credential arguments and resumes without replay', async () => {
   const projectId = randomUUID();
   const { service, gateway, home } = await setup(async (context, callbacks, signal) => {

@@ -79,7 +79,7 @@ test('chat guides connection, private app key and exact approval without exposin
     await page.screenshot({ path: info.outputPath(`chat-private-input-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await expect(panel.getByRole('button', { name: 'Drag Assistant panel', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Drag Assistant panel', exact: true })).toHaveCount(0);
   await expect(privateInput).toBeVisible();
   await privateInput.fill(appKey); await card.getByRole('button', { name: 'Save private input' }).click();
   await expect(card.getByLabel('Replace value')).toHaveValue('');
@@ -124,7 +124,7 @@ test('manual cards clear unsaved values on close and project switch, and Plan mo
   await page.goto(studio.issueLaunchUrl()); await selectProject(page, other.id);
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   await expect(card).toHaveCount(0);
-  await panel.getByRole('button', { name: 'Plan mode', exact: true }).click();
+  await panel.getByRole('combobox', { name: 'Assistant mode' }).selectOption('plan');
   await panel.locator('.assistant-setup-menu > summary').click();
   await expect(panel.getByRole('button', { name: 'Connect Supabase', exact: true })).toBeDisabled();
   expect(calls).toBe(0); expect(engine.backends.status().configured).toBe(false);
