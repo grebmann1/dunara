@@ -53,7 +53,7 @@ Disposable Studio screenshots are under `.builder/bonsai-experience/`, with `bef
 
 These changes are in the shared OSS implementation. Package qualification and release receipts belong to the coordinated archive workflow; a local candidate does not update the hosted service or website. Exact downstream dependency updates follow a qualified release. No private implementation is copied into OSS.
 
-A live provider-generated Bonsai build remains a separate qualification: create in a disposable Studio, send the same brief, request the golden-hour/mentor refinement, navigate garden → tree → care → journal → lesson, inspect actual changed routes at both phone sizes, and report provider, elapsed time, interactions, persistence and remaining defects. No provider API credential was available in this test environment. User sign-in or a configured connection is needed for that run; offline tests must not be presented as proof of equivalent generated aesthetics. Native-device and store qualification remain separate from the two-minute web demonstration.
+A live provider-generated Bonsai build was subsequently completed through desktop Studio with ChatGPT / GPT-6 Astra. The same creative prompts produced working garden, care, journal and lesson screens, but the output still falls short of the mock's visual detail and compact layout. Recovery, timings, actual behavior checks, runtime fixes and remaining work are recorded in [the live qualification](bonsai-live-qualification.md). The offline tests below remain separate evidence; native-device and store qualification remain open.
 
 ## Validation record
 
@@ -62,7 +62,7 @@ A live provider-generated Bonsai build remains a separate qualification: create 
 - Browser coverage: creation/backend/reliability, responsive Studio, design-system/keyboard/zoom, overview, Assistant/continuity and the four new idea-to-app scenarios. Failed intermediate checks exposed the draft flush and initial transcript-position issues described above; final targeted regressions pass.
 - The actual provider adapter test confirms Build receives the design contract and Plan does not receive implementation instructions. This uses an offline Responses fixture and makes no live model request.
 - Final new-flow screenshots: `.builder/bonsai-experience/ready/`; baseline: `.builder/bonsai-experience/before/`. Images were opened and visually inspected, including the final primary preview button at all three sizes. After resizing, transcript actions are reachable by scrolling.
-- Coordinated package candidate version: 0.3.2. Package build/consumer receipts are retained under `.builder/packages/`; publication, downstream adoption and a live Bonsai build are distinct follow-up gates.
+- Coordinated package candidate version: 0.3.2. Package build/consumer receipts are retained under `.builder/packages/`; publication and downstream adoption remain separate gates. See the subsequent live qualification for the real Bonsai build.
 
 
 ## Connection flow follow-up
