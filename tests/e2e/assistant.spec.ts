@@ -771,3 +771,29 @@ test('does not attach a late image upload to another project', async ({ page }) 
   expect((await engine.assets.list(first.id)).assets).toHaveLength(1);
   expect((await engine.assets.list(second.id)).assets).toHaveLength(0); expect(calls).toBe(0);
 });
+
+test('a fresh workspace offers app creation without suggesting a screen or project to repair', async ({ page }, info) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const panel = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  const start = panel.getByRole('button', { name: /Build something new/ });
+  await expect(start).toBeVisible();
+  await expect(panel.getByRole('button', { name: /Refine this screen|Find and fix an issue/ })).toHaveCount(0);
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await expect(start).toBeInViewport({ ratio: 1 });
+    await page.screenshot({ path: info.outputPath(`new-workspace-assistant-${width}.png`) });
+  }
+  await start.click();
+  await expect(panel.getByLabel('Message assistant')).toHaveValue(/Help me plan a new mobile app/);
+  await expect(panel.getByLabel('Message assistant')).toBeFocused();
+  expect(calls).toBe(0);
+  await panel.getByRole('button', { name: 'Close assistant' }).click();
+  await engine.projects.create({ name: 'Existing app', slug: 'existing-app' });
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveText('Existing app');
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  await expect(panel.getByRole('button', { name: /Refine this screen/ })).toBeVisible();
+  await expect(panel.getByRole('button', { name: /Find and fix an issue/ })).toBeVisible();
+  expect(calls).toBe(0);
+});

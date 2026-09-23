@@ -25,12 +25,13 @@ export function DesignPanel({ design, disabled, onApply, savedDraft, onDraft, op
   const colors = ['background', 'surface', 'text', 'muted', 'accent', 'onAccent', 'border'] as const;
   return <DesignSurface open={open} onOpenChange={onOpenChange} trigger={trigger}><aside className="inspector">
     <h2 className="text-lg tracking-tight">Design tokens</h2>
-    <p className="text-sm text-muted-foreground">Preset and app appearance changes reset custom tokens. Apply or discard your draft first.</p>
+    <p className="text-sm text-muted-foreground">Choose a palette, then fine-tune colors, type, and spacing.</p>
+    {dirty && <p className="text-sm text-muted-foreground" role="status">Apply or discard your changes before switching palettes or appearance.</p>}
     {conflict && <div className="design-conflict"><p role="alert">Design changed outside this draft. Review your values against the latest design before reapplying. Nothing has been overwritten.</p><Button variant="outline" disabled={disabled} onClick={() => remember(draft, design.revision)}>Review against latest revision</Button></div>}
     <fieldset disabled={disabled} className="mt-5 grid gap-5">
       <legend className="sr-only">App theme</legend>
       <div><h3 className="mb-3 text-sm font-medium">Collection</h3><div className="presets">
-        {(['sage', 'clay', 'midnight'] as const).map(p => <Button variant="outline" key={p} aria-label={p} disabled={dirty || design.preset === p} aria-pressed={design.preset === p} className={`preset ${p} ${design.preset === p ? 'bg-primary/5 border-primary/30 text-primary disabled:opacity-100' : ''}`} onClick={() => void apply({ preset: p, expectedRevision: design.revision })}><span aria-hidden className="swatches"><i /><i /><i /></span><span>{p}</span>{design.preset === p && <Check aria-hidden className="ml-auto" />}</Button>)}
+        {(['sage', 'clay', 'midnight'] as const).map(p => <Button variant="outline" key={p} aria-label={p} disabled={dirty || design.preset === p} aria-pressed={design.preset === p} className={`preset justify-start ${p} ${design.preset === p ? 'bg-primary/5 border-primary/30 text-primary disabled:opacity-100' : ''}`} onClick={() => void apply({ preset: p, expectedRevision: design.revision })}><span aria-hidden className="swatches"><i /><i /><i /></span><span>{p}</span>{design.preset === p && <Check aria-hidden className="ml-auto" />}</Button>)}
       </div></div>
       <div><h3 className="mb-3 text-sm font-medium">App appearance</h3><div className="flex gap-2">
         {(['light', 'dark'] as const).map(mode => <Button variant="outline" key={mode} disabled={dirty || design.mode === mode} aria-pressed={design.mode === mode} className={design.mode === mode ? 'bg-primary/5 border-primary/30 text-primary disabled:opacity-100' : ''} onClick={() => void apply({ mode, expectedRevision: design.revision })}>{mode === 'light' ? <Sun aria-hidden /> : <Moon aria-hidden />}{mode === 'light' ? 'Light' : 'Dark'}</Button>)}

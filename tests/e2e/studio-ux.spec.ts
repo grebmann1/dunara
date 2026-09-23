@@ -33,7 +33,8 @@ test('chooses and connects a backend before creation, retains the brief and leav
     await expect(dialog.getByRole('button', { name: 'Create app', exact: true })).toBeInViewport({ ratio: 1 });
     await page.screenshot({ path: info.outputPath(`new-app-idea-${size.width}.png`) });
   }
-  await dialog.getByRole('button', { name: 'Need accounts or shared data?', exact: true }).click();
+  await dialog.locator('.creation-folder summary').click();
+  await dialog.getByRole('button', { name: /Accounts & shared data/ }).click();
   await expect(dialog.getByRole('heading', { name: 'Choose your backend' })).toBeFocused();
   await expect(dialog.getByRole('button', { name: 'Create app', exact: true })).toBeEnabled();
   await dialog.getByRole('radio', { name: /^Supabase/ }).check();
@@ -65,13 +66,15 @@ test('chooses and connects a backend before creation, retains the brief and leav
 test('keeps creation cancellable, supports no backend and catches a disconnected account before submission', async ({ page }) => {
   await page.getByRole('button', { name: '+ New app', exact: true }).click();
   const dialog = page.locator('.project-creation-dialog');
-  await dialog.getByRole('button', { name: 'Need accounts or shared data?', exact: true }).click();
+  await dialog.locator('.creation-folder summary').click();
+  await dialog.getByRole('button', { name: /Accounts & shared data/ }).click();
   await dialog.getByRole('radio', { name: /No backend for now/ }).check();
   await dialog.getByRole('button', { name: 'Close dialog', exact: true }).click();
   expect(await engine.projects.list()).toHaveLength(0);
   engine.backends.configure({ token: 'fixture-disconnected-before-submit' });
   await page.getByRole('button', { name: '+ New app', exact: true }).click();
-  await dialog.getByRole('button', { name: 'Need accounts or shared data?', exact: true }).click();
+  await dialog.locator('.creation-folder summary').click();
+  await dialog.getByRole('button', { name: /Accounts & shared data/ }).click();
   await dialog.getByRole('radio', { name: /^Supabase/ }).check();
   await expect(dialog).toContainText('Account connection saved');
   engine.backends.disconnect();

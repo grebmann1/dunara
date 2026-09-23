@@ -456,7 +456,7 @@ test('creation and Design dialogs fit at 200 percent zoom with reachable actions
       await expect(apply).toBeInViewport();
     } else {
       await dialog.locator('.creation-folder summary').click();
-      await dialog.getByLabel('Directory slug').focus();
+      await dialog.getByLabel('Project folder').focus();
       await page.keyboard.press('Tab');
       await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
     }

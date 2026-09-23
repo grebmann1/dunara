@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, ArrowRight, Check, ChevronDown, Database, Smartphone, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Database, SlidersHorizontal, Smartphone, Sparkles } from 'lucide-react';
 import type { Backends } from '../../../../packages/core/src/backends';
 import { useStudioClient } from '../api';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
@@ -54,9 +54,13 @@ export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, 
         <fieldset disabled={locked}>
           <div className="creation-field"><Label htmlFor="app-name">App name</Label><Input id="app-name" required maxLength={60} value={name} onChange={event => onName(event.target.value)} /></div>
           <div className="creation-field"><Label htmlFor="new-app-brief">The idea <span className="optional-label">optional</span></Label><textarea id="new-app-brief" rows={4} maxLength={2000} value={brief} onChange={event => setBrief(event.target.value)} placeholder="What does your app do? Who is it for? Describe the screens and the look you love." /><small>Tell us the purpose, the main screens, and the visual style. Leave out private information.</small></div>
-          <details className="creation-folder"><summary>Project folder <span>{slug}</span><ChevronDown size={14} aria-hidden /></summary><Label htmlFor="app-slug">Directory slug</Label><Input id="app-slug" required pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" maxLength={48} value={slug} onChange={event => onSlug(event.target.value)} onInvalid={event => { const details = event.currentTarget.closest('details'); if (details) details.open = true; }} /></details>
-          {backendEnabled && <button type="button" className="creation-backend-link" onClick={() => setStep('backend')}><Database size={14} aria-hidden />{backend === 'supabase' ? 'Supabase selected · change setup' : 'Need accounts or shared data?'}<ArrowRight size={14} aria-hidden /></button>}
-          <p className="creation-next-note">{assistantEnabled ? 'Create your workspace, then send your idea to the Assistant to build your first version.' : 'Creates an editable Expo starter. Connect an Assistant-enabled runtime to build from your idea.'}</p>
+          <details className="creation-folder"><summary><SlidersHorizontal size={14} aria-hidden /><span>App settings</span>{backend === 'supabase' && <small>Supabase</small>}<ChevronDown size={14} aria-hidden /></summary>
+            <div className="creation-options-body">
+              <div className="creation-field"><Label htmlFor="app-slug">Project folder</Label><Input id="app-slug" required pattern="[a-z][a-z0-9]*(-[a-z0-9]+)*" maxLength={48} value={slug} onChange={event => onSlug(event.target.value)} onInvalid={event => { const details = event.currentTarget.closest('details'); if (details) details.open = true; }} /><small>Lowercase letters, numbers, and hyphens.</small></div>
+              {backendEnabled && <Button variant="ghost" className="creation-backend-link" onClick={() => setStep('backend')}><Database size={16} aria-hidden /><span><strong>Accounts &amp; shared data</strong><small>{backend === 'supabase' ? 'Supabase selected · change setup' : 'Optional · you can connect this later'}</small></span><ArrowRight size={16} aria-hidden /></Button>}
+            </div>
+          </details>
+          <p className="creation-next-note">{assistantEnabled ? 'Next, shape your app with the Assistant. Nothing is sent automatically.' : 'Start with an editable app. Customize it at your own pace.'}</p>
           {connectionError && <p role="alert">{connectionError}</p>}
           <footer><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit">{locked ? 'Creating…' : 'Create app'}<ArrowRight size={14} aria-hidden /></Button></footer>
         </fieldset>
@@ -68,7 +72,7 @@ export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, 
         </fieldset>
         {backend === 'supabase' && (connection?.configured ? <div className="creation-account-ready" role="status"><Check size={16} aria-hidden /><div><strong>Account connection saved</strong><p>After creation, choose a Supabase project and review the connection in Backend.</p></div></div> : <SupabaseSettings compact disabled={locked} onConnected={async () => { const version = ++connectionVersion.current; const value = await api<ReturnType<Backends['status']>>('/backend/connection'); if (alive.current && version === connectionVersion.current) { setConnection(value); setConnectionError(''); } }} />)}
         {connectionError && <p role="alert">{connectionError}</p>}
-        <p className="creation-recipe-note">Starts with an editable three-screen Expo app. You can replace its content with the Assistant.</p>
+        <p className="creation-recipe-note">You can change this setup later in Backend.</p>
         <footer><Button variant="ghost" disabled={locked} onClick={() => setStep('idea')}><ArrowLeft size={14} aria-hidden />Back</Button><Button disabled={locked || !backend || (backend === 'supabase' && (!connection?.configured || !backendEnabled))} onClick={() => void create()}>{locked ? 'Creating…' : 'Create app'}</Button></footer>
       </>}
     </DialogContent>

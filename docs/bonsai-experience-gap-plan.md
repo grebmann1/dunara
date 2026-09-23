@@ -72,3 +72,17 @@ The Settings screenshot exposed a redundant sign-in → provider → model → s
 The UI handoff follows only its own login and stops on cancellation, failure, another login, a changed model/provider, another account or a restarted runtime. It survives leaving Settings. A full Studio reload ends the UI handoff; the service retains its login, and **Use** remains available. Failed model saves keep the existing selection. No backend restart is needed for these interface changes.
 
 Verification: 10 activation unit scenarios and 19 distinct focused browser scenarios passed, including optional draft persistence, API selection/routing, OAuth completion after navigation, cancellation, failed model saves, saved keys and managed credits. Typecheck and lint passed. Actual ready-state screenshots at 1440×1000, 375×812 and 430×932 were inspected and retained under `.builder/bonsai-experience/connections/`. The native desktop interface was refreshed without restarting its backend; the existing session-only ChatGPT connection remained connected and was selected successfully. No live Assistant message was sent for this review.
+
+## Broader interface review
+
+The follow-up creation screenshot exposed an unpadded backend button, competing setup controls and an oversized next-step notice. Creation now puts optional folder and account/data setup inside **App settings**, gives the backend entry proper spacing and a clear optional label, and uses quiet next-step guidance above grouped footer actions. Folder validation still expands the settings disclosure, and creation retains the brief without sending it.
+
+The wider review also corrected three misleading or inconsistent states:
+
+- Design palette swatches and labels now align consistently; the apply/discard warning appears only when there are unsaved changes.
+- Icon setup says **Review icon changes** and offers a simple image-selection instruction before artwork exists. Exact change review and approval are preserved.
+- Assistant offers **Build something new** in an empty workspace. Refine/fix actions appear once a project exists, and the empty composer asks for an app idea.
+
+Reviewed creation, Settings, Assistant, Design, Preview, Assets/import/generation, App Icons, Backend, Activity and Plugins. Changed screens were visually inspected at 375×812, 430×932 and desktop; screenshots and disposable regression artifacts are under `.builder/ui-review-2026-09-23/`. The running desktop was refreshed with the revised creation dialog without restarting its backend or sending a model request.
+
+Validation: 47 distinct browser scenarios passed across creation/handoff, keyboard and zoom, design drafts, galleries, icon review/conflicts, plugins and the empty-workspace Assistant. The new Assistant test verifies that selecting a starter only stages text and that project editing actions become available after creation. Typecheck, lint and diff checks passed. This is interface and offline behavior qualification; live generated-app quality and native-device behavior remain separate.

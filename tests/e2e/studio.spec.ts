@@ -484,7 +484,7 @@ test('project picker has an honest empty state and a single accessible project c
   await page.getByRole('button', { name: '+ New app' }).click();
   await page.getByLabel('App name', { exact: true }).fill('Alpha Studio');
   await page.locator('.creation-folder summary').click();
-  await page.getByLabel('Directory slug').fill('alpha-studio');
+  await page.getByLabel('Project folder').fill('alpha-studio');
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const picker = page.getByRole('combobox', { name: 'Project', exact: true });
@@ -580,13 +580,13 @@ test('create validates names and slugs, cancels, rejects duplicates and guards r
   await page.getByRole('button', { name: 'Dismiss error' }).click();
   await page.getByLabel('App name', { exact: true }).fill('Valid name');
   await page.locator('.creation-folder summary').click();
-  await page.getByLabel('Directory slug').fill('BAD slug');
-  expect(await page.getByLabel('Directory slug').evaluate((node: HTMLInputElement) => node.checkValidity())).toBe(false);
-  await page.getByLabel('Directory slug').fill('existing');
+  await page.getByLabel('Project folder').fill('BAD slug');
+  expect(await page.getByLabel('Project folder').evaluate((node: HTMLInputElement) => node.checkValidity())).toBe(false);
+  await page.getByLabel('Project folder').fill('existing');
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('alert')).toBeVisible();
   await page.getByRole('button', { name: 'Dismiss error' }).click();
-  await page.getByLabel('Directory slug').fill('valid-name');
+  await page.getByLabel('Project folder').fill('valid-name');
   let release!: () => void;
   const held = new Promise<void>(resolve => { release = resolve; }); let posts = 0;
   await page.route('**/api/projects', async route => { if (route.request().method() === 'POST') { posts++; await held; } await route.continue(); });
