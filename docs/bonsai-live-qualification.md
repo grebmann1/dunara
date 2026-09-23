@@ -72,6 +72,15 @@ Validation: 100 targeted unit/integration scenarios, 12 browser scenarios, the r
 
 The follow-up coordinated 0.3.2 package candidate also passes clean-checkout build and installed-consumer qualification at source `0e2530b7d109d12023c5a51acdde5e331400202a` (`sourceDirty: false`). The five archive hashes and source receipt are retained under `.builder/packages/release.json`.
 
+## Follow-up: preview menu and phone connection
+
+A subsequent desktop review found two additional defects:
+
+- Compact toolbar styling applied its fixed icon dimensions to every descendant button, including the three-dot menu. Text wrapped into overlapping rows. Icon sizing now targets direct toolbar controls, leaving menu rows at their full width and natural height.
+- The installed Expo 57 CLI prints `Waiting on http://localhost:…` when output is piped, including when started with `--lan`. Studio previously relied on console output for the phone address. LAN startup now reads the owned Metro server's `GET /_expo/open?platform=ios&runtime=expo` response when the console has not supplied an address. It accepts only a private IPv4 address belonging to this computer on the owned preview port; older CLI output remains supported. A missing address keeps the web preview usable and exposes Retry phone preview plus Use this computer only. The connection summary reflects actual LAN mode instead of incorrectly claiming This computer.
+
+Validation: 26 targeted preview/unit scenarios, four browser scenarios, production build, typecheck, lint and source checks pass. Menu and device-dialog images were inspected at desktop, 375×812 and 430×932; bounded evidence is under `.builder/device-preview-review-2026-09-23/`. The actual desktop was fully restarted with its existing workspace/profile, and Start phone preview produced Bonsai Master's live Expo Go QR code. Requests through the local Wi-Fi address returned both iOS and Android manifests and successfully compiled bundles (HTTP 200). These checks establish address discovery and native bundle delivery from this computer; they do not establish successful execution on a physical phone. No phone-test checklist entries were marked automatically.
+
 ## Remaining qualification
 
 The concrete functional defects and capture limitation found in this review are fixed. The artwork is improved but remains a different, simpler interpretation than the hand-authored presentation. A fresh two-prompt build using the strengthened guidance has not been rerun, and no two-minute generation guarantee is established. Animation and native-device qualification remain separate. Package publication and downstream adoption remain outside these local checks.

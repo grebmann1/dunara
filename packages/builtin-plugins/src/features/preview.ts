@@ -130,6 +130,20 @@ export class Previews implements PreviewDriver {
         if (child.exitCode !== null || child.signalCode !== null) throw new BuilderError('PROCESS_FAILED', 'Expo exited before becoming ready');
         try {
           const response = await fetch(url, { signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]), redirect: 'error' });
+          // Recent Expo versions log only localhost when stdout is piped, even in LAN mode.
+          // Ask the owned server for its native deep link instead of guessing a network address.
+          if (response.ok && lan && !this.status(id).deviceUrl) {
+            try {
+              const native = await fetch(`${url}/_expo/open?platform=ios&runtime=expo`, { signal: AbortSignal.any([signal, AbortSignal.timeout(3000)]), redirect: 'error' });
+              if (native.ok) {
+                const info: unknown = await native.json();
+                const candidate = info && typeof info === 'object' && 'url' in info && typeof info.url === 'string' ? info.url : undefined;
+                const deviceUrl = candidate && expoDeviceUrl(candidate, port);
+                if (!signal.aborted && this.status(id).sessionId === sessionId && deviceUrl && deviceUrl === candidate && addresses.has(new URL(deviceUrl).hostname)) this.update({ ...this.status(id), deviceUrl, deviceIssue: undefined });
+              }
+            } catch { /* Older Expo versions may only provide the address through their output. */ }
+          }
+          signal.throwIfAborted();
           if (response.ok) return this.update({ ...this.status(id), projectId: id, status: 'ready', url, configurationRevision: revision(JSON.stringify(appEnvironment)), deviceIssue: lan ? this.status(id).deviceUrl ? undefined : 'Expo has not reported a private LAN address. Check your network connection and restart the preview.' : 'Choose Start phone preview to share this app on your local network.', ...(appEnvironment.EXPO_PUBLIC_SUPABASE_URL ? { backendUrl: appEnvironment.EXPO_PUBLIC_SUPABASE_URL, environment: appEnvironment.EXPO_PUBLIC_BUILDER_ENVIRONMENT } : {}) });
         } catch { /* Wait until Metro accepts requests. */ }
         await sleep(300, undefined, { signal });

@@ -54,6 +54,36 @@ it('keeps localhost sessions without a phone link even if app output prints a LA
   expect(preview.status(id)).toMatchObject({ transport: 'localhost', runtime: 'expo-go' });
   expect(preview.status(id).deviceUrl).toBeUndefined();
   expect(preview.status(id).deviceIssue).toContain('Start phone preview');
+  expect(vi.mocked(fetch).mock.calls.every(([url]) => !String(url).includes('/_expo/open'))).toBe(true);
+});
+it('gets the Expo Go link from Metro when piped Expo output only reports localhost', async () => {
+  const { preview, id, launches } = await fixture(true);
+  vi.mocked(fetch).mockImplementation(async input => {
+    const url = new URL(String(input));
+    if (url.pathname === '/_expo/open') {
+      expect(url.search).toBe('?platform=ios&runtime=expo');
+      return Response.json({ runtime: 'expo', url: `exp://192.168.1.20:${url.port}` });
+    }
+    return new Response('ready');
+  });
+  const ready = await preview.start(id), launch = launches[0]!;
+  launch.log(`Waiting on http://localhost:${launch.port}\n`);
+  expect(ready).toMatchObject({ status: 'ready', transport: 'lan', deviceUrl: `exp://192.168.1.20:${launch.port}` });
+  expect(ready.deviceIssue).toBeUndefined();
+});
+it.each(['unavailable', 'malformed', 'foreign', 'public', 'port', 'credentials', 'embedded'])('keeps the web preview usable if native address discovery is %s', async kind => {
+  const { preview, id } = await fixture(true);
+  vi.mocked(fetch).mockImplementation(async input => {
+    const url = new URL(String(input));
+    if (url.pathname !== '/_expo/open') return new Response('ready');
+    if (kind === 'unavailable') return new Response('Not found', { status: 404 });
+    if (kind === 'malformed') return new Response('<html>Not a manifest</html>');
+    const host = kind === 'foreign' ? '192.168.1.21' : kind === 'public' ? '8.8.8.8' : '192.168.1.20';
+    return Response.json({ url: `${kind === 'embedded' ? 'unexpected ' : ''}exp://${kind === 'credentials' ? 'secret@' : ''}${host}:${kind === 'port' ? Number(url.port) + 1 : url.port}` });
+  });
+  const ready = await preview.start(id);
+  expect(ready).toMatchObject({ status: 'ready', transport: 'lan', deviceIssue: expect.stringContaining('private LAN address') });
+  expect(ready.deviceUrl).toBeUndefined();
 });
 it('switches an owned preview to LAN without a CLI relaunch and rejects stale transport requests', async () => {
   const { preview, id, launches } = await fixture(false);

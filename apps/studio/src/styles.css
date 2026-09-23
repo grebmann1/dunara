@@ -78,7 +78,7 @@ summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .toolbar { position: relative; z-index: 6; display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 4px 8px; background: var(--surface); border-bottom: 1px solid var(--line); }
 .toolbar-actions, .phone-sizes { display: flex; align-items: center; gap: 2px; }
 .phone-sizes { border-right: 1px solid var(--line); padding-right: 4px; margin-right: 2px; }
-.toolbar button, .toolbar > details > summary, .preview-tools > summary { display: flex; align-items: center; justify-content: center; flex-shrink: 0; height: 44px; width: 44px; min-height: 44px; min-width: 44px; padding: 10px; border-radius: 6px; }
+.toolbar > button, .toolbar > details > summary, .preview-tools > summary { display: flex; align-items: center; justify-content: center; flex-shrink: 0; height: 44px; width: 44px; min-height: 44px; min-width: 44px; padding: 10px; border-radius: 6px; }
 .toolbar button[aria-pressed=true], .toolbar details[open] > summary { background: var(--soft); }
 .toolbar svg { width: 16px; height: 16px; flex-shrink: 0; }
 .toolbar details > summary { list-style: none; }

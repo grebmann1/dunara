@@ -150,6 +150,42 @@ test('shows a QR code with the current environment and removes it when the previ
   await dialog.press('Escape'); await expect(button).toBeFocused();
 });
 
+test('shows LAN discovery failures honestly and lets the user retry or return to this computer', async ({ page }, info) => {
+  const publish = (state: Preview) => (engine.previews as unknown as { update(state: Preview): Preview }).update(state);
+  const sessionId = randomUUID();
+  publish({ projectId, status: 'ready', transport: 'lan', sessionId, deviceIssue: 'Expo has not reported a private LAN address. Check your network connection and restart the preview.' });
+  const requests: unknown[] = [];
+  engine.previews.setTransport = async (id, input) => {
+    requests.push(input);
+    const transport = (input as { transport: 'lan' | 'localhost' }).transport;
+    publish({ projectId: id, status: 'starting', transport, sessionId: randomUUID() });
+    return publish({ projectId: id, status: 'ready', transport, sessionId: randomUUID(), ...(transport === 'lan' ? { deviceUrl: 'exp://192.168.1.20:8081' } : {}) });
+  };
+  await page.getByRole('button', { name: 'Connect a device', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
+  await expect(dialog.locator('.device-preview-details')).toContainText('Local network · waiting for address');
+  await expect(dialog.getByRole('button', { name: 'Use this computer only', exact: true })).toBeVisible();
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+    await page.screenshot({ path: info.outputPath(`phone-retry-${width}.png`) });
+  }
+  await dialog.getByRole('button', { name: 'Retry phone preview', exact: true }).click();
+  await expect(dialog.getByRole('img')).toBeVisible();
+  expect(requests[0]).toEqual({ transport: 'lan', expectedSessionId: sessionId });
+  await expect(dialog).not.toContainText('waiting for address');
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`phone-ready-${width}.png`) });
+  }
+  await dialog.getByRole('button', { name: 'Use this computer only', exact: true }).click();
+  await expect(dialog.getByRole('img')).toHaveCount(0);
+  await expect(dialog.locator('.device-preview-details')).toContainText('This computer');
+  await expect(dialog.getByRole('button', { name: 'Start phone preview', exact: true })).toBeVisible();
+});
+
 test('starts phone sharing from Studio and records session-scoped iPhone and Android observations', async ({ page }, info) => {
   // Simulate only Expo startup. The authenticated transport and phone-test routes remain real.
   const publish = (state: Preview) => (engine.previews as unknown as { update(state: Preview): Preview }).update(state);

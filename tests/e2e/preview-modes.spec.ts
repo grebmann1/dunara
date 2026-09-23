@@ -180,6 +180,16 @@ test('long screen lists scroll inside the dialog while actions stay visible and 
 });
 
 test('one compact toolbar groups secondary tools and reveals selection actions only when needed', async ({ page }, info) => {
+  const checkMenuLabels = async () => {
+    const items = page.locator('.preview-action-menu button');
+    expect(await items.count()).toBeGreaterThanOrEqual(5);
+    expect(await items.evaluateAll(buttons => buttons.every(button => {
+      const bounds = button.getBoundingClientRect(), range = globalThis.document.createRange();
+      range.selectNodeContents(button);
+      const content = range.getBoundingClientRect();
+      return bounds.width > 150 && content.bottom <= bounds.bottom + 1 && content.right <= bounds.right + 1;
+    }))).toBe(true);
+  };
   await page.getByRole('button', { name: 'All screens', exact: true }).click();
   await expect(page.locator('.screen-thumbnail img')).toHaveCount(4, { timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Refresh screens', exact: true })).toBeVisible();
@@ -197,6 +207,7 @@ test('one compact toolbar groups secondary tools and reveals selection actions o
   await openPreviewTools(page);
   await expect(page.getByRole('button', { name: 'Manage screens', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Project routes', exact: true })).toBeVisible();
+  await checkMenuLabels();
   await page.screenshot({ path: info.outputPath('grouped-toolbar-menu.png'), fullPage: true });
   await page.getByLabel('Preview tools', { exact: true }).press('Escape');
   await expect(page.getByLabel('Preview tools', { exact: true })).toBeFocused();
@@ -221,6 +232,7 @@ test('one compact toolbar groups secondary tools and reveals selection actions o
     await openPreviewTools(page);
     const menu = page.locator('.preview-tools > .preview-popover');
     await expect(menu).toBeInViewport();
+    await checkMenuLabels();
     const rect = (await menu.boundingBox())!;
     expect(rect.x).toBeGreaterThanOrEqual(0); expect(rect.x + rect.width).toBeLessThanOrEqual(width);
     await page.screenshot({ path: info.outputPath(`grouped-menu-${width}.png`), fullPage: true });
