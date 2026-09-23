@@ -70,6 +70,8 @@ The older desktop used an ephemeral browser partition. The one-time switch to th
 
 Validation: 100 targeted unit/integration scenarios, 12 browser scenarios, the real Electron backend/full-quit smoke, generated-app TypeScript, repository typecheck/lint and source checks pass. Actual Settings screenshots at desktop, 375×812 and 430×932 were inspected. All four generated routes and lesson detail were captured and inspected at both phone sizes. Evidence uses `*-polished-375.png`, `*-polished-430.png` and `mock-vs-polished.png` in the same local evidence directory. The latter is labeled as a targeted follow-up, preserving the original `mock-vs-live.png` comparison.
 
+The follow-up coordinated 0.3.2 package candidate also passes clean-checkout build and installed-consumer qualification at source `0e2530b7d109d12023c5a51acdde5e331400202a` (`sourceDirty: false`). The five archive hashes and source receipt are retained under `.builder/packages/release.json`.
+
 ## Remaining qualification
 
 The concrete functional defects and capture limitation found in this review are fixed. The artwork is improved but remains a different, simpler interpretation than the hand-authored presentation. A fresh two-prompt build using the strengthened guidance has not been rerun, and no two-minute generation guarantee is established. Animation and native-device qualification remain separate. Package publication and downstream adoption remain outside these local checks.
