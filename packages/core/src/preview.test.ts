@@ -59,6 +59,18 @@ it('enables Metro watching even when the harness runs in CI', async () => {
   try { await p.run(process.execPath, ['-e', 'console.log(process.env.CI)'], dir, line => output.push(line)); expect(output.join('').trim()).toBe('0'); }
   finally { vi.unstubAllEnvs(); await p.close(); }
 });
+it('allows Expo account lookup only for an explicitly online preview without forwarding provider tokens', async () => {
+  vi.stubEnv('EXPO_TOKEN', 'private-expo-canary'); vi.stubEnv('OPENAI_API_KEY', 'private-provider-canary');
+  const processes = new Processes();
+  try {
+    for (const expoOnline of [false, true]) {
+      const output: string[] = [];
+      const child = processes.spawn(process.execPath, ['-e', 'console.log(JSON.stringify({offline:process.env.EXPO_OFFLINE,expoToken:process.env.EXPO_TOKEN,providerToken:process.env.OPENAI_API_KEY}))'], dir, line => output.push(line), {}, { expoOnline });
+      await once(child, 'exit');
+      expect(JSON.parse(output.join(''))).toEqual({ offline: expoOnline ? '0' : '1' });
+    }
+  } finally { vi.unstubAllEnvs(); await processes.close(); }
+});
 it('coalesces duplicate starts and stops a pending dependency install before retry', async () => {
   const app = await projects.create({ name: 'Lifecycle', slug: 'lifecycle' });
   const p = new Previews(projects, new Diagnostics(), true);

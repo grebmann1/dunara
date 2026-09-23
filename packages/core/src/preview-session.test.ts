@@ -92,12 +92,13 @@ it('switches an owned preview to LAN without a CLI relaunch and rejects stale tr
   expect(phone).toMatchObject({ transport: 'lan', status: 'ready' });
   expect(phone.sessionId).not.toBe(local.sessionId);
   expect(phone.url).toBe(local.url);
-  expect(preview.processes.spawn).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining(['--go', '--lan']), expect.any(String), expect.any(Function), {});
+  expect(preview.processes.spawn).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining(['--go', '--lan']), expect.any(String), expect.any(Function), {}, { expoOnline: true });
   await expect(preview.setTransport(id, { transport: 'localhost', expectedSessionId: local.sessionId })).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
   expect(launches).toHaveLength(2);
   launches[1]!.log(`Waiting on http://192.168.1.20:${launches[1]!.port}\n`);
   const desktop = await preview.setTransport(id, { transport: 'localhost', expectedSessionId: phone.sessionId });
   expect(desktop.transport).toBe('localhost'); expect(desktop.deviceUrl).toBeUndefined();
+  expect(preview.processes.spawn).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining(['--localhost']), expect.any(String), expect.any(Function), {}, { expoOnline: false });
 });
 it('records human observations per phone platform and session, with stale-check protection and reset on restart', async () => {
   const { preview, id, launches } = await fixture(true);

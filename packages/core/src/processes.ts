@@ -13,8 +13,10 @@ export async function freePort(preferred = 0) {
 }
 export class Processes {
   private owned = new Set<ChildProcess>();
-  spawn(command: string, args: string[], cwd: string, log: (text: string) => void, appEnvironment: AppEnvironment = {}) {
+  spawn(command: string, args: string[], cwd: string, log: (text: string) => void, appEnvironment: AppEnvironment = {}, options: { expoOnline?: boolean } = {}) {
     const env = runtimeEnvironment(process.env, appEnvironment);
+    // Expo Go resolves the computer's signed-in account online for physical-device previews.
+    if (options.expoOnline) env.EXPO_OFFLINE = '0';
     const child = spawn(command, args, { cwd, shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'], env });
     this.owned.add(child);
     child.stdout?.on('data', buffer => log(String(buffer)));

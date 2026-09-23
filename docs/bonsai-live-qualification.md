@@ -81,6 +81,14 @@ A subsequent desktop review found two additional defects:
 
 Validation: 26 targeted preview/unit scenarios, four browser scenarios, production build, typecheck, lint and source checks pass. Menu and device-dialog images were inspected at desktop, 375×812 and 430×932; bounded evidence is under `.builder/device-preview-review-2026-09-23/`. The actual desktop was fully restarted with its existing workspace/profile, and Start phone preview produced Bonsai Master's live Expo Go QR code. Requests through the local Wi-Fi address returned both iOS and Android manifests and successfully compiled bundles (HTTP 200). These checks establish address discovery and native bundle delivery from this computer; they do not establish successful execution on a physical phone. No phone-test checklist entries were marked automatically.
 
+## Follow-up: Expo Go account prerequisite
+
+Physical-phone feedback then exposed a prerequisite the HTTP bundle checks did not cover. Expo Go for iOS with SDK 57 requires the same Expo account in the computer CLI and phone app ([Expo announcement, September 3, 2026](https://expo.dev/changelog/expo-go-57-login)). The installed CLI reads that account online and puts its username in the native manifest. Dunara had forced `EXPO_OFFLINE=1` for every generated process, so even signing in could not make the account visible to Expo Go.
+
+LAN previews now explicitly allow Expo online account resolution, while localhost previews and other generated processes retain their existing offline setting. The process environment still withholds provider tokens and inherited `EXPO_TOKEN`; Expo uses its own normal local login session. The device dialog now explains the same-account requirement, browser login command, and distinction between Expo, ChatGPT and app accounts. The computer browser login was launched using the installed Expo CLI; account entry remains with the user.
+
+Validation: 28 preview/environment unit scenarios, three device browser scenarios, production build, typecheck, lint and source checks pass. Phone setup and expanded login help were inspected at desktop and both phone sizes. The local runtime and phone preview were restarted with the corrected launch settings. Account-authenticated physical-phone execution remains pending the user's Expo sign-in and scan; unsigned manifest/bundle HTTP success is not counted as that verification.
+
 ## Remaining qualification
 
 The concrete functional defects and capture limitation found in this review are fixed. The artwork is improved but remains a different, simpler interpretation than the hand-authored presentation. A fresh two-prompt build using the strengthened guidance has not been rerun, and no two-minute generation guarantee is established. Animation and native-device qualification remain separate. Package publication and downstream adoption remain outside these local checks.

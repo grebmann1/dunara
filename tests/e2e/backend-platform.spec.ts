@@ -130,6 +130,18 @@ test('shows a QR code with the current environment and removes it when the previ
   await button.click();
   const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
   await expect(dialog.getByRole('img', { name: 'Scan to open Still Connected in Expo Go' })).toBeVisible();
+  await expect(dialog).toContainText('sign in to the same Expo account on your computer and in Expo Go');
+  const loginHelp = dialog.locator('.device-expo-login');
+  await loginHelp.locator('summary').click();
+  await expect(loginHelp).toContainText('npx expo login --browser');
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await loginHelp.scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+    await page.screenshot({ path: info.outputPath(`expo-login-${width}.png`) });
+  }
+  await loginHelp.locator('summary').click();
+  await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
   await expect(dialog).toContainText('development');
   await expect(dialog).toContainText(ref);
   expect(await dialog.getByRole('img').evaluate(node => {

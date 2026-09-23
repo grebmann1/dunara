@@ -118,7 +118,7 @@ export class Previews implements PreviewDriver {
         output = (output + line).slice(-8192);
         const deviceUrl = expoDeviceUrl(output, port);
         if (lan && deviceUrl && addresses.has(new URL(deviceUrl).hostname) && !signal.aborted && this.status(id).sessionId === sessionId && ['starting', 'ready'].includes(this.status(id).status)) this.update({ ...this.status(id), deviceUrl, deviceIssue: undefined });
-      }, appEnvironment);
+      }, appEnvironment, { expoOnline: lan });
       this.children.set(id, child);
       let spawnError: Error | undefined;
       child.once('error', error => { spawnError = error; });
