@@ -31,15 +31,16 @@ test('connects multiple providers, switches the chat model, and routes only expl
   await expect(configuration.getByRole('button', { name: 'Sign in with Grok', exact: true })).toBeVisible();
   await configuration.getByText('API keys & endpoints', { exact: false }).click();
   await configuration.getByLabel('Anthropic API key', { exact: true }).fill('fixture-anthropic-key-sentinel');
-  await configuration.getByRole('button', { name: 'Save API connection' }).click();
+  await configuration.getByRole('button', { name: /Connect & use/ }).click();
   await expect(configuration.getByLabel('Anthropic API key', { exact: true })).toHaveValue('');
+  await expect.poll(() => assistant.status().providerId).toBe('anthropic');
+  await configuration.getByText('Manage connections', { exact: true }).click();
   await configuration.getByRole('button', { name: 'xAI', exact: true }).click();
   await configuration.getByLabel('xAI API key', { exact: true }).fill('fixture-xai-key-sentinel');
-  await configuration.getByRole('button', { name: 'Save API connection' }).click();
+  await configuration.getByRole('button', { name: /Connect & use/ }).click();
   await expect(configuration.getByLabel('xAI API key', { exact: true })).toHaveValue('');
-  await expect(configuration.getByLabel('Assistant provider')).toContainText('Anthropic');
-  await configuration.getByLabel('Assistant provider').selectOption('xai');
-  await configuration.getByRole('button', { name: 'Save assistant model' }).click();
+  await expect(configuration.getByRole('group', { name: 'Active AI connection' })).toContainText('xAI');
+  await expect(configuration.getByRole('button', { name: 'Save assistant model' })).toHaveCount(0);
   await expect.poll(() => assistant.status().providerId).toBe('xai'); expect(calls).toHaveLength(0);
   await page.getByRole('button', { name: 'Assistant', exact: true }).click();
   const chat = page.getByRole('dialog', { name: /Assistant/ });
@@ -48,7 +49,7 @@ test('connects multiple providers, switches the chat model, and routes only expl
   const anthropic = assistant.status().connections.find(item => item.id === 'anthropic')!.models[0]!.id;
   await chat.getByRole('combobox', { name: 'Chat model' }).selectOption(`anthropic:${anthropic}`);
   await expect.poll(() => assistant.status().providerId).toBe('anthropic');
-  await expect(configuration.getByLabel('Assistant provider')).toHaveValue('anthropic');
+  await expect(configuration.getByRole('group', { name: 'Active AI connection' })).toContainText('Anthropic');
   await chat.getByRole('textbox', { name: 'Message assistant' }).fill('Explain the current project');
   await chat.getByRole('button', { name: 'Send message' }).click();
   await expect(chat.getByText('Provider fixture completed.', { exact: true })).toBeVisible();
@@ -181,4 +182,65 @@ test('explains how to recover when an old backend omits connection metadata', as
     await page.screenshot({ path: info.outputPath(`outdated-backend-${width}.png`), animations: 'disabled' });
   }
   expect(calls).toHaveLength(0);
+});
+
+
+test('sign-in selects a model automatically even after leaving Settings', async ({ page }, info) => {
+  let view = assistant.status(), selections = 0;
+  await page.route('**/api/assistant/status', route => route.fulfill({ json: view }));
+  await page.route('**/api/assistant/connections/sign-in', async route => {
+    view = { ...view, signIn: { id: randomUUID(), provider: 'chatgpt', state: 'waiting', url: 'https://auth.openai.com/authorize' } };
+    await route.fulfill({ json: view });
+  });
+  await page.route('**/api/assistant/configure', async route => {
+    selections++;
+    const { provider, model } = route.request().postDataJSON();
+    expect(provider).toBe('chatgpt');
+    view = { ...view, providerId: provider, provider: 'ChatGPT', model, configured: true };
+    await route.fulfill({ json: view });
+  });
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const configuration = page.getByRole('region', { name: 'Assistant configuration' });
+  await configuration.getByRole('button', { name: 'Sign in with ChatGPT' }).click();
+  await expect(configuration.getByRole('link', { name: 'Continue in browser' })).toBeVisible();
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await expect(configuration).toBeHidden();
+  view = { ...view, signIn: { ...view.signIn!, state: 'connected' }, connections: view.connections.map(item => item.id === 'chatgpt' ? { ...item, configured: true, source: 'session' } : item) };
+  await expect.poll(() => selections).toBe(1);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const active = configuration.getByRole('group', { name: 'Active AI connection' });
+  await expect(active).toContainText('ChatGPT');
+  await expect(active).toContainText('Ready');
+  await expect(configuration.getByLabel('Assistant model')).toBeHidden();
+  await expect(configuration.getByRole('button', { name: 'Sign in again' })).toBeHidden();
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height }); await configuration.scrollIntoViewIfNeeded();
+    await expect(active).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`ready-connection-${width}.png`), animations: 'disabled' });
+  }
+  await active.getByText('Change model', { exact: true }).click();
+  const alternative = view.connections.find(item => item.id === 'chatgpt')!.models.find(item => item.id !== view.model)!;
+  await configuration.getByLabel('Assistant model').selectOption(`chatgpt:${alternative.id}`);
+  await expect.poll(() => view.model).toBe(alternative.id);
+  expect(selections).toBe(2); expect(calls).toHaveLength(0);
+  // Revisiting a completed login must not replay an old selection.
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(active).toContainText(alternative.label);
+  expect(selections).toBe(2);
+});
+
+test('failed automatic model save preserves the active model and offers recovery', async ({ page }) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: 'fixture-openai-model-save', expectedRevision: engine.mediaJobs.providerStatus().revision });
+  const original = assistant.status().model;
+  await page.route('**/api/assistant/configure', route => route.fulfill({ status: 409, json: { error: { message: 'A turn started. Try again when it finishes.' } } }));
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const configuration = page.getByRole('region', { name: 'Assistant configuration' });
+  await configuration.getByText('Change model', { exact: true }).click();
+  const model = configuration.getByLabel('Assistant model');
+  await model.selectOption('openai:gpt-5.6-sol');
+  await expect(configuration.getByRole('alert')).toContainText('A turn started');
+  await expect(model).toHaveValue(`openai:${original}`);
+  expect(assistant.status().model).toBe(original); expect(calls).toHaveLength(0);
 });

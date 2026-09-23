@@ -33,6 +33,7 @@ for (const [width, height] of [[375, 812], [430, 932]] as const) {
     await page.setViewportSize({ width, height });
     await page.goto(studio.launchUrl);
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    await page.getByText('Privacy & storage', { exact: true }).click();
     const remember = page.getByLabel('Remember drafts on this computer');
     await expect(remember).toBeEnabled();
     await remember.click();

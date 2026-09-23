@@ -28,7 +28,7 @@ test('starts with included credits and preserves explicit personal funding at ev
     await page.goto(studio.launchUrl); await page.getByRole('button',{name:'Settings',exact:true}).click();
     const settings = page.getByRole('region',{name:'Assistant configuration'}), images = page.getByRole('region',{name:'OpenAI configuration'});
     await expect(settings.getByText('87.42 / 100 credits left')).toBeVisible();
-    await expect(settings.getByLabel('Assistant provider')).toHaveValue('managed');
+    await expect(settings.getByRole('group', { name: 'Active AI connection' })).toContainText('Dunara credits');
     for (const [width,height] of [[1440,1000],[375,812],[430,932]] as const) {
       await page.setViewportSize({width,height}); await settings.scrollIntoViewIfNeeded();
       expect(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBe(true);

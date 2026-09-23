@@ -76,6 +76,7 @@ test('one-form creation stages the right project, retains other drafts, and pers
   const previous = await engine.projects.create({ name: 'Other ideas', slug: 'other-ideas' });
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await page.getByText('Privacy & storage', { exact: true }).click();
   await page.getByLabel('Remember drafts on this computer').click();
   await expect(page.getByLabel('Remember drafts on this computer')).toBeChecked();
   await page.getByRole('button', { name: 'Preview', exact: true }).click();

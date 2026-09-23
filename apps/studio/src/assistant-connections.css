@@ -13,11 +13,20 @@
 .settings-section .ai-remember input[type="checkbox"]::before { left: 0; top: 0; }
 .settings-section .ai-remember input[type="checkbox"]:checked::after { left: 7px; top: 3px; }
 .ai-connections small { color: var(--muted); line-height: 1.5; }
-.ai-model-form fieldset, .ai-api-settings fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 10px; }
-.ai-model-fields { display: grid; grid-template-columns: 1fr 1.3fr; gap: 12px; }
-.ai-model-fields label { display: grid; gap: 6px; min-width: 0; font-size: 12px; }
-.ai-model-fields select { width: 100%; min-width: 0; text-overflow: ellipsis; }
-.ai-model-form button, .ai-api-settings button[type="submit"] { justify-self: start; }
+.ai-api-settings fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; gap: 10px; }
+.ai-active-connection { padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: var(--bg-subtle, var(--surface)); }
+.ai-active-connection .ai-connection-title strong { font-size: 16px; }
+.ai-active-connection .ai-connection-title span { color: var(--foreground); font-size: 12px; }
+.ai-connections .ai-active-connection p { margin: 5px 0 12px; font-size: 13px; color: var(--muted); }
+.ai-model-settings label { display: grid; gap: 6px; min-width: 0; font-size: 12px; margin: 12px 0 6px; }
+.ai-model-settings select { width: 100%; min-width: 0; max-width: 520px; text-overflow: ellipsis; }
+.ai-connections summary { cursor: pointer; font-size: 13px; }
+.ai-connection-options, .ai-privacy-settings { border-top: 1px solid var(--line); padding-top: 14px; }
+.ai-connection-options-body, .ai-privacy-settings > div { display: grid; gap: 14px; padding-top: 14px; }
+.ai-account-actions { margin-top: 12px; }
+.ai-account-actions > div { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 10px; }
+.ai-account-actions summary { color: var(--muted); font-size: 12px; }
+.ai-api-settings button[type="submit"] { justify-self: start; }
 .ai-api-settings { border-top: 1px solid var(--line); padding-top: 14px; }
 .ai-api-settings summary, .ai-sign-in summary { cursor: pointer; font-size: 13px; }
 .ai-api-settings > summary span { color: var(--muted); font-size: 11px; margin-left: 8px; }
@@ -34,9 +43,9 @@
 .assistant-model-picker select { flex: 1; min-width: 0; max-width: 100%; height: 30px; font-size: 11px; text-overflow: ellipsis; border-radius: 6px; }
 .assistant-model-picker button { flex-shrink: 0; font-size: 11px; }
 @container studio (max-width: 760px) {
-  .ai-subscriptions, .ai-model-fields { grid-template-columns: 1fr; }
+  .ai-subscriptions { grid-template-columns: 1fr; }
   .ai-api-list button, .assistant-model-picker select { min-height: 44px; }
-  .ai-remember { min-height: 44px; }
+  .ai-remember, .ai-connections summary { min-height: 44px; align-content: center; }
 }
 
 .assistant-provider-tag { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; font-weight: 400; color: var(--muted); }

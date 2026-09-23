@@ -38,11 +38,11 @@ test('one masked OpenAI key configures both features and the selected model reac
   await expect(key).toHaveAttribute('type', 'password');
   await expect(section.locator('input[type="password"]:visible')).toHaveCount(0);
   await key.fill(secret); await page.getByRole('button', { name: 'Save for this Dunara session', exact: true }).click();
-  await expect(key).toHaveValue(''); await expect.poll(() => assistant.status().source).toBe('session'); await expect(section.getByLabel('Assistant provider')).toHaveValue('openai');
+  await expect(key).toHaveValue(''); await expect.poll(() => assistant.status().source).toBe('session'); await expect(section.getByRole('group', { name: 'Active AI connection' })).toContainText('OpenAI');
   expect(assistant.status().configured).toBe(true); expect(engine.mediaJobs.providerStatus().configured).toBe(true); expect(calls).toBe(0);
-  await section.getByLabel('Assistant model', { exact: true }).selectOption('gpt-5.6-sol');
-  await section.getByRole('button', { name: 'Save assistant model' }).click();
-  await expect(section.getByText('Assistant model saved for future messages. No provider request was made.')).toBeVisible();
+  await section.getByText('Change model', { exact: true }).click();
+  await section.getByLabel('Assistant model', { exact: true }).selectOption('openai:gpt-5.6-sol');
+  await expect.poll(() => assistant.status().model).toBe('gpt-5.6-sol');
   expect(assistant.status().model).toBe('gpt-5.6-sol'); expect(calls).toBe(0);
   for (const [width, height] of [[375, 812], [430, 932], [1280, 900]]) {
     await page.setViewportSize({ width: width!, height: height! }); await section.scrollIntoViewIfNeeded();
@@ -72,8 +72,8 @@ test('Remember persists a shared key and independent model choice across restart
   await section.getByLabel('Remember on this computer').check();
   await section.getByRole('button', { name: 'Save on this computer', exact: true }).click();
   await expect(section.getByText('saved', { exact: true })).toBeVisible();
-  await page.getByLabel('Assistant model', { exact: true }).selectOption('gpt-5.6-luna');
-  await page.getByRole('button', { name: 'Save assistant model' }).click();
+  await page.getByText('Change model', { exact: true }).click();
+  await page.getByLabel('Assistant model', { exact: true }).selectOption('openai:gpt-5.6-luna');
   await expect.poll(() => assistant.status().model).toBe('gpt-5.6-luna');
   await page.goto('about:blank'); await assistant.close(); await endpoint.close(); await studio.close(); await engine.close();
   const home = path.join(root, 'home');
@@ -82,8 +82,9 @@ test('Remember persists a shared key and independent model choice across restart
   assistant = new AssistantService({ secretProtection: protection, home, createHarness: () => ({ async run() { calls++; }, async close() {} }), createGateway: (binding, signal, context) => McpGateway.open(endpoint.socketPath, binding, signal, context) });
   studio = await startStudio(engine, path.resolve('dist/studio'), assistant);
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  await expect.poll(() => assistant.status().source).toBe('saved'); await expect(page.getByLabel('Assistant provider')).toHaveValue('openai');
-  await expect(page.getByLabel('Assistant model', { exact: true })).toHaveValue('gpt-5.6-luna');
+  await expect.poll(() => assistant.status().source).toBe('saved'); await expect(page.getByRole('group', { name: 'Active AI connection' })).toContainText('OpenAI');
+  await page.getByText('Change model', { exact: true }).click();
+  await expect(page.getByLabel('Assistant model', { exact: true })).toHaveValue('openai:gpt-5.6-luna');
   await expect(section.getByLabel('OpenAI API key', { exact: true })).toHaveValue('');
   await page.getByRole('button', { name: 'Disconnect OpenAI' }).click();
   await expect(section.getByText('none', { exact: true })).toBeVisible();

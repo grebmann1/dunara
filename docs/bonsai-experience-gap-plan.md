@@ -63,3 +63,12 @@ A live provider-generated Bonsai build remains a separate qualification: create 
 - The actual provider adapter test confirms Build receives the design contract and Plan does not receive implementation instructions. This uses an offline Responses fixture and makes no live model request.
 - Final new-flow screenshots: `.builder/bonsai-experience/ready/`; baseline: `.builder/bonsai-experience/before/`. Images were opened and visually inspected, including the final primary preview button at all three sizes. After resizing, transcript actions are reachable by scrolling.
 - Coordinated package candidate version: 0.3.2. Package build/consumer receipts are retained under `.builder/packages/`; publication, downstream adoption and a live Bonsai build are distinct follow-up gates.
+
+
+## Connection flow follow-up
+
+The Settings screenshot exposed a redundant sign-in → provider → model → save sequence. Studio now activates the connection explicitly requested by sign-in or **Connect & use**, using its supported model catalog. A compact active-account card replaces the separate provider form and permanent success banner. **Change model** saves immediately; account maintenance, additional connections, API endpoints and privacy/storage use disclosures. Existing connected accounts need only **Use**. Credential persistence remains opt-in, and no message is sent by setup.
+
+The UI handoff follows only its own login and stops on cancellation, failure, another login, a changed model/provider, another account or a restarted runtime. It survives leaving Settings. A full Studio reload ends the UI handoff; the service retains its login, and **Use** remains available. Failed model saves keep the existing selection. No backend restart is needed for these interface changes.
+
+Verification: 10 activation unit scenarios and 19 distinct focused browser scenarios passed, including optional draft persistence, API selection/routing, OAuth completion after navigation, cancellation, failed model saves, saved keys and managed credits. Typecheck and lint passed. Actual ready-state screenshots at 1440×1000, 375×812 and 430×932 were inspected and retained under `.builder/bonsai-experience/connections/`. The native desktop interface was refreshed without restarting its backend; the existing session-only ChatGPT connection remained connected and was selected successfully. No live Assistant message was sent for this review.
