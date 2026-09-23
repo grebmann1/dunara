@@ -5,7 +5,7 @@ import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { Engine } from '../../core/src/engine.js';
-import { BuilderError, createSchema, errorResult, routeSchema, viewportSchema } from '../../core/src/contracts.js';
+import { BuilderError, captureRouteSchema, createSchema, errorResult, routeSchema, viewportSchema } from '../../core/src/contracts.js';
 import { designUpdateSchema } from '../../core/src/design.js';
 import { presets, recipes } from '../../templates/src/catalog.js';
 import { approveAssetSchema, briefUpdateSchema, importSchema, jobIdSchema, MEDIA_BYTES, transformSchema } from '../../core/src/media-contracts.js';
@@ -35,7 +35,8 @@ async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
   catch { throw new BuilderError('INVALID_INPUT', 'Malformed JSON request. Check the form and submit again.'); }
 }
 function sendJson(res: ServerResponse, value: unknown, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
-export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService) {
+export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService, options: { port?: number } = {}) {
+  const port = z.number().int().min(0).max(65535).parse(options.port ?? 0);
   // Async stores commit at the write. Legacy synchronous settings stage immutable records;
   // their acknowledgment barrier must finish before a successful transport response.
   async function json(res: ServerResponse, value: unknown, status = 200) {
@@ -439,7 +440,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
       if (action === 'phone-test') return json(res, await engine.projects.mutations.run(() => engine.previews.recordPhoneTest(id, input)));
       if (action === 'start') { z.object({}).strict().parse(input); return json(res, await engine.previews.start(id, controller.signal)); }
       if (action === 'stop') { z.object({}).strict().parse(input); await engine.previews.stop(id); return json(res, engine.previews.status(id)); }
-      if (action === 'capture') { const value = z.object({ route: routeSchema, viewport: viewportSchema }).strict().parse(input); const result = await engine.captures.capture(id, value.route, value.viewport, controller.signal); engine.diagnostics.emit('change', id); return json(res, result.meta); }
+      if (action === 'capture') { const value = z.object({ route: captureRouteSchema, viewport: viewportSchema }).strict().parse(input); const result = await engine.captures.capture(id, value.route, value.viewport, controller.signal); engine.diagnostics.emit('change', id); return json(res, result.meta); }
       if (action === 'board-captures') { const value = z.object({ route: routeSchema }).strict().parse(input); const result = await engine.boardCaptures.capture(id, value.route, controller.signal); engine.diagnostics.emit('change', id); return json(res, result); }
       return json(res, { error: { message: 'Not found' } }, 404);
     }
@@ -462,7 +463,11 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
     if (!dirty) return; dirty = false;
     for (const socket of wss.clients) { if (socket.bufferedAmount > 64_000) socket.terminate(); else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'reconcile' })); }
   }, 250);
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  } catch (error) {
+    clearInterval(interval); engine.diagnostics.off('change', changed); wss.close(); throw error;
+  }
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Studio did not bind');
   host = `127.0.0.1:${address.port}`; origin = `http://${host}`;
   return { origin, launchUrl: issueLaunchUrl(), issueLaunchUrl, async close() {

@@ -33,6 +33,7 @@ it('supervises one built backend with one-use reconnect, persistence and owned c
   await expect(fetch(host.origin)).rejects.toThrow(); await expect(stat(host.socketPath)).rejects.toThrow();
   const replacement = new DesktopHost(config); hosts.push(replacement);
   await replacement.start(); expect(replacement.pid).not.toBe(pid);
+  expect(replacement.origin).toBe(host.origin);
   const launch = await replacement.launchUrl();
   const auth = await fetch(`${replacement.origin}/api/bootstrap`, { method: 'POST', headers: { Origin: replacement.origin, 'Content-Type': 'application/json' }, body: JSON.stringify({ ticket: new URL(launch).hash.slice(1) }) });
   const { token } = await auth.json();

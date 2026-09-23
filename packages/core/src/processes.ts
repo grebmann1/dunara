@@ -3,9 +3,9 @@ import { createServer } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { BuilderError } from './contracts.js';
 import { runtimeEnvironment, type AppEnvironment } from './runtime-environment.js';
-export async function freePort() {
+export async function freePort(preferred = 0) {
   const server = createServer();
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(preferred, '127.0.0.1', resolve); });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Port allocation failed');
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));

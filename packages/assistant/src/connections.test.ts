@@ -89,6 +89,39 @@ it('keeps locked ciphertext until explicit disconnect', async () => {
   expect(locked.status(legacy).connections.find(item => item.id === 'google')?.locked).toBe(false);
 });
 
+it('remembers an existing subscription without signing in again and retains explicit storage preferences', async () => {
+  const login = vi.fn(async () => ({ type: 'oauth' as const, access, refresh, expires: Date.now() + 3600000 }));
+  const { manager, status, update, home } = await setup({ name: 'Fixture', login, async refresh(value) { return value; }, async toAuth(value) { return { apiKey: value.access }; } });
+  await manager.begin({ provider: 'chatgpt', remember: false, expectedRevision: status().connectionRevision });
+  await vi.waitFor(() => expect(status().signIn?.state).toBe('connected'));
+  const oldRevision = status().connectionRevision;
+  update({ action: 'preference', rememberNewConnections: true });
+  expect(() => manager.update({ action: 'remember', provider: 'chatgpt', remember: true, expectedRevision: oldRevision })).toThrow('changed');
+  update({ action: 'remember', provider: 'chatgpt', remember: true });
+  expect(status().connections.find(item => item.id === 'chatgpt')?.source).toBe('saved');
+  manager.close();
+  const restored = new AssistantConnections(home, protection, () => {}, () => {}); connections.push(restored);
+  expect(restored.status(legacy).rememberNewConnections).toBe(true);
+  expect(restored.credential('chatgpt', legacy).key).toBe(access);
+  expect(login).toHaveBeenCalledOnce();
+  expect(JSON.stringify(restored.status(legacy))).not.toContain(access);
+  const files = await Promise.all((await readdir(path.join(home, 'credentials'))).map(file => readFile(path.join(home, 'credentials', file), 'utf8')));
+  expect(files.join('')).not.toContain(access); expect(files.join('')).not.toContain(refresh);
+  restored.update({ action: 'remember', provider: 'chatgpt', remember: false, expectedRevision: restored.status(legacy).connectionRevision });
+  expect(restored.credential('chatgpt', legacy).key).toBe(access);
+  const forgotten = new AssistantConnections(home, protection, () => {}, () => {}); connections.push(forgotten);
+  expect(forgotten.credential('chatgpt', legacy).key).toBe('');
+  expect(forgotten.status(legacy).rememberNewConnections).toBe(true);
+});
+
+it('does not enable credential remembering without protection or promote an inherited connection', async () => {
+  const { update } = await setup(undefined, false);
+  expect(() => update({ action: 'preference', rememberNewConnections: true })).toThrow('Protected storage');
+  expect(() => update({ action: 'remember', provider: 'openai', remember: true })).toThrow('Connect this provider');
+  update({ action: 'connect', provider: 'xai', key: access, remember: false });
+  expect(() => update({ action: 'remember', provider: 'xai', remember: true })).toThrow('Protected storage');
+});
+
 it.each(['browser', 'device_code'] as const)('uses the host-selected ChatGPT %s flow', async method => {
   const { home } = await setup();
   const login = vi.fn(async (interaction: ProviderAuthInteraction) => {

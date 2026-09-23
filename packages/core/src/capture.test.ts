@@ -32,9 +32,11 @@ it('requires an active preview and rejects arbitrary URLs', async () => {
   for (const route of ['https://example.com', '//example.com', '/%2fexample.com', '/a/../b']) await expect(captures.capture(id, route, 'compact')).rejects.toThrow();
 });
 it('captures a real browser image, diagnostics, and scopes artifact access', async () => {
-  const url = await listen(createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<h1>Local preview</h1><script>throw Error("fixture error")</script>'); }));
+  const destinations: string[] = [];
+  const url = await listen(createServer((req, res) => { destinations.push(req.url!); res.setHeader('Content-Type', 'text/html'); res.end('<h1>Local preview</h1><script>throw Error("fixture error")</script>'); }));
   vi.spyOn(previews, 'status').mockReturnValue({ projectId: id, status: 'ready', url });
-  const result = await captures.capture(id, '/', 'compact');
+  const result = await captures.capture(id, '/lessons?lesson=0', 'compact');
+  expect(destinations).toContain('/lessons?lesson=0'); expect(result.meta.route).toBe('/lessons?lesson=0');
   expect(result.png.subarray(1, 4).toString()).toBe('PNG'); expect(result.meta.width).toBe(375);
   expect(captures.list(id)).toHaveLength(1); expect(captures.get(id, result.meta.id)).toStrictEqual(result);
   expect(() => captures.get('other', result.meta.id)).toThrow();

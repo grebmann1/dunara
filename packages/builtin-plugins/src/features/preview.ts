@@ -9,7 +9,8 @@ import { Projects } from "../../../core/src/projects.js";
 import { Diagnostics } from "../../../core/src/diagnostics.js";
 import { atomicWrite, exists, noSymlinks, readText } from "../../../core/src/storage.js";
 import { checkDependencies } from "../../../core/src/dependency-profiles.js";
-import { freePort, Processes } from "../../../core/src/processes.js";
+import { Processes } from "../../../core/src/processes.js";
+import { localPort } from '../../../core/src/local-ports.js';
 import { revision } from "../../../core/src/files.js";
 import type { AppEnvironment } from "../../../core/src/runtime-environment.js";
 import { expoDeviceUrl } from "../../../core/src/device-preview.js";
@@ -103,7 +104,7 @@ export class Previews implements PreviewDriver {
       await this.beforeStart(id);
       await this.installDependencies(id, project.root, signal);
       signal.throwIfAborted();
-      const port = await freePort();
+      const port = await localPort(this.projects.home, `preview-${id}`);
       const url = `http://localhost:${port}`;
       const appEnvironment = await this.environment(id);
       const sessionId = this.status(id).sessionId;

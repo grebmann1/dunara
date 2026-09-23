@@ -241,8 +241,11 @@ try {
   assert.equal((await fetch(previewUrl)).status, 200); await menu('Show Studio');
   await page.evaluate(() => { globalThis.open('https://example.com'); const a = globalThis.document.createElement('a'); a.href = 'file:///etc/passwd'; globalThis.document.body.append(a); a.click(); a.remove(); });
   await expect.poll(() => app.windows().length).toBe(1); assert.equal(new URL(page.url()).origin, origin);
+  await page.evaluate(() => { globalThis.document.documentElement.dataset.restartCheck = 'old-document'; });
   await menu('Restart backend…');
-  await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).not.toBe(origin);
+  await expect(page.locator('html')).not.toHaveAttribute('data-restart-check', 'old-document', { timeout: 30_000 });
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toBeVisible();
+  assert.equal(new URL(page.url()).origin, origin);
   await client.close(); await transport.close(); await connect();
   origin = new URL(page.url()).origin;
   const restarted = await tool('project_inspect', { projectId }); assert.equal(restarted.preview.status, 'stopped'); assert.equal(restarted.captures.length, 0);

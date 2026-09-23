@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { createSchema, routeSchema, writeSchema } from './contracts.js';
+import { captureRouteSchema, createSchema, routeSchema, writeSchema } from './contracts.js';
 describe('contracts', () => {
   it('validates creation and rejects unsafe slugs', () => {
     expect(createSchema.parse({ name: 'Still', slug: 'still' }).recipe).toBe('wellness');
@@ -23,5 +23,10 @@ describe('contracts', () => {
   });
   it('requires a revision or explicit new-file marker', () => {
     expect(writeSchema.safeParse({ path: 'app/a.tsx', content: '' }).success).toBe(false);
+  });
+  it('supports bounded capture screen parameters without loosening saved route destinations', () => {
+    for (const route of ['/', '/lessons?lesson=0', '/habit?tree=aki&day=2026-09-23']) expect(captureRouteSchema.parse(route)).toBe(route);
+    for (const route of ['//evil?lesson=0', '/a/../b?x=1', '/lessons?next=https://evil.test', '/lessons?lesson=%30', '/lessons?lesson=0#fragment', '/lessons?lesson=0&lesson=1', '/lessons?', '/lessons?x=0?y=1']) expect(captureRouteSchema.safeParse(route).success).toBe(false);
+    expect(routeSchema.safeParse('/lessons?lesson=0').success).toBe(false);
   });
 });

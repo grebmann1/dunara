@@ -2,7 +2,7 @@
 
 23 September 2026. A real Bonsai Master app was created and refined through the running desktop Studio's Assistant in a disposable workspace. The generated project was not hand-edited by the reviewer, and no mock implementation was copied into it.
 
-**Result:** the functional shape is similar to the presentation; visual polish and workflow reliability still fall short. The presentation is a 1:52 scripted simulation, not a measured generation time. This live run required recovery, took substantially longer, and does not establish a two-minute build claim.
+**Initial benchmark result:** the functional shape was similar to the presentation; visual polish and workflow reliability fell short. The presentation is a 1:52 scripted simulation, not a measured generation time. This live run required recovery, took substantially longer, and does not establish a two-minute build claim. The subsequent fixes and restart qualification are recorded below; they are a separate targeted follow-up, not a replacement for the original benchmark.
 
 ## Inputs and execution
 
@@ -47,11 +47,31 @@ Animation was not separately qualified. No native device, signed build, store su
 
 Validation: 44 targeted Assistant worker/service/API tests pass; typecheck, lint, source ownership and diff checks pass. Clean coordinated package build and installed-consumer checks pass for candidate 0.3.2 at source `f87c98c80d807a75916ba23b6200a174ca4fed12`, with a clean source receipt. This qualifies a local candidate; it is not a publication or downstream upgrade.
 
-## Remaining work, in order
+## Follow-up: functional fixes, polish and memory
 
-1. Establish stable preview identity or explicit development-state persistence across restarts; add a restart → reopen behavior check that retains care, journal and lesson state.
-2. Improve the build contract's visual acceptance criteria: layered original illustration, a compact first viewport that exposes the care action and trees, and consistent artwork across care and lessons. Repeat this same two-prompt benchmark and compare actual screenshots; instructions alone are not proof of better output.
-3. Require and verify connected domain behavior: care events in the journal, standard keyboard checkbox activation and a working return action for completed lessons. Keep generic guidance in the builder and domain-specific behavior in generated apps.
-4. Extend reproducible visual review to navigated lesson/detail states, then qualify animation and native devices separately.
+The next user request authorized fixing the remaining issues and remembering settings and ChatGPT. A targeted Build message through Studio refined the generated app; its implementation was again produced by the connected Assistant, without copying mock source. It now has layered leaf sprays, shaped branches, speckled pots, a lantern/pond setting, and consistent mentor treatment on Garden, Care, Journal and Lessons. The full first tree card and care action are visible above navigation at 375×812; both tree cards fit at 430×932. The pot crop and a web animation-driver warning were repaired during the Assistant's visual pass.
+
+The generated-app fixes were exercised in the actual desktop preview:
+
+- Space and Enter each toggle a care checkbox once, with updated accessible checked state and progress.
+- Completing a tree's routine adds a dated journal event. Undoing and completing it again leaves one event, alongside the existing manual note.
+- Wrong quiz answers retain feedback and keep completion disabled. A correct answer completes the lesson. Reopening it exposes an enabled return button without repeating the quiz; clicking it returns to Lessons.
+- After a full desktop quit and relaunch, the preview returned on the same port with 3/3 care observations, two journal entries and 1/3 lessons completed. ChatGPT returned connected with GPT-6 Astra, and both the new-connection memory preference and draft-saving preference remained enabled. No prompt was automatically resent.
+
+Shared product changes supporting this result:
+
+1. Local previews reserve a distinct port per project; desktop Studio also remembers its origin. Occupied saved ports produce an error rather than silently switching origins or stopping another process. Runtime authentication still renews, and desktop restart loads a new document even when its origin is unchanged.
+2. The desktop uses persistent browser storage across full quits. Sidebar visibility and sidebar/Assistant widths are saved, alongside the existing dock layout and project view preferences.
+3. **Remember connection** saves an already-connected subscription/API credential with encrypted storage without requiring another login. **Remember new connections** now persists as a preference; reauthentication retains an existing remembered connection. Explicit session-only and disconnect controls remain available. Model, reasoning, history and opted-in drafts restore through their existing stores.
+4. Captures accept bounded simple screen parameters, such as `/lessons?lesson=0`, while retaining path validation, origin checks and network restrictions. Lesson-detail captures now succeed at both sizes.
+5. Default Build guidance now explicitly covers detailed domain artwork, useful content in the compact first viewport, coherent secondary screens, related domain events, idempotent completion, preserved storage keys and keyboard activation.
+
+The older desktop used an ephemeral browser partition. The one-time switch to the new persistent partition does not migrate that in-memory partition automatically. In this disposable review app, the known manual test note was re-entered and test progress re-established before the full-quit persistence check. The result above proves persistence after that transition; it does not claim an automatic migration of legacy browser data. Existing encrypted ChatGPT credentials, project identities, source files, chat history and server-side settings were retained.
+
+Validation: 100 targeted unit/integration scenarios, 12 browser scenarios, the real Electron backend/full-quit smoke, generated-app TypeScript, repository typecheck/lint and source checks pass. Actual Settings screenshots at desktop, 375×812 and 430×932 were inspected. All four generated routes and lesson detail were captured and inspected at both phone sizes. Evidence uses `*-polished-375.png`, `*-polished-430.png` and `mock-vs-polished.png` in the same local evidence directory. The latter is labeled as a targeted follow-up, preserving the original `mock-vs-live.png` comparison.
+
+## Remaining qualification
+
+The concrete functional defects and capture limitation found in this review are fixed. The artwork is improved but remains a different, simpler interpretation than the hand-authored presentation. A fresh two-prompt build using the strengthened guidance has not been rerun, and no two-minute generation guarantee is established. Animation and native-device qualification remain separate. Package publication and downstream adoption remain outside these local checks.
 
 Local evidence is retained under `.builder/live-bonsai-2026-09-23/`: `mock-vs-live.png`, initial/refined Garden images and final Care, Journal and Lessons images at both phone sizes. The side-by-side comparison uses the hand-authored reference and the actual refined live output at 375×812. Runtime diagnostics contain bounded failure categories and stack information; account/session files are not part of shared evidence.

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { chromium, type Browser } from 'playwright';
-import { BuilderError, routeSchema, viewportSchema } from "../../../core/src/contracts.js";
+import { BuilderError, captureRouteSchema, viewportSchema } from "../../../core/src/contracts.js";
 import type { PreviewDriver } from "../../../core/src/preview-driver.js";
 export const viewports = { compact: { width: 375, height: 812 }, large: { width: 430, height: 932 } } as const;
 export type Artifact = { id: string; projectId: string; route: string; viewport: string; width: number; height: number; createdAt: string; rendering: 'React Native Web'; bytes: number; environment?: string; configurationRevision?: string };
@@ -19,7 +19,7 @@ export class Captures {
     return artifact;
   }
   async capture(projectId: string, inputRoute: string, inputViewport: string, signal?: AbortSignal) {
-    const route = routeSchema.parse(inputRoute), viewport = viewportSchema.parse(inputViewport);
+    const route = captureRouteSchema.parse(inputRoute), viewport = viewportSchema.parse(inputViewport);
     await this.previews.projects.get(projectId);
     const session = this.previews.status(projectId);
     if (session.status !== 'ready' || !session.url) throw new BuilderError('PREVIEW_NOT_READY', 'Start a managed preview before capturing');

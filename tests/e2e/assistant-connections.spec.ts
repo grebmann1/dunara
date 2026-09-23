@@ -244,3 +244,56 @@ test('failed automatic model save preserves the active model and offers recovery
   await expect(model).toHaveValue(`openai:${original}`);
   expect(assistant.status().model).toBe(original); expect(calls).toHaveLength(0);
 });
+
+test('remembers a connected provider, storage preference, draft and layout across a backend restart', async ({ page }, info) => {
+  const options = {
+    home: path.join(home, 'home'), secretProtection: { kind: 'configured' as const, key: 'ce'.repeat(32) },
+    createHarness: () => ({ async run(input: HarnessInput) { calls.push(input); }, async close() {} }),
+    createGateway: async () => ({ tools: [], async call() { return { content: [] }; }, async close() {} }),
+  };
+  await assistant.close(); await studio.close();
+  assistant = new AssistantService(options);
+  studio = await startStudio(engine, path.resolve('dist/studio'), assistant);
+  assistant.connectionUpdate({ action: 'connect', provider: 'anthropic', key: 'fixture-persistence-key-sentinel', remember: false, expectedRevision: assistant.status().connectionRevision });
+  assistant.configure({ action: 'model', provider: 'anthropic', model: assistant.status().connections.find(item => item.id === 'anthropic')!.models[0]!.id });
+  await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const configuration = page.getByRole('region', { name: 'Assistant configuration' });
+  await configuration.getByRole('button', { name: 'Remember Anthropic connection', exact: true }).click();
+  await expect(configuration.getByRole('group', { name: 'Active AI connection' })).toContainText('Remembered');
+  await configuration.getByText('Manage connections', { exact: true }).click();
+  await configuration.getByRole('checkbox', { name: 'Remember new connections on this computer' }).click();
+  await expect(configuration.getByRole('checkbox', { name: 'Remember new connections on this computer' })).toBeChecked();
+  await configuration.getByText('Privacy & storage', { exact: true }).click();
+  await configuration.getByRole('checkbox', { name: 'Remember drafts on this computer' }).click();
+  await expect(configuration.getByRole('checkbox', { name: 'Remember drafts on this computer' })).toBeChecked();
+  await expect.poll(() => assistant.status().rememberNewConnections).toBe(true);
+  for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await configuration.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`remembered-${width}.png`), animations: 'disabled' });
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  const sidebar = page.getByRole('separator', { name: 'Sidebar width', exact: true });
+  await sidebar.focus(); await sidebar.press('End'); await expect(sidebar).toHaveAttribute('aria-valuenow', '360');
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  const chat = page.getByRole('dialog', { name: 'Assistant', exact: true });
+  await chat.getByRole('textbox', { name: 'Message assistant' }).fill('Keep this unsent Bonsai refinement');
+  await chat.getByRole('button', { name: 'Close assistant' }).click();
+  const origin = studio.origin;
+  await page.goto('about:blank');
+  await assistant.close(); await studio.close(); await engine.close();
+  engine = new Engine(await Projects.open(path.join(home, 'apps'), path.join(home, 'home')), false);
+  assistant = new AssistantService(options);
+  studio = await startStudio(engine, path.resolve('dist/studio'), assistant, { port: Number(new URL(origin).port) });
+  await page.goto(studio.launchUrl);
+  await expect(page.getByRole('separator', { name: 'Sidebar width', exact: true })).toHaveAttribute('aria-valuenow', '360');
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await expect(configuration.getByRole('group', { name: 'Active AI connection' })).toContainText('Remembered');
+  await configuration.getByText('Manage connections', { exact: true }).click();
+  await expect(configuration.getByRole('checkbox', { name: 'Remember new connections on this computer' })).toBeChecked();
+  await page.getByRole('button', { name: 'Assistant', exact: true }).click();
+  await expect(chat.getByRole('textbox', { name: 'Message assistant' })).toHaveValue('Keep this unsent Bonsai refinement');
+  expect(calls).toHaveLength(0);
+  expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toContain('fixture-persistence-key-sentinel');
+});

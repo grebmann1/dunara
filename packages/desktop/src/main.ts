@@ -60,6 +60,8 @@ async function start() {
   try {
     const launchUrl = await host.start();
     logDiagnostic(`Desktop MCP socket: ${host.socketPath}\n`);
+    // The remembered origin is unchanged; a fragment-only ticket must still create a fresh document.
+    await window?.loadURL('about:blank');
     await window?.loadURL(launchUrl); show();
   } catch (error) {
     if (error instanceof PlatformError && error.code === 'CONFIGURATION_REQUIRED' || error instanceof BuilderError && error.code === 'INVALID_INPUT') dialog.showErrorBox('Dunara configuration needs attention', error.message);
@@ -104,8 +106,9 @@ if (!app.requestSingleInstanceLock()) {
   const appIcon = fileURLToPath(new URL('../assets/app-icon.png', import.meta.url));
   app.dock?.setIcon(appIcon);
   app.setAboutPanelOptions({ applicationName: 'Dunara', iconPath: appIcon });
-  // Ephemeral browser storage; provider credentials remain only in the Node backend.
-  const browserSession = session.fromPartition('builder-desktop');
+  // Retain Studio layout and generated-app browser data across full desktop quits.
+  // Assistant provider credentials remain in the backend's encrypted stores.
+  const browserSession = session.fromPartition('persist:builder-desktop');
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   browserSession.setPermissionCheckHandler(() => false);
   browserSession.setDevicePermissionHandler(() => false);

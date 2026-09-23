@@ -41,6 +41,7 @@ it('binds a noninteractive Expo address to its session and ignores stale output 
   expect(preview.status(id)).toEqual({ projectId: id, status: 'stopped' });
   const second = await preview.start(id), current = launches[1]!;
   expect(second.sessionId).not.toBe(first.sessionId);
+  expect(second.url).toBe(first.url);
   current.log(`Waiting on http://192.168.1.20:${current.port}\n`);
   expect(preview.status(id).deviceUrl).toBe(`exp://192.168.1.20:${current.port}`);
   old.log(`Waiting on http://192.168.1.20:${old.port}\n`); old.child.emit('exit', 0);
@@ -60,6 +61,7 @@ it('switches an owned preview to LAN without a CLI relaunch and rejects stale tr
   const phone = await preview.setTransport(id, { transport: 'lan', expectedSessionId: local.sessionId });
   expect(phone).toMatchObject({ transport: 'lan', status: 'ready' });
   expect(phone.sessionId).not.toBe(local.sessionId);
+  expect(phone.url).toBe(local.url);
   expect(preview.processes.spawn).toHaveBeenLastCalledWith(expect.any(String), expect.arrayContaining(['--go', '--lan']), expect.any(String), expect.any(Function), {});
   await expect(preview.setTransport(id, { transport: 'localhost', expectedSessionId: local.sessionId })).rejects.toMatchObject({ code: 'REVISION_CONFLICT' });
   expect(launches).toHaveLength(2);

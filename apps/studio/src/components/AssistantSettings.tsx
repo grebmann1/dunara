@@ -13,12 +13,13 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
   const { api, capabilities } = useStudioClient();
   const [status, setStatus] = useState<AssistantStatus>();
   const [showConnections, setShowConnections] = useState(false);
-  const [apiProvider, setApiProvider] = useState('anthropic'), [remember, setRemember] = useState(false), [endpoint, setEndpoint] = useState('');
+  const [apiProvider, setApiProvider] = useState('anthropic'), [endpoint, setEndpoint] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState('');
   const alive = useRef(true), operating = useRef(false), generation = useRef(0), key = useRef<HTMLInputElement>(null), code = useRef<HTMLInputElement>(null);
   const connections = status?.connections ?? [], selected = connections.find(item => item.id === status?.providerId), apiConnection = connections.find(item => item.id === apiProvider);
   const flow = status?.signIn, waiting = flow?.state === 'waiting', locked = disabled || busy || !status?.available || status.busy;
   const ready = !!status?.configured && !!selected?.models.some(item => item.id === status.model);
+  const remember = !!status?.rememberNewConnections;
   useEffect(() => {
     alive.current = true;
     const refresh = async () => {
@@ -58,6 +59,7 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
     if (model) void act('configure', { action: 'model', provider: id, model });
   };
   const disconnect = (id: string) => void act('connections/update', { action: 'disconnect', provider: id, expectedRevision: status?.connectionRevision }, 'Connection removed.');
+  const rememberConnection = (id: string, remember: boolean) => void act('connections/update', { action: 'remember', provider: id, remember, expectedRevision: status?.connectionRevision }, remember ? 'Connection remembered with encrypted storage.' : 'Connection will last for this session only.');
   if (!status?.available || !connections.length) return <section className="settings-section ai-connections ai-connections-unavailable" aria-label="Assistant configuration">
     <div className="ai-connections-heading"><KeyRound size={18} aria-hidden /><h2>AI connections</h2></div>
     <p role="status">{!status ? error || 'Loading connections…' : status.available ? 'Restart Dunara to load AI connections.' : 'The Assistant requires the desktop app with its optional runtime installed.'}</p>
@@ -70,6 +72,7 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
     {ready && <div className="ai-active-connection" role="group" aria-label="Active AI connection">
       <div className="ai-connection-title"><strong>{selected?.name}</strong><span><Check size={14} aria-hidden />Ready</span></div>
       <p>{selected?.models.find(item => item.id === status.model)?.label}{selected?.source === 'session' ? ' · This session' : selected?.source === 'saved' ? ' · Remembered' : ''}</p>
+      {selected?.source === 'session' && !selected.inherited && status.rememberAvailable && <Button variant="outline" disabled={locked || waiting} onClick={() => rememberConnection(selected.id, true)}>Remember {selected.name} connection</Button>}
       <details className="ai-model-settings"><summary>Change model</summary>
         <label>Assistant model<select aria-label="Assistant model" value={`${status.providerId}:${status.model}`} disabled={locked || waiting} onChange={event => {
           const [provider, ...parts] = event.target.value.split(':');
@@ -81,18 +84,19 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
     <details className="ai-connection-options" open={!ready || showConnections} onToggle={event => { if (ready) setShowConnections(event.currentTarget.open); }}>
       <summary>{ready ? 'Manage connections' : 'Choose a connection'}</summary>
       <div className="ai-connection-options-body">
-      {status.rememberAvailable && <label className="ai-remember"><input type="checkbox" disabled={locked || waiting} checked={remember} onChange={event => setRemember(event.target.checked)} />Remember new connections {capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer'}</label>}
+      {status.rememberAvailable && <label className="ai-remember"><input type="checkbox" disabled={locked || waiting} checked={remember} onChange={event => void act('connections/update', { action: 'preference', expectedRevision: status.connectionRevision, rememberNewConnections: event.target.checked })} />Remember new connections {capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer'}</label>}
       <div className="ai-subscriptions">{connections.filter(item => item.kind === 'oauth' || item.configured).map(item => <section className="ai-connection-card" key={item.id} aria-label={`${item.name} connection`}>
         <div className="ai-connection-title"><strong>{item.name}</strong><span>{item.configured ? <><Check size={13} aria-hidden />{ready && item.id === status.providerId ? 'In use' : 'Connected'}</> : item.locked ? 'Locked' : 'Subscription'}</span></div>
         <p>{item.configured ? item.source === 'saved' ? `Remembered ${capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer'}.` : item.kind === 'managed' ? 'Use your included allowance.' : item.source === 'session' ? 'Connected for this session.' : 'Connected and available.' : `Use your ${item.name} account.`}</p>
         {item.configured ? item.id !== status.providerId || !ready ? <Button variant="outline" disabled={locked || waiting || !item.models.length} onClick={() => useConnection(item.id)}>Use {item.name}</Button> : null : <Button disabled={locked || waiting || item.locked} onClick={() => void act('connections/sign-in', { provider: item.id, expectedRevision: status.connectionRevision, remember: remember && status.rememberAvailable }, '', item.id)}>Sign in with {item.name}</Button>}
         {item.kind !== 'managed' && (item.configured || item.locked) && <details className="ai-account-actions"><summary>Connection options</summary><div>
-          {item.kind === 'oauth' && <Button variant="outline" disabled={locked || waiting || item.locked} onClick={() => void act('connections/sign-in', { provider: item.id, expectedRevision: status.connectionRevision, remember: remember && status.rememberAvailable })}>Sign in again</Button>}
+          {item.kind === 'oauth' && <Button variant="outline" disabled={locked || waiting || item.locked} onClick={() => void act('connections/sign-in', { provider: item.id, expectedRevision: status.connectionRevision, remember: (item.source === 'saved' || remember) && status.rememberAvailable })}>Sign in again</Button>}
+          {item.configured && !item.inherited && (item.source === 'saved' || status.rememberAvailable) && <Button variant="outline" disabled={locked || waiting || item.locked} onClick={() => rememberConnection(item.id, item.source !== 'saved')}>{item.source === 'saved' ? 'Use for this session only' : 'Remember connection'}</Button>}
           {!item.inherited && <Button variant="ghost" disabled={locked || waiting} onClick={() => disconnect(item.id)}>Disconnect {item.name}</Button>}
           {item.inherited && <small>Manage this key under Image generation below.</small>}
         </div></details>}
       </section>)}</div>
-      <small>{status.rememberAvailable ? 'New connections are used for your next message.' : 'New connections are used for your next message and last until Dunara closes.'}</small>
+      <small>{status.rememberAvailable ? 'This preference is saved. Existing connections keep their own storage setting.' : 'New connections are used for your next message and last until Dunara closes.'}</small>
     {flow && flow.state !== 'connected' && <div className="ai-sign-in" role="status">
       {waiting ? <><strong>Finish signing in to {connections.find(item => item.id === flow.provider)?.name}</strong>
         {flow.url ? <a href={flow.url} target="_blank" rel="noreferrer">Continue in browser <ExternalLink size={13} aria-hidden /></a> : <p>Preparing secure sign-in…</p>}
@@ -102,7 +106,7 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
     </div>}
     <details className="ai-api-settings"><summary>API keys & endpoints <span>{connections.filter(item => item.kind === 'api_key' && item.configured).length} connected</span></summary>
       <div className="ai-api-list">{connections.filter(item => item.kind === 'api_key').map(item => <button type="button" key={item.id} aria-pressed={apiProvider === item.id} onClick={() => { setApiProvider(item.id); setEndpoint(item.baseUrl); if (key.current) key.current.value = ''; }}><span>{item.name}</span>{item.configured && <Check size={13} aria-label="Connected" />}</button>)}</div>
-      <form onSubmit={event => { event.preventDefault(); void act('connections/update', { action: 'connect', provider: apiProvider, expectedRevision: status?.connectionRevision, key: key.current?.value ?? '', remember: remember && status?.rememberAvailable, ...((endpoint.trim() || apiConnection?.baseUrl) ? { baseUrl: endpoint.trim() || apiConnection?.baseUrl } : {}) }, '', apiProvider); }} autoComplete="off">
+      <form onSubmit={event => { event.preventDefault(); void act('connections/update', { action: 'connect', provider: apiProvider, expectedRevision: status?.connectionRevision, key: key.current?.value ?? '', remember: (apiConnection?.source === 'saved' || remember) && status?.rememberAvailable, ...((endpoint.trim() || apiConnection?.baseUrl) ? { baseUrl: endpoint.trim() || apiConnection?.baseUrl } : {}) }, '', apiProvider); }} autoComplete="off">
         <fieldset disabled={locked || waiting || apiConnection?.locked}>
           <Label htmlFor="assistant-api-key">{apiConnection?.name ?? 'Provider'} API key</Label><Input id="assistant-api-key" ref={key} type="password" required minLength={16} maxLength={4096} autoComplete="off" spellCheck={false} />
           <details><summary>Custom endpoint</summary><Label htmlFor="assistant-api-endpoint">HTTPS API base URL</Label><Input id="assistant-api-endpoint" type="url" value={endpoint} placeholder={apiConnection?.baseUrl} onChange={event => setEndpoint(event.target.value)} /><small>Your key and messages will be sent to this endpoint.</small></details>

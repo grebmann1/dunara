@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { readShellPreferences, saveShellPreferences } from '../../shell-preferences';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, Activity, Database, FolderPlus, Image, LayoutGrid, Puzzle, Settings, Smartphone } from 'lucide-react';
 import type { Project } from '../../../../../packages/core/src/contracts';
@@ -34,10 +35,12 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
   const shell = useRef<HTMLDivElement>(null), sidebarTrigger = useRef<HTMLButtonElement>(null);
   const [assistantHost, setAssistantHost] = useState<HTMLDivElement | null>(null);
   const [compact, setCompact] = useState(() => typeof matchMedia === 'function' && matchMedia('(max-width: 760px)').matches);
-  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true), [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [savedShell] = useState(readShellPreferences);
+  const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(savedShell.sidebarOpen), [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const drawer = hosted && compact, sidebarOpen = drawer ? mobileSidebarOpen : desktopSidebarOpen;
-  const [sidebarWidth, setSidebarWidth] = useState(248);
-  const [assistantWidth, setAssistantWidth] = useState(0);
+  const [sidebarWidth, setSidebarWidth] = useState(savedShell.sidebarWidth);
+  const [assistantWidth, setAssistantWidth] = useState(savedShell.assistantWidth);
+  useEffect(() => { saveShellPreferences({ sidebarOpen: desktopSidebarOpen, sidebarWidth, assistantWidth }); }, [desktopSidebarOpen, sidebarWidth, assistantWidth]);
   const drag = useRef<{ x: number; width: number } | null>(null);
   const assistantDrag = useRef<{ x: number; width: number } | null>(null);
   const returnFocus = useRef<'trigger' | 'workspace' | 'dialog'>('trigger');
