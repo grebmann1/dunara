@@ -311,13 +311,22 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         const initial = assistant.events(cursor.after, cursor.epoch);
         assistantStreams.add(res); res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'X-Accel-Buffering': 'no' });
         let after = initial.sequence; const epoch = initial.epoch;
-        const unsubscribe = assistant.subscribe(() => {
-          try { const packet = assistant.events(after, epoch); after = packet.sequence; if (!res.write(JSON.stringify(packet) + '\n')) res.end(); }
-          catch { res.end(); }
+        let ended = false, unsubscribe = () => {};
+        const cleanup = () => { if (ended) return; ended = true; clearTimeout(deadline); unsubscribe(); assistantStreams.delete(res); };
+        const end = () => { cleanup(); if (!res.writableEnded && !res.destroyed) res.end(); };
+        const write = (packet: ReturnType<AssistantService['events']>) => {
+          if (ended || res.writableEnded || res.destroyed) { cleanup(); return; }
+          try { if (!res.write(JSON.stringify(packet) + '\n')) end(); }
+          catch { end(); }
+        };
+        unsubscribe = assistant.subscribe(() => {
+          try { const packet = assistant.events(after, epoch); after = packet.sequence; write(packet); }
+          catch { end(); }
         });
-        const deadline = setTimeout(() => res.end(), 25_000);
-        res.once('close', () => { clearTimeout(deadline); unsubscribe(); assistantStreams.delete(res); });
-        if (!res.write(JSON.stringify(initial) + '\n')) res.end();
+        res.once('error', () => { cleanup(); res.destroy(); });
+        res.once('close', cleanup);
+        const deadline = setTimeout(end, 25_000);
+        write(initial);
         return;
       }
       if (url.pathname === '/api/studio') {

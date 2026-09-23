@@ -15,7 +15,7 @@ import type { PiHarness } from './pi.js';
 const built: { PiHarness: typeof PiHarness } = await import(new URL('../../../dist/packages/assistant/src/pi.js', import.meta.url).href);
 const cleanups: Array<() => Promise<unknown>> = [];
 const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() })).default([]), input: z.unknown() }).passthrough();
-type Mode = 'text' | 'tool' | 'hold' | '429' | '500';
+type Mode = 'text' | 'tool' | 'hold' | '429' | '500' | 'model-unavailable';
 async function provider(mode: Mode) {
   const requests: Array<z.infer<typeof requestSchema>> = [];
   const server = createServer((req, res) => { void (async () => {
@@ -23,6 +23,7 @@ async function provider(mode: Mode) {
     expect(req.url).toBe('/v1/responses'); expect(req.headers.authorization).toBe('Bearer offline-worker-credential-sentinel');
     const body = requestSchema.parse(JSON.parse(text)); requests.push(body);
     expect(body.store).toBe(false); expect(text).not.toContain('offline-worker-credential-sentinel'); expect(text).not.toContain('INHERITED_POISON');
+    if (mode === 'model-unavailable') { res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: "The 'fixture' model is not supported when using this account. PRIVATE-PROVIDER-DETAIL" } })); return; }
     if (mode === '429' || mode === '500') { res.writeHead(Number(mode), { 'Content-Type': 'application/json', 'Retry-After': '0' }).end(JSON.stringify({ error: { message: 'Offline fixture rejection' } })); return; }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     send(res, { type: 'response.created', response: { id: 'resp_fixture', status: 'in_progress' } });
@@ -46,6 +47,11 @@ function harness(baseUrl: string, reasoning = false): RunHarness {
   cleanups.push(() => value.close()); return value;
 }
 afterEach(async () => { vi.unstubAllEnvs(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+it('reports an unavailable account model with a fixed recovery notice and no provider details or retry', async () => {
+  const fixture = await provider('model-unavailable'), worker = harness(fixture.baseUrl);
+  await expect(worker.run(input(), { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal)).rejects.toThrow('This model is not available for your connected account. Choose another model, then send your message again. No automatic retry was made.');
+  expect(fixture.requests).toHaveLength(1);
+}, 20000);
 it.each(['low', 'high'] as const)('sends explicit %s reasoning through the real worker and Responses adapter', async reasoningEffort => {
   const fixture = await provider('text'), worker = harness(fixture.baseUrl, true);
   await worker.run({ ...input(), reasoningEffort }, { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal);

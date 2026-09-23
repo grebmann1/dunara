@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { get } from 'node:http';
+import { get, ServerResponse } from 'node:http';
 import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -136,6 +136,36 @@ it('requires an exact active human approval and rejects forged, cross-project an
   const projectId = z.object({ id: z.uuid() }).parse((await engine.projects.list())[0]).id;
   expect((await assistant.conversation(conversation.id)).projectId).toBe(projectId);
   expect((await poll()).approvals).toEqual([]); expect(JSON.stringify(await poll())).not.toContain(review.id);
+});
+
+it('closes a backpressured event stream before more tokens arrive without failing the build', async () => {
+  await settings('replace', secret);
+  let burst: (() => void) | undefined;
+  behavior = async (_, callbacks) => new Promise<void>(resolve => {
+    burst = () => { for (let index = 0; index < 8; index++) callbacks.text(`Word ${index}. `); resolve(); };
+  });
+  const conversation = await create(); await start(conversation);
+  await vi.waitFor(() => expect(burst).toBeDefined());
+  let backpressure = false;
+  const errors: Error[] = [], observed = new Set<ServerResponse>();
+  const write = ServerResponse.prototype.write;
+  const spy = vi.spyOn(ServerResponse.prototype, 'write').mockImplementation(function (this: ServerResponse, ...args: Parameters<typeof write>) {
+    const streaming = this.getHeader('Content-Type') === 'application/x-ndjson';
+    if (streaming && !observed.has(this)) { observed.add(this); this.on('error', error => errors.push(error)); }
+    const result = write.apply(this, args);
+    return streaming && backpressure ? false : result;
+  });
+  try {
+    const response = await post('events', { after: 0, epoch: assistant.epoch, stream: true });
+    expect(response.status).toBe(200);
+    backpressure = true; burst!();
+    await response.text();
+    await vi.waitFor(() => expect(assistant.status().busy).toBe(false));
+    expect(errors).toEqual([]);
+    expect((await assistant.conversation(conversation.id)).turns.at(-1)).toMatchObject({ state: 'completed', response: 'Word 0. Word 1. Word 2. Word 3. Word 4. Word 5. Word 6. Word 7. ' });
+    expect((await poll()).events.filter(event => event.type === 'text')).toHaveLength(8);
+    expect(invoked).toHaveBeenCalledTimes(1);
+  } finally { spy.mockRestore(); }
 });
 
 it('validates and persists model selection without spending, then uses it for the next turn', async () => {

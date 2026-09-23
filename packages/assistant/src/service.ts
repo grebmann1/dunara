@@ -17,6 +17,7 @@ import { setupRequestSchema } from './contracts.js';
 import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
 import { ManagedAiUnavailable, type ManagedAiConnection } from '../../core/src/managed-ai.js';
+import { AssistantModelUnavailable } from './provider-failure.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -371,7 +372,7 @@ export class AssistantService {
       }, run.controller.signal), run.controller.signal);
       this.guard(run); this.text(run, '', true); run.turn.state = 'completed';
     } catch (error) {
-      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
+      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof AssistantModelUnavailable ? new AssistantModelUnavailable().message : error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
     } finally {
       clearTimeout(run.timer);
       run.controller.abort();
