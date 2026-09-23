@@ -1,6 +1,6 @@
 {
   "name": "@mobile-builder/plugin-sdk",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "license": "Apache-2.0",
   "description": "Public contracts and authoring helpers for Dunara plugins",

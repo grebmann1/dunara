@@ -28,6 +28,15 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
     setAttachments({ ...attachments, inspector });
   };
   const setDraft = (value: string) => { drafts.current.set(draftKey, value); setDraftState(value); };
+  // Creation can finish before React has committed the project switch. Address
+  // the destination explicitly so the previous project's unsent draft is safe.
+  const stageProjectBuild = (target: string, prompt: string) => {
+    const key = chosen.current.get(target) ?? `project:${target}`;
+    const previous = drafts.current.get(key);
+    const next = previous?.trim() ? `${previous}\n\n${prompt}` : prompt;
+    drafts.current.set(key, next); modes.current.set(key, 'build');
+    if (current.current === target) { setDraftState(next); renderMode(value => value + 1); }
+  };
   const persistence = useAssistantDraftPersistence({ projectId, conversationId: conversation?.id ?? null }, { text: draft, mode, attachments }, ready && open && !loading && !!status?.available, value => {
     drafts.current.set(draftKey, value.text); modes.current.set(draftKey, value.mode); attachmentDrafts.current.set(draftKey, value.attachments);
     setDraftState(value.text); renderMode(value => value + 1); renderAttachments(value => value + 1);
@@ -232,6 +241,6 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   async function approve(review: AssistantPacket['approvals'][number], approve: boolean) {
     await operate(async () => { await api('/assistant/approvals', { id: review.id, epoch: review.epoch, runId: review.runId, conversationId: review.conversationId, projectId: review.projectId, approve }); });
   }
-  return { selectModel, selectReasoning, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
+  return { stageProjectBuild, selectModel, selectReasoning, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
 }
 export type AssistantController = ReturnType<typeof useAssistant>;

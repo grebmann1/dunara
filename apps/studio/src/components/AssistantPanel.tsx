@@ -15,17 +15,18 @@ import type { AssistantSetupRequest } from '../../../../packages/assistant/src/c
 import { continuationPrompt } from '../assistant-history';
 import '../assistant-images.css';
 import '../assistant-connections.css';
+import type { Preview } from '../../../../packages/core/src/contracts';
 import { useOverlayViewport } from '../useOverlayViewport';
 import '../assistant-mobile.css';
 
-type Props = { controller: AssistantController; open: boolean; desktop: boolean; container: HTMLDivElement | null; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; backendEnabled: boolean; onBackend(): void; onSettings(): void };
+type Props = { controller: AssistantController; open: boolean; desktop: boolean; container: HTMLDivElement | null; onOpenChange(open: boolean): void; trigger: RefObject<HTMLButtonElement | null>; projectName?: string; preview?: Preview; previewDisabled?: boolean; onPreview?(mode: 'focus' | 'overview'): Promise<void>; backendEnabled: boolean; onBackend(): void; onSettings(): void };
 const starters = [
   { title: 'Refine this screen', detail: 'Make the details feel right', prompt: 'Review the current screen and suggest improvements to its layout, spacing, and typography.' },
   { title: 'Build something new', detail: 'Turn an idea into a working app', prompt: 'Help me plan a new mobile app. Ask me about the idea, who it is for, and the visual direction.' },
   { title: 'Find and fix an issue', detail: 'Get things working again', prompt: 'Review this project for errors and help me fix what is not working.' },
 ];
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
-export function AssistantPanel({ controller: a, open, desktop, container, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings }: Props) {
+export function AssistantPanel({ controller: a, open, desktop, container, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings, preview, previewDisabled, onPreview }: Props) {
   const narrow = !desktop;
   const viewport = useOverlayViewport(open && narrow);
   const [manualSetup, setManualSetup] = useState<AssistantSetupRequest>();
@@ -48,6 +49,8 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
   useLayoutEffect(() => { setManualSetup(undefined); }, [setupScope]);
   const continueSetup = (message: string) => { a.setDraft(a.draft.trim() ? `${a.draft}\n\n${message}` : message); input.current?.focus(); };
   const setupDisabled = a.working || !!a.status?.busy || a.mode === 'plan';
+  // Resize the composer before calculating the transcript’s new bottom.
+  useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open, desktop]);
   useLayoutEffect(() => {
     const element = scroll.current; if (!element) return;
     // Native scroll events can follow a React layout commit. Respect an upward
@@ -60,7 +63,6 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
     else if (following.current) element.scrollTop = element.scrollHeight;
     lastScroll.current = { element, top: element.scrollTop };
   }, [a.conversation?.turns, a.approvals, a.working, a.error, a.connectionError, deleting, showHistory, count, open, narrow]);
-  useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open, desktop]);
   const active = a.status?.active, here = !!active && active.conversationId === a.conversation?.id;
   const reviews = a.approvals.filter(review => review.conversationId === a.conversation?.id);
   const lastTurn = a.conversation?.turns.at(-1);
@@ -98,7 +100,7 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
         {showHistory && <AssistantHistory key={a.projectId ?? 'new'} controller={a} onSelect={() => setShowHistory(false)} onDelete={() => { setDeleting(true); setShowHistory(false); followLatest(); }} />}
         <div className="assistant-conversation">
           <div className="assistant-transcript" ref={scroll} aria-label="Conversation" onScroll={() => { if (scroll.current) { const near = scroll.current.scrollHeight - scroll.current.scrollTop - scroll.current.clientHeight < 60; following.current = near; lastScroll.current = { element: scroll.current, top: scroll.current.scrollTop }; setAtBottom(near); } }}>
-            {!a.status || (a.status.configured && a.loading) ? <div className="assistant-loading" role="status"><LoaderCircle className="assistant-spinner" size={18} aria-hidden />Loading conversation…</div> : !a.status.configured ? <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>A little help. A lot of possibility.</h3><p>Build an app, refine a screen, or work through an idea, right beside your preview.</p><Button onClick={() => { onOpenChange(false); onSettings(); }}>Connect assistant<ChevronRight size={16} aria-hidden /></Button><small>Connect ChatGPT, Grok or an API provider in Settings.</small></section> : !a.conversation?.turns.length && !a.historyError && !a.error && <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>What would you like to build?</h3><p>A fresh idea or a finishing touch.<br />Let’s make your app feel right.</p><div className="assistant-starters">{starters.map(({ title, detail, prompt }) => <button key={title} onClick={() => { a.setDraft(prompt); input.current?.focus(); }} disabled={a.working}><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={16} aria-hidden /></button>)}</div></section>}
+            {!a.status || (a.status.configured && a.loading) ? <div className="assistant-loading" role="status"><LoaderCircle className="assistant-spinner" size={18} aria-hidden />Loading conversation…</div> : !a.status.configured ? <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>A little help. A lot of possibility.</h3><p>Build an app, refine a screen, or work through an idea, right beside your preview.</p><Button onClick={() => { onOpenChange(false); onSettings(); }}>Connect assistant<ChevronRight size={16} aria-hidden /></Button><small>Connect ChatGPT, Grok or an API provider in Settings.</small></section> : !a.conversation?.turns.length && !a.historyError && !a.error && <section className="assistant-empty"><span className="assistant-empty-mark" aria-hidden><Sparkles size={26} /></span><h3>{a.draft.trim() ? 'Ready when you are' : 'What would you like to build?'}</h3><p>{a.draft.trim() ? a.mode === 'build' ? 'Review your idea below, then send it to build. You can refine every detail as you go.' : 'Review your message below, then send it to start planning.' : <>A fresh idea or a finishing touch.<br />Let’s make your app feel right.</>}</p><div className="assistant-starters" hidden={!!a.draft.trim()}>{starters.map(({ title, detail, prompt }) => <button key={title} onClick={() => { a.setDraft(prompt); input.current?.focus(); }} disabled={a.working}><span><strong>{title}</strong><small>{detail}</small></span><ChevronRight size={16} aria-hidden /></button>)}</div></section>}
             {a.conversation && a.conversation.turns.length > count && <Button variant="ghost" onClick={() => { following.current = false; earlierHeight.current = scroll.current?.scrollHeight ?? null; setCount(value => value + 40); }}>Show earlier messages</Button>}
             {a.conversation?.turns.slice(-count).map(turn => <article key={turn.id} className="assistant-turn">
               <div className="assistant-user-message"><h3>You <span className="assistant-mode-tag">{turn.mode === 'plan' ? 'Plan' : 'Build'}</span></h3><p className="assistant-user">{turn.prompt}</p></div>
@@ -110,6 +112,16 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
               {turn.notice && <p className="assistant-turn-notice" data-state={turn.state}>{turn.notice}</p>}
               {backendEnabled && turn.setupRequests?.filter(request => request.projectId === a.projectId).map(request => <AssistantSetupCard key={`${setupScope}:${turn.id}:${request.kind}:${request.environment}`} request={request} initialOpen={turn.id === lastTurn?.id} disabled={setupDisabled} onBackend={() => { onOpenChange(false); onBackend(); }} onContinue={continueSetup} />)}
               {a.status?.sourceChanges && a.conversation?.projectId && turn.mode !== 'plan' && !['starting', 'running'].includes(turn.state) && <AssistantChanges key={`${a.status.epoch}:${a.status.accountContext}:${a.projectId}:${a.conversation.id}:${turn.id}`} conversationId={a.conversation.id} runId={turn.id} status={a.status} working={a.working} onRestore={a.refresh} />}
+              {turn.id === lastTurn?.id && turn.mode === 'build' && turn.state === 'completed' && a.projectId && onPreview && <section className="assistant-result" aria-label="Try and refine your app">
+                <strong>Keep making it yours</strong>
+                <p>{preview?.status === 'ready' ? 'Your preview is running. Try the interactions, then tell me what to change.' : preview?.status === 'starting' ? 'Your preview is starting. You can review saved screens while it gets ready.' : 'Start the preview to try this version, or review your saved screens.'}</p>
+                <div className="assistant-result-actions">
+                  <Button disabled={previewDisabled || !!a.status?.busy || preview?.status === 'starting'} onClick={() => void onPreview('focus')}><Play size={14} aria-hidden />{preview?.status === 'ready' ? 'Try your app' : 'Start preview'}</Button>
+                  <Button variant="ghost" disabled={a.working || !!a.status?.busy} onClick={() => void onPreview('overview')}>Review screens</Button>
+                  <Button variant="ghost" disabled={a.working || !!a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode('build'); a.setDraft('Refine the visual design of this app. Inspect the current screens, choose the most impactful improvements to its composition, artwork, typography and interaction feedback, then implement and visually verify them. Preserve the working features.'); input.current?.focus(); }}>Refine the design</Button>
+                </div>
+                {previewDisabled && preview?.status !== 'ready' && <small>Preview is unavailable right now. Check the Preview workspace for setup or errors.</small>}
+              </section>}
               {turn.id === lastTurn?.id && turn.mode === 'plan' && turn.state === 'completed' && turn.response && <Button variant="outline" className="assistant-build-plan" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode('build'); a.setDraft('Implement the plan we just discussed. Follow its steps and verify the changes.'); input.current?.focus(); }}><Hammer size={14} aria-hidden />Build this plan</Button>}
               {turn.id === lastTurn?.id && ['cancelled', 'failed', 'interrupted', 'limited'].includes(turn.state) && <Button variant="outline" className="assistant-build-plan" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode(turn.mode ?? 'build'); a.setDraft(continuationPrompt(turn)); input.current?.focus(); }}><Play size={14} aria-hidden />Continue</Button>}
               {['failed', 'interrupted', 'limited'].includes(turn.state) && <Button variant="ghost" className="assistant-edit-message" disabled={a.working || a.status?.busy || !!a.draft.trim()} onClick={() => { a.setMode(turn.mode ?? 'build'); a.setDraft(turn.prompt); input.current?.focus(); }}>Edit and resend</Button>}

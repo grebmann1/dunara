@@ -76,6 +76,11 @@ it.each(['plan', 'build'] as const)('passes trusted %s mode instructions to the 
   const request = JSON.stringify(fixture.requests[0]);
   expect(request).toContain(`Current mode: ${mode.toUpperCase()}`);
   expect(request).toContain('assistant_update_tasks');
+  if (mode === 'build') {
+    expect(request).toContain('specific visual direction');
+    expect(request).toContain('Capture each changed route at compact and large sizes');
+    expect(request).toContain('consistent state');
+  } else expect(request).not.toContain('For a new app brief');
   expect(request).toContain(mode === 'plan' ? 'This mode is fixed for the entire turn' : 'Implement the user');
 }, 20000);
 it.each(['429', '500'] as const)('makes exactly one request and no automatic retries after HTTP %s', async mode => {

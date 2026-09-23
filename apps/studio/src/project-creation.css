@@ -33,3 +33,9 @@
 .project-creation-dialog .backend-connection fieldset > p { margin: 0; font-size: 11px; }
 .project-creation-dialog .backend-actions { gap: 6px; }
 @media (max-width: 600px) { .project-creation-dialog { padding: 20px; } }
+
+.creation-backend-link { display: flex; align-items: center; gap: 8px; width: fit-content; max-width: 100%; min-height: 36px; padding: 0; color: var(--muted-foreground); font-size: 12px; text-align: left; }
+.creation-backend-link svg { flex-shrink: 0; }
+.creation-backend-link:hover { color: var(--foreground); }
+.creation-next-note { margin: 0; padding: 12px; border-radius: 8px; background: var(--primary-soft); color: var(--foreground); font-size: 12px; line-height: 1.6; }
+@media (max-width: 600px) { .creation-backend-link { min-height: 44px; } }

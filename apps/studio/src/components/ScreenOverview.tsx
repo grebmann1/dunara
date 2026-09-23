@@ -44,23 +44,25 @@ export function ScreenOverview({ controlsHost, projectId, screens, captures, sou
     try {
       for (const [index, route] of routes.entries()) {
         if (controller.signal.aborted) break;
-        attempted.current.add(route); setProgress({ route, index: index + 1, total: routes.length });
+        const attempt = `${sourceRevision}:${route}`;
+        attempted.current.add(attempt); setProgress({ route, index: index + 1, total: routes.length });
         setErrors(current => ({ ...current, [route]: '' }));
         try {
           const capture = await api<BoardCapture>(`/projects/${projectId}/board-captures`, { route }, controller.signal);
           if (mounted.current && !controller.signal.aborted) setFresh(current => ({ ...current, [route]: capture }));
         } catch (error) {
-          if (controller.signal.aborted) attempted.current.delete(route);
+          if (controller.signal.aborted) attempted.current.delete(attempt);
           else if (mounted.current) setErrors(current => ({ ...current, [route]: error instanceof Error ? error.message : 'Refresh failed. Try again.' }));
         }
       }
     } finally { if (running.current === controller) { running.current = null; if (mounted.current) setProgress(undefined); } }
   }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; running.current?.abort(); }; }, []);
+  useEffect(() => { attempted.current.clear(); }, [sourceRevision]);
   useEffect(() => {
     if (!active || !ready || disabled) { running.current?.abort(); return; }
-    if (!autoPaused) void refresh(screens.filter(screen => !all.has(screen.route) && !attempted.current.has(screen.route)).map(screen => screen.route));
-  }, [active, ready, disabled, routesKey, !!progress, autoPaused]);
+    if (!autoPaused) void refresh(screens.filter(screen => { const capture = all.get(screen.route); return (!capture || capture.sourceRevision !== sourceRevision || capture.changedDuringCapture) && !attempted.current.has(`${sourceRevision}:${screen.route}`); }).map(screen => screen.route));
+  }, [active, ready, disabled, routesKey, sourceRevision, !!progress, autoPaused]);
   return <section className="screen-overview" aria-label="All app screens" hidden={!active}>
     {active && controlsHost && createPortal(progress ? <Button className="overview-refresh" variant="outline" aria-label="Stop refresh" title="Stop refresh" onClick={() => { setAutoPaused(true); running.current?.abort(); }}><Square aria-hidden /><span className="refresh-label">Stop refresh</span></Button> : <Button className="overview-refresh" variant="ghost" aria-label={chosen.length ? 'Refresh selected' : 'Refresh screens'} title={chosen.length ? 'Refresh selected' : 'Refresh screens'} disabled={!ready || disabled || !screens.length} onClick={() => void refresh((chosen.length ? chosen : screens).map(screen => screen.route))}><RefreshCw aria-hidden /><span className="refresh-label">{chosen.length ? 'Refresh selected' : 'Refresh screens'}</span></Button>, controlsHost)}
     <div className="overview-board">

@@ -72,16 +72,18 @@ test('captures survive source changes and refresh failures; all modes fit compac
   await expect(page.locator('.screen-thumbnail img')).toHaveCount(4, { timeout: 60_000 });
   await expect(page.getByRole('button', { name: 'Refresh screens', exact: true })).toBeVisible();
   const original = await engine.boardCaptures.list(projectId);
+  await page.route(`**/api/projects/${projectId}/board-captures`, route => route.fulfill({ status: 400, json: { error: { message: 'Preview is busy. Try again.' } } }));
   const source = await engine.files.read(projectId, 'app/journal.tsx');
   await engine.files.write(projectId, [{ path: source.path, expectedRevision: source.revision, content: source.content + '\n// Changed by another editor' }]);
-  await expect(page.getByText('Source changed', { exact: true })).toHaveCount(4);
+  await expect(page.getByText('Refresh failed', { exact: true })).toHaveCount(4);
+  await expect(page.getByRole('button', { name: 'Refresh screens', exact: true })).toBeVisible();
   const canvasBounds = (await page.getByRole('region', { name: 'Screen overview canvas' }).boundingBox())!;
   await page.mouse.move(canvasBounds.x + 12, canvasBounds.y + 70); await page.mouse.wheel(20, 20);
   const firstScreen = page.getByRole('article', { name: 'Tonight screen', exact: true });
   const beforeFailure = (await firstScreen.boundingBox())!;
   await page.route(`**/api/projects/${projectId}/board-captures`, route => route.fulfill({ status: 400, json: { error: { message: 'Preview is busy. Try again.' } } }));
   await page.getByRole('button', { name: 'Refresh Journal', exact: true }).click();
-  await expect(page.getByText(/Previous capture retained/)).toBeVisible();
+  await expect(page.getByText(/Previous capture retained/)).toHaveCount(4);
   await expect.poll(async () => Math.abs((await firstScreen.boundingBox())!.y - beforeFailure.y)).toBeLessThan(2);
   await expect(page.locator('.screen-thumbnail img')).toHaveCount(4);
   expect((await engine.boardCaptures.list(projectId)).map(capture => capture.id)).toEqual(original.map(capture => capture.id));
@@ -429,4 +431,22 @@ test('overview scrolling and background dragging move the camera while screens k
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     await page.screenshot({ path: info.outputPath(`overview-camera-${width}.png`), fullPage: true });
   }
+});
+
+test('overview refreshes changed source once per revision without retrying failures in a loop', async ({ page }) => {
+  await page.getByRole('button', { name: 'All screens', exact: true }).click();
+  await expect(page.locator('.screen-thumbnail img')).toHaveCount(4, { timeout: 60_000 });
+  await expect(page.getByRole('button', { name: 'Refresh screens', exact: true })).toBeVisible();
+  const initial = (await engine.boardCaptures.list(projectId)).map(capture => capture.id);
+  let requests = 0;
+  await page.route(`**/api/projects/${projectId}/board-captures`, route => { if (route.request().method() === 'POST') requests++; return route.continue(); });
+  const source = await engine.files.read(projectId, 'app/journal.tsx');
+  await engine.files.write(projectId, [{ path: source.path, expectedRevision: source.revision, content: source.content + '\n// Refined journal' }]);
+  await expect.poll(async () => (await engine.boardCaptures.list(projectId)).filter(capture => !initial.includes(capture.id)).length, { timeout: 60_000 }).toBe(4);
+  await expect(page.getByRole('button', { name: 'Refresh screens', exact: true })).toBeVisible();
+  expect(requests).toBe(4);
+  await page.getByRole('button', { name: 'Focus', exact: true }).click();
+  await page.getByRole('button', { name: 'All screens', exact: true }).click();
+  await expect(page.getByText('Captured', { exact: true })).toHaveCount(4);
+  expect(requests).toBe(4);
 });

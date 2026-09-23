@@ -113,8 +113,6 @@ test('clears a missing last project and still permits a new app', async ({ page 
   await expect(page.getByRole('heading', { name: 'Create your first app', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '+ New app', exact: true }).click();
   await page.getByLabel('App name', { exact: true }).fill('Fresh app');
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await page.getByRole('radio', { name: /No backend for now/ }).check();
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toContainText('Fresh app');
   await expect(page.locator('.unavailable-projects')).toContainText('1 unavailable app');
