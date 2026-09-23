@@ -43,7 +43,7 @@ summary { cursor: pointer; min-height: 44px; padding: 12px 0; }
 .studio { height: 100dvh; display: flex; min-width: 0; }
 .studio-main { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .studio-main > .topbar, .studio-main > .error-banner { flex-shrink: 0; }
-.studio-assistant { display: flex; flex: 0 0 424px; min-width: 0; min-height: 0; }
+.studio-assistant { position: relative; display: flex; flex: 0 0 var(--assistant-width, 30%); min-width: 320px; max-width: 50%; min-height: 0; }
 .skip-link { position: absolute; top: -100px; padding: 12px; background: var(--surface); color: var(--ink); z-index: 20; }
 .skip-link:focus { top: 12px; }
 .topbar { min-height: 56px; display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 5px 20px; background: var(--surface); border-bottom: 1px solid var(--line); }

@@ -22,13 +22,13 @@ const destinations = [
 type Props = {
   children: ReactNode; banners: ReactNode; overlays: ReactNode; footer?: ReactNode; contentRef: Ref<HTMLDivElement>;
   projects: Project[]; selected: string; workspace: Workspace; usable: boolean; busy: boolean;
-  connectionLabel: string; pendingReview: number; projectStatus: ReactNode; assistantControl?: ReactNode;
+  connectionLabel: string; pendingReview: number; projectStatus: ReactNode; assistantControl?: ReactNode; accountControl?: ReactNode;
   assistant?: { open: boolean; desktop: boolean; render(host: HTMLDivElement | null): ReactNode };
   hiddenDestinations?: string[];
   onSelect: (id: string) => void; onNavigate: (workspace: Workspace) => void; onCreate: () => void;
 };
 
-export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, assistant, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
+export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, accountControl, assistant, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
   const { capabilities } = useStudioClient();
   const hosted = capabilities.connectionLabel === 'Cloud workspace';
   const shell = useRef<HTMLDivElement>(null), sidebarTrigger = useRef<HTMLButtonElement>(null);
@@ -37,15 +37,28 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
   const [desktopSidebarOpen, setDesktopSidebarOpen] = useState(true), [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const drawer = hosted && compact, sidebarOpen = drawer ? mobileSidebarOpen : desktopSidebarOpen;
   const [sidebarWidth, setSidebarWidth] = useState(248);
+  const [assistantWidth, setAssistantWidth] = useState(0);
   const drag = useRef<{ x: number; width: number } | null>(null);
+  const assistantDrag = useRef<{ x: number; width: number } | null>(null);
   const returnFocus = useRef<'trigger' | 'workspace' | 'dialog'>('trigger');
   const resize = (width: number) => setSidebarWidth(Math.max(200, Math.min(360, Math.round(width))));
+  const clampAssistant = (width: number) => {
+    const studio = shell.current?.clientWidth ?? 1280;
+    return Math.max(320, Math.min(Math.round(studio * 0.5), Math.round(width)));
+  };
+  const resizeAssistant = (width: number) => setAssistantWidth(clampAssistant(width));
   const project = projects.find(project => project.id === selected);
   useEffect(() => {
     const element = shell.current;
     if (!element) return;
-    const observer = new ResizeObserver(() => setCompact(element.clientWidth <= 760));
+    const apply = () => {
+      setCompact(element.clientWidth <= 760);
+      if (element.clientWidth <= 760) return;
+      setAssistantWidth(current => clampAssistant(current || element.clientWidth * 0.3));
+    };
+    const observer = new ResizeObserver(apply);
     observer.observe(element);
+    apply();
     return () => observer.disconnect();
   }, []);
   useEffect(() => { setMobileSidebarOpen(false); }, [drawer]);
@@ -87,6 +100,7 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
         <div className="sidebar-footer">
           {project && capabilities.localPaths && <ProjectDownload key={project.id} projectId={project.id} name={project.name} disabled={!usable || busy} />}
           <Button disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-pressed={workspace === 'settings'} aria-current={workspace === 'settings' ? 'page' : undefined} onClick={() => navigate('settings')}><Settings aria-hidden /><span>Settings</span></Button>
+          {accountControl && <div className="studio-account">{accountControl}</div>}
         </div>
         <div className="sidebar-resizer" role="separator" aria-label="Sidebar width" aria-orientation="vertical" aria-valuemin={200} aria-valuemax={360} aria-valuenow={sidebarWidth} tabIndex={0} title="Drag to resize · double-click to reset" onDoubleClick={() => resize(248)} onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
@@ -115,7 +129,14 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
     </div>
     {footer}
     </div>
-    <div ref={setAssistantHost} className="studio-assistant" hidden={!assistant?.open || !assistant.desktop} />
+    <div ref={setAssistantHost} className="studio-assistant" hidden={!assistant?.open || !assistant.desktop} style={assistantWidth ? { '--assistant-width': `${assistantWidth}px` } as CSSProperties : undefined}>
+      {assistant?.open && assistant.desktop && !compact && <div className="assistant-resizer" role="separator" aria-label="Assistant width" aria-orientation="vertical" aria-valuemin={320} aria-valuemax={Math.max(320, Math.round((shell.current?.clientWidth ?? 1280) * 0.5))} aria-valuenow={assistantWidth || undefined} tabIndex={0} title="Drag to resize · double-click to reset" onDoubleClick={() => resizeAssistant((shell.current?.clientWidth ?? 1280) * 0.3)} onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const studio = shell.current?.clientWidth ?? 1280;
+        resizeAssistant(event.key === 'Home' ? 320 : event.key === 'End' ? studio * 0.5 : (assistantWidth || studio * 0.3) + (event.key === 'ArrowLeft' ? 16 : -16));
+      }} onPointerDown={event => { if (event.button !== 0) return; event.preventDefault(); assistantDrag.current = { x: event.clientX, width: assistantWidth || Math.round((shell.current?.clientWidth ?? 1280) * 0.3) }; event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (assistantDrag.current) resizeAssistant(assistantDrag.current.width - (event.clientX - assistantDrag.current.x)); }} onPointerUp={event => { assistantDrag.current = null; if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId); }} onLostPointerCapture={() => { assistantDrag.current = null; }} />}
+    </div>
     {assistant?.render(assistantHost)}
     {overlays}
   </div>;

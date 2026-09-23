@@ -29,10 +29,13 @@
 .sidebar-project-name small { font-size: 10px; color: #656e7a; overflow-wrap: anywhere; }
 .sidebar-project-empty { padding: 8px 12px; font-size: 12px; color: #656e7a; }
 .sidebar-project-empty button { display: block; margin-top: 4px; }
-:is(.studio, .sidebar-drawer) .sidebar-footer { display: grid; flex-shrink: 0; gap: 2px; padding-top: 8px; border-top: 1px solid #dce0e6; margin-top: 8px; }
+:is(.studio, .sidebar-drawer) .sidebar-footer { display: grid; flex-shrink: 0; gap: 2px; padding-top: 8px; border-top: 1px solid #dce0e6; margin-top: 8px; overflow: visible; }
+.sidebar-footer .studio-account, .sidebar-footer .cloud-account { min-width: 0; }
 :is(.studio, .sidebar-drawer) .sidebar-footer .project-download-trigger { justify-content: flex-start; font-size: 12px; color: #606977; padding-inline: 10px; }
-.sidebar-resizer { position: absolute; right: -3px; top: 0; bottom: 0; width: 6px; z-index: 8; cursor: col-resize; touch-action: none; }
-.sidebar-resizer:hover, .sidebar-resizer:focus-visible { background: #3977ce55; outline: none; }
+.sidebar-resizer, .assistant-resizer { position: absolute; top: 0; bottom: 0; width: 6px; z-index: 8; cursor: col-resize; touch-action: none; }
+.sidebar-resizer { right: -3px; }
+.assistant-resizer { left: -3px; }
+.sidebar-resizer:hover, .sidebar-resizer:focus-visible, .assistant-resizer:hover, .assistant-resizer:focus-visible { background: #3977ce55; outline: none; }
 .topbar .header-project { overflow: visible; max-width: 440px; }
 .topbar .project-picker-trigger { border: 0; background: transparent; box-shadow: none; padding: 4px 6px; font-size: 13px; font-weight: 600; gap: 6px; }
 .topbar .project-picker-icon { display: none; }
@@ -41,7 +44,7 @@
   .studio .sidebar .new-project { grid-column: 1; }
   .studio .sidebar .workspace-nav { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); grid-column: 1 / -1; grid-row: 2; margin: 0; }
   .studio .sidebar .sidebar-action { min-height: 44px; padding: 6px 8px; font-size: 12px; gap: 7px; }
-  .studio .sidebar-projects, .sidebar-resizer { display: none; }
+  .studio .sidebar-projects, .sidebar-resizer, .assistant-resizer { display: none; }
   .studio .sidebar-footer { display: flex; grid-column: 2; grid-row: 1; margin: 0; padding: 0; border: 0; }
   .studio .sidebar-footer .sidebar-action { width: auto; }
   .studio .sidebar-footer .project-download-trigger { width: 44px; min-height: 44px; padding: 10px; font-size: 0; gap: 0; }

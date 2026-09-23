@@ -94,9 +94,19 @@ test('assistant stays at the page edge across navigation, other panels and compa
   await expect(page.getByRole('button', { name: 'Drag Assistant panel' })).toHaveCount(0);
   await expect(page.getByLabel('Arrange Assistant panel', { exact: true })).toHaveCount(0);
   await expect(page.locator('.dock-slot[data-panel=assistant]')).toHaveCount(0);
-  const shell = (await page.locator('.studio').boundingBox())!, edge = (await panel.boundingBox())!;
+  const shell = (await page.locator('.studio').boundingBox())!;
+  let edge = (await panel.boundingBox())!;
   expect(edge.y).toBeCloseTo(shell.y, 0); expect(edge.height).toBeCloseTo(shell.height, 0);
   expect(edge.x + edge.width).toBeCloseTo(shell.x + shell.width, 0);
+  expect(edge.width).toBeGreaterThan(430);
+  const assistantResize = page.getByRole('separator', { name: 'Assistant width' });
+  await expect(assistantResize).toBeVisible();
+  await expect(assistantResize).toHaveAttribute('aria-valuenow', /\d+/);
+  const assistantBefore = Number(await assistantResize.getAttribute('aria-valuenow'));
+  await assistantResize.focus(); await assistantResize.press('ArrowLeft');
+  await expect(assistantResize).toHaveAttribute('aria-valuenow', String(assistantBefore + 16));
+  expect((await panel.boundingBox())!.width).toBeGreaterThan(edge.width);
+  edge = (await panel.boundingBox())!;
   const header = (await panel.locator('.assistant-header').boundingBox())!;
   await page.mouse.move(header.x + 80, header.y + 30); await page.mouse.down();
   await page.mouse.move(300, 350, { steps: 8 }); await page.mouse.up();
@@ -137,6 +147,7 @@ test('assistant stays at the page edge across navigation, other panels and compa
     await page.setViewportSize({ width, height: width === 375 ? 812 : 932 });
     await expect(input).toBeVisible(); await expect(input).toHaveValue('A draft that stays with this panel');
     await expect(page.getByRole('button', { name: 'Drag Assistant panel' })).toHaveCount(0);
+    await expect(page.getByRole('separator', { name: 'Assistant width' })).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBe(0);
     expect((await panel.locator('.assistant-input-box').boundingBox())!.height).toBeLessThanOrEqual(150);
     await page.screenshot({ path: info.outputPath(`assistant-${width}.png`) });
