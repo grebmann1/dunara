@@ -1,3 +1,4 @@
+import { AppVerification } from './AppVerification';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, Check, ListChecks } from 'lucide-react';
 import { type MediaState, type StudioState, useStudioClient } from '../api';
@@ -85,7 +86,7 @@ export function CreationGuide({ visible, projectId, state, disabled, mediaEnable
     { id: 'create', title: 'Create', complete: !!state, later: false, description: state ? 'Your workspace is ready. Shape your app with the Assistant.' : 'Name your app and describe the idea. Backend setup is optional.', action: state ? 'Open workspace' : 'Create your app', run: () => state ? onNavigate('preview') : onCreate(), blocked: false },
     { id: 'assets', title: 'Add assets', complete: !!media?.assets.length, later: !!preferences.assetsLater || !mediaEnabled, description: 'Bring in a logo, photos, or visual references. You can also attach images in the Assistant.', action: 'Open Assets', run: () => onNavigate('assets'), blocked: !mediaEnabled || !projectId },
     { id: 'test', title: 'Preview & test', complete: tested, later: false, description: stale ? 'Your app changed since your last recorded checks. Test this version again.' : tested ? 'You recorded checks for this version. This is your report, not automatic device verification.' : 'Walk through your screens and try the app on your phone. Record your checks when you finish.', action: 'Open preview', run: () => onNavigate('preview'), blocked: !projectId },
-    { id: 'build', title: 'Build', complete: false, later: false, description: 'Prepare your app, build a signed iPhone version on this Mac, then review installation on your phone. Finish by checking the installed app with the preview server stopped.', action: 'Open build setup', run: onBuild, blocked: !buildEnabled || !projectId },
+    { id: 'build', title: 'Build', complete: false, later: false, description: 'Prepare your app, build an iPhone or Android preview app with local tools, then review installation on your phone. Finish by checking the installed app with the preview server stopped.', action: 'Open build setup', run: onBuild, blocked: !buildEnabled || !projectId },
     { id: 'publish', title: 'Publish', complete: false, later: false, description: 'Prepare screenshots, an icon, and listing copy. A Launch Kit does not publish your app. Deployment and store submission are still separate steps.', action: 'Open Launch Kit', run: onPublish, blocked: !launchKitEnabled || !projectId },
   ];
   const current = steps.findIndex(step => !step.complete && !step.later);
@@ -105,6 +106,7 @@ export function CreationGuide({ visible, projectId, state, disabled, mediaEnable
           <h2>{step.id === 'idea' ? 'What are you making?' : step.title}</h2><p>{step.description}</p>
           {step.id === 'idea' && projectId && <label className="creation-brief">Your app brief<textarea value={brief} maxLength={2000} rows={3} disabled={locked} onChange={event => { if (!dirty.current) setDraftRevision(progress?.revision); dirty.current = true; setBrief(event.target.value); }} placeholder="An app for… that helps them…" /><small>Saved with your project. No passwords or private keys.</small></label>}
           {unavailable && <p role="status">Some progress is unavailable. Reconnecting…</p>}
+          {step.id === 'test' && state && <AppVerification state={state} />}
           <div className="creation-guide-actions">
             {step.id === 'idea' ? <>
               <Button disabled={locked || conflict} onClick={async () => { if (await remember({ idea: true, ...(projectId ? { brief } : {}) })) setSelected(1); }}>Save & continue<ArrowRight size={14} aria-hidden /></Button>

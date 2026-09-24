@@ -135,7 +135,7 @@ test('shared creative loop integrates a local image in real Expo and persists ic
 test('offline brief, import, rendered comparison, transforms and approval persist', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(studio.launchUrl); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Assets', exact: true }).click();
-  await expect(page.getByText('Offline assets ready · AI unavailable')).toBeVisible();
+  await expect(page.getByText('Asset library ready · Image generation needs setup')).toBeVisible();
   await closeMediaDrawer(page); await page.getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stage request for review' })).toBeDisabled();
   await closeMediaDrawer(page); await page.getByRole('button', { name: 'Art direction', exact: true }).click();

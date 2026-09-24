@@ -52,6 +52,7 @@ test('one Engine: real MCP edits, Studio preview/design/captures and shared stop
     expect(inspected.project.root).toBe(await realpath(path.join(dir, 'apps', 'connected-alpha')));
     await page.getByLabel('Preview tools', { exact: true }).click();
     await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+    await page.getByText('Project details', { exact: true }).click();
     await expect(page.getByText(first.id, { exact: true })).toBeVisible();
     await expect(page.getByText(first.root, { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Preview', exact: true }).click();

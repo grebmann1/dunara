@@ -10,7 +10,7 @@ import { Captures } from "../../../core/src/capture.js";
 import { Projects } from "../../../core/src/projects.js";
 import { stageHomeStateBatch, assertStateAvailable } from '../../../core/src/durable-state.js';
 import { exists, noSymlinks, SerialQueue } from "../../../core/src/storage.js";
-import { KIT_BYTES, KIT_PROJECT_LIMIT, KIT_STORAGE_BYTES, kitFileIdSchema, kitLimitations, launchKitCreateSchema, launchKitManifestSchema, launchKitRemoveSchema, type LaunchKit, type LaunchKitFile, type LaunchKitManifest } from "../../../core/src/launch-kit-contracts.js";
+import { KIT_BYTES, KIT_PROJECT_LIMIT, KIT_STORAGE_BYTES, kitFileIdSchema, kitLimitations, legacyKitLimitations, launchKitCreateSchema, launchKitManifestSchema, launchKitRemoveSchema, type LaunchKit, type LaunchKitFile, type LaunchKitManifest } from "../../../core/src/launch-kit-contracts.js";
 
 const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
 const json = (value: unknown) => Buffer.from(JSON.stringify(value, null, 2) + '\n');
@@ -37,13 +37,15 @@ function descriptor(id: string, bytes: Buffer): LaunchKitFile {
 }
 // Quote drafts as inert Markdown text instead of interpreting authored HTML or links.
 const quote = (value: string) => value.replace(/[&<>]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[char]!).replace(/([\\`*_{}[\]()#+.!|~-])/g, '\\$1').split('\n').map(line => `> ${line}`).join('\n');
-function textFiles(manifest: Pick<LaunchKitManifest, 'listing' | 'attribution' | 'icon'>) {
+function textFiles(manifest: Pick<LaunchKitManifest, 'listing' | 'attribution' | 'icon'> & { schemaVersion?: 1 | 2 }) {
   const { listing, attribution, icon } = manifest;
+  const limitations = manifest.schemaVersion === 1 ? legacyKitLimitations : kitLimitations;
+  const destinations = manifest.schemaVersion === 1 ? '' : '\n\n## iPhone / App Store\n\n- [ ] Signed release and TestFlight installation checked on the intended iPhone.\n- [ ] Native screenshots, app privacy disclosures, age rating and review access prepared.\n- [ ] Support/privacy pages and each requested listing locale reviewed.\n\n## Android / Google Play\n\n- [ ] Store-signed AAB prepared; a preview APK is not a Play release.\n- [ ] Internal testing, data safety, content rating and review access completed.\n- [ ] Native screenshots, feature artwork and localized listing reviewed.\n\n## Web preview\n\n- [ ] Intended routes, primary actions and data persistence tested.\n- [ ] Access control, backend environment and shared URL tested by the intended audience.';
   return new Map<string, Buffer>([
     ['listing-json', json(listing)],
     ['listing', Buffer.from(`# Listing draft — not reviewed for publication\n\n${Object.entries(listing).map(([field, value]) => `## ${field}\n\n${quote(value)}`).join('\n\n')}\n`)],
     ['credits', Buffer.from(`# Attribution draft — rights not verified\n\n## Screenshot/app imagery\n\n${quote(attribution || 'No attribution supplied. Review all app imagery and license obligations before sharing.')}\n\n## Optional icon\n\n${quote(icon?.rightsNote || (icon ? 'No icon rights note supplied.' : 'No icon included.'))}\n`)],
-    ['readiness', Buffer.from(`# Factual readiness checklist\n\n- [x] Selected original web PNGs copied locally and hashed.\n- [x] User confirmed the selected local export contents.\n- [ ] Human visual and gesture review.\n- [ ] Rights and attribution review, including derivative-license obligations.\n- [ ] Listing claims and support/privacy content review.\n- [ ] Native interaction, keyboard, safe areas, accessibility and launcher review.\n- [ ] Store-specific screenshot and submission requirements.\n\n## Known limitations\n\n${kitLimitations.map(item => `- ${item}`).join('\n')}\n`)],
+    ['readiness', Buffer.from(`# Factual readiness checklist\n\n- [x] Selected original web PNGs copied locally and hashed.\n- [x] User confirmed the selected local export contents.\n- [ ] Human visual and gesture review.\n- [ ] Rights and attribution review, including derivative-license obligations.\n- [ ] Listing claims and support/privacy content review.\n- [ ] Native interaction, keyboard, safe areas, accessibility and launcher review.\n- [ ] Store-specific screenshot and submission requirements.\n\n## Known limitations\n\n${limitations.map(item => `- ${item}`).join('\n')}${destinations}\n`)],
   ]);
 }
 
@@ -141,7 +143,7 @@ export class LaunchKits {
     await this.directory(directory);
     const raw = await this.safeFile(directory, 'manifest.json', 128 * 1024);
     const manifest = launchKitManifestSchema.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(raw)));
-    if (manifest.id !== bundleId || manifest.project.id !== projectId || JSON.stringify(manifest.limitations) !== JSON.stringify(kitLimitations)) invalid('Kit identity or limitations changed');
+    if (manifest.id !== bundleId || manifest.project.id !== projectId || JSON.stringify(manifest.limitations) !== JSON.stringify(manifest.schemaVersion === 1 ? legacyKitLimitations : kitLimitations)) invalid('Kit identity or limitations changed');
     if (new Set(manifest.captures.map(c => c.id)).size !== manifest.captures.length || manifest.captures.some(c => c.projectId !== projectId)) invalid('Invalid capture identities');
     const expected = textFiles(manifest);
     const expectedIds = [...expected.keys(), ...manifest.captures.map(c => `screenshot-${c.id}`), ...(manifest.icon ? ['icon'] : [])];
@@ -216,7 +218,7 @@ export class LaunchKits {
         contents.set(`screenshot-${capture.meta.id}`, capture.png);
       }
       if (icon) contents.set('icon', icon.bytes);
-      const manifest = launchKitManifestSchema.parse({ schemaVersion: 1, id, createdAt: new Date().toISOString(), project: { id: project.id, name: project.name, slug: project.slug }, captures: captured.map(c => c.meta), ...draft, files: [...contents].map(([id, bytes]) => descriptor(id, bytes)), limitations: [...kitLimitations] });
+      const manifest = launchKitManifestSchema.parse({ schemaVersion: 2, id, createdAt: new Date().toISOString(), project: { id: project.id, name: project.name, slug: project.slug }, captures: captured.map(c => c.meta), ...draft, files: [...contents].map(([id, bytes]) => descriptor(id, bytes)), limitations: [...kitLimitations] });
       contents.set('manifest', json(manifest));
       const size = [...contents.values()].reduce((sum, bytes) => sum + bytes.length, 0);
       const checkQuota = async (extra: number) => { const usage = await this.usage(); if (size > KIT_BYTES || usage.bytes + extra > KIT_STORAGE_BYTES || (usage.counts.get(projectId) ?? 0) >= KIT_PROJECT_LIMIT) full(); };

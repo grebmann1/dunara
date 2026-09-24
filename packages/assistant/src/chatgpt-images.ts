@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { MEDIA_BYTES } from '../../core/src/media-contracts.js';
 import { CHATGPT_IMAGE_MODEL, type JobRequest } from '../../core/src/media-job-contracts.js';
 import { ProviderFailure } from '../../core/src/openai-images.js';
+import { recoveryKind, recoveryMessage } from './recovery.js';
 
 export type ChatGPTImageAuth = { accessToken: string; chatgptAccountId: string; chatgptPlanType?: string };
 export function codexImageCommand() {
@@ -18,7 +19,7 @@ export function codexImageCommand() {
 }
 
 const generated = z.object({ type: z.literal('imageGeneration'), id: z.string(), status: z.string(), result: z.string().max(Math.ceil(MEDIA_BYTES / 3) * 4), savedPath: z.string().optional(), failure: z.unknown().optional() });
-const failure = () => new ProviderFailure('ChatGPT image generation did not complete. Check your ChatGPT access and usage limits, then try a new request. No automatic retry was made.');
+const failure = (cause?: unknown) => new ProviderFailure(recoveryMessage(recoveryKind(cause), 'ChatGPT image generation'));
 
 /** One isolated, ephemeral Codex session per approved image request. Tokens travel over stdin only. */
 export async function runChatGPTImage(command: string, auth: ChatGPTImageAuth, request: JobRequest, references: Buffer[], signal: AbortSignal): Promise<Buffer[]> {
@@ -66,7 +67,7 @@ export async function runChatGPTImage(command: string, auth: ChatGPTImageAuth, r
           const message = JSON.parse(line);
           if ('id' in message && !message.method) {
             const waiter = pending.get(message.id); pending.delete(message.id);
-            if (message.error) { waiter?.reject(failure()); fail(); } else waiter?.resolve(message.result);
+            if (message.error) { const error = failure(message.error); waiter?.reject(error); fail(error); } else waiter?.resolve(message.result);
           } else if ('id' in message && message.method) {
             // An artwork request cannot authorize tools, account changes, or filesystem operations.
             send({ id: message.id, error: { code: -32601, message: 'Only image generation is available in this session.' } });
@@ -75,7 +76,7 @@ export async function runChatGPTImage(command: string, auth: ChatGPTImageAuth, r
             const item = generated.parse(message.params.item); items.set(item.id, item);
           } else if (message.method === 'turn/completed') {
             for (const raw of message.params?.turn?.items ?? []) if (raw.type === 'imageGeneration') { const item = generated.parse(raw); items.set(item.id, item); }
-            if (message.params?.turn?.status !== 'completed') { fail(); continue; }
+            if (message.params?.turn?.status !== 'completed') { fail(failure(message.params?.turn?.error)); continue; }
             settled = true; finish([...items.values()]);
           }
         } catch { fail(); }
@@ -99,7 +100,7 @@ export async function runChatGPTImage(command: string, auth: ChatGPTImageAuth, r
     ] });
     const results = await completion;
     signal.throwIfAborted();
-    if (results.length !== 1 || results[0]!.status !== 'completed' || results[0]!.failure) throw failure();
+    if (results.length !== 1 || results[0]!.status !== 'completed' || results[0]!.failure) throw failure(results[0]?.failure);
     const result = results[0]!;
     if (result.result && /^[A-Za-z0-9+/]+={0,2}$/.test(result.result)) {
       const bytes = Buffer.from(result.result, 'base64'); if (bytes.length && bytes.length <= MEDIA_BYTES) return [bytes];

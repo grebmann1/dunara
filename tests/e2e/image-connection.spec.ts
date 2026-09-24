@@ -54,6 +54,8 @@ test('acknowledges ChatGPT while explaining missing image runtime setup, focuses
     const images = page.getByRole('region', { name: 'OpenAI configuration', exact: true });
     await expect(images).toBeFocused();
     await expect(images).toContainText('Install or update Codex');
+    await images.getByText('Use another image connection', { exact: true }).click();
+    await images.getByLabel('OpenAI API key', { exact: true }).scrollIntoViewIfNeeded();
     await expect(images.getByLabel('OpenAI API key', { exact: true })).toBeInViewport();
     for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
       await page.setViewportSize({ width, height }); await images.scrollIntoViewIfNeeded();

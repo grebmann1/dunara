@@ -332,7 +332,7 @@ test('bare origin and reload show authentication recovery rather than connecting
   await page.goto(studio.launchUrl);
   await expect(page.getByRole('button', { name: '+ New app' })).toBeEnabled();
   await expect(page.locator('.connection')).toHaveText('Local workspace');
-  expect(await page.evaluate(() => [Object.keys(localStorage).filter(key => key !== 'builder.workspace-layout.v1').length, sessionStorage.length])).toEqual([0, 0]);
+  expect(await page.evaluate(() => [Object.keys(localStorage).filter(key => !['builder.workspace-layout.v1', 'builder.shell-preferences.v1'].includes(key)).length, sessionStorage.length])).toEqual([0, 0]);
   expect(new URL(page.url()).hash).toBe('');
   await page.reload();
   await expect(page.locator('.connection')).toHaveText('Session unavailable');

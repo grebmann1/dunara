@@ -59,10 +59,10 @@ test('reviews a local build, persists progress across drawer navigation, and ins
   const panel = page.getByRole('region', { name: 'Install on iPhone', exact: true });
   await panel.getByRole('button', { name: 'Check phone and signing', exact: true }).click();
   await expect(panel.getByLabel('iPhone', { exact: true })).toContainText('My iPhone');
-  await capture(page, info, 'phone-selection', '.native-delivery');
+  await capture(page, info, 'phone-selection', '[aria-label="Install on iPhone"]');
   await panel.getByRole('button', { name: 'Review iPhone build', exact: true }).click();
   await expect(page.getByLabel('iPhone build review')).toContainText('automatic signing');
-  expect(installations).toBe(0); await capture(page, info, 'build-review', '.native-delivery .native-build-review');
+  expect(installations).toBe(0); await capture(page, info, 'build-review', '[aria-label="Install on iPhone"] .native-build-review');
   await panel.getByRole('button', { name: 'Build signed iPhone app', exact: true }).click();
   await expect(panel.getByRole('status')).toHaveText('Building and signing with Xcode');
   await page.getByRole('dialog', { name: 'Build setup', exact: true }).press('Escape');
@@ -71,12 +71,12 @@ test('reviews a local build, persists progress across drawer navigation, and ins
   releaseBuild!(); await expect(panel.getByRole('status')).toHaveText('Signed app ready'); expect(installations).toBe(0);
   await panel.getByRole('button', { name: 'Review installation', exact: true }).click();
   await expect(page.getByLabel('iPhone installation review')).toContainText('Install this signed app');
-  await capture(page, info, 'install-review', '.native-delivery .native-build-review');
+  await capture(page, info, 'install-review', '[aria-label="Install on iPhone"] .native-build-review');
   await panel.getByRole('button', { name: 'Install on iPhone', exact: true }).click();
   await expect(panel.getByRole('status')).toHaveText('Installation verified'); expect(installations).toBe(1); expect(launches).toBe(0);
   await panel.getByRole('button', { name: 'Open on iPhone', exact: true }).click();
   await expect(panel.getByRole('status')).toHaveText('Opened on iPhone'); expect(launches).toBe(1);
-  await capture(page, info, 'phone-opened', '.native-delivery article');
+  await capture(page, info, 'phone-opened', '[aria-label="Install on iPhone"] article');
   await panel.getByRole('button', { name: 'Remove build files', exact: true }).click();
   await expect(panel).toContainText('installed phone app stay unchanged');
   await panel.getByRole('button', { name: 'Confirm removal', exact: true }).click();
@@ -88,5 +88,5 @@ test('explains missing prerequisites and prevents an incomplete build review', a
   await panel.getByRole('button', { name: 'Check phone and signing', exact: true }).click();
   await expect(panel).toContainText('Connect and unlock your iPhone.');
   await expect(panel.getByRole('button', { name: 'Review iPhone build', exact: true })).toBeDisabled();
-  await capture(page, info, 'prerequisites', '.native-delivery');
+  await capture(page, info, 'prerequisites', '[aria-label="Install on iPhone"]');
 });

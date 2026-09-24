@@ -130,29 +130,23 @@ test('shows a QR code with the current environment and removes it when the previ
   await button.click();
   const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
   await expect(dialog.getByRole('img', { name: 'Scan to open Still Connected in Expo Go' })).toBeVisible();
-  await expect(dialog).toContainText('sign in to the same Expo account on your computer and in Expo Go');
-  const setup = dialog.getByRole('region', { name: 'Expo sign-in setup' });
-  await expect(setup.getByRole('heading', { name: 'First, sign in to Expo' })).toBeVisible();
-  expect(await setup.evaluate(node => !!(node.compareDocumentPosition(globalThis.document.querySelector('.device-preview-qr')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  const setup = dialog.locator('details.device-preview-account');
+  await expect(setup).not.toHaveAttribute('open');
+  await page.route('**/expo-account', route => route.fulfill({ json: { state: 'signed-in', message: 'Expo sign-in verified on this computer. Use the same account in Expo Go.' } }));
+  await dialog.getByRole('button', { name: 'Check Expo sign-in' }).click();
+  await expect(dialog.getByText('Expo sign-in verified on this computer. Use the same account in Expo Go.')).toBeVisible();
+  await setup.locator('summary').click();
+  await expect(setup.getByRole('heading', { name: 'Expo account' })).toBeVisible();
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await setup.getByRole('button', { name: 'Copy Expo login command' }).click();
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('npx expo login --browser');
   for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
     await page.setViewportSize({ width, height });
-    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
-    await expect(setup.getByRole('heading')).toBeInViewport();
-    await page.screenshot({ path: info.outputPath(`expo-prerequisite-${width}.png`) });
-  }
-  const loginHelp = dialog.locator('.device-expo-login');
-  await loginHelp.locator('summary').click();
-  await expect(loginHelp).toContainText('npx expo login --browser');
-  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
-    await page.setViewportSize({ width, height });
-    await loginHelp.scrollIntoViewIfNeeded();
+    await setup.scrollIntoViewIfNeeded();
     expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
     await page.screenshot({ path: info.outputPath(`expo-login-${width}.png`) });
   }
-  await loginHelp.locator('summary').click();
+  await setup.locator('summary').click();
   await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
   await expect(dialog).toContainText('development');
   await expect(dialog).toContainText(ref);
@@ -290,6 +284,7 @@ test('reviews a legacy app upgrade, refuses stale edits, and applies the exact f
   const manifestPath = path.join(project.root, 'package.json'), original = await readFile(manifestPath, 'utf8');
   const navigation = await readFile(path.join(project.root, 'src/ui/index.tsx'), 'utf8');
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByText('Advanced app setup', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'App backend support' });
   await panel.getByRole('button', { name: 'Review upgrade', exact: true }).click();
   await expect(panel).toContainText('supabase-notes-v1'); await expect(panel).toContainText('12 file changes');

@@ -1,4 +1,4 @@
-import { cp, mkdir, readdir, realpath, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, realpath, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -17,8 +17,10 @@ export const templateRoot = fileURLToPath(new URL('../../templates/expo/', impor
 
 export class Projects {
   readonly mutations: ProjectTransactions;
+  readonly durable: boolean;
   private unmountState?: () => Promise<void>;
   private constructor(readonly workspace: string, readonly home: string, durability?: ProjectDurability) {
+    this.durable = !!durability;
     this.mutations = new ProjectTransactions(durability ? async () => durability.commit(await this.snapshot()) : undefined, durability ? async () => durability.unchanged(await this.snapshot()) : undefined);
   }
   static async open(workspace: string, home: string, persistence?: ProjectWorkspacePersistence, statePersistence?: HomeStatePersistence) {
@@ -128,6 +130,27 @@ export class Projects {
     const value = projectMetadataSchema.parse(JSON.parse(await readText(file, 16_384)));
     if (value.project.id !== project.id || value.project.slug !== project.slug || value.project.name !== project.name || value.project.createdAt !== project.createdAt) throw new BuilderError('INVALID_INPUT', 'Project metadata does not match its registry identity');
     return value;
+  }
+  /** Import reviewed regular source into a new project; never executes tooling. */
+  async importSource(input: unknown, source: Map<string, Buffer>) {
+    const value = createSchema.parse(input);
+    return this.mutations.run(async () => {
+      const records = await this.records(), root = path.join(this.workspace, value.slug);
+      if (records.length >= 200) throw new BuilderError('LIMIT_EXCEEDED', 'Project registry is full');
+      await noSymlinks(this.workspace, root);
+      if (await exists(root)) throw new BuilderError('INVALID_INPUT', 'Target already exists; choose a new project folder.');
+      await mkdir(root);
+      try {
+        for (const [relative, content] of source) {
+          if (!relative || path.isAbsolute(relative) || relative.split('/').some(part => !part || part === '..' || part === '.') || relative.includes('\\') || relative === projectMetadataFile) throw new BuilderError('INVALID_PATH', 'Unsupported import path');
+          const file = path.join(root, relative); await mkdir(path.dirname(file), { recursive: true }); await noSymlinks(root, file); await writeFile(file, content, { flag: 'wx', mode: 0o600 });
+        }
+        const project: Project = { id: randomUUID(), name: value.name, slug: value.slug, root, recipe: 'wellness', createdAt: new Date().toISOString() };
+        await this.writeMetadata(project, defaultStudio(project.id));
+        await atomicWrite(path.join(this.home, 'projects.json'), JSON.stringify([...records, project], null, 2));
+        return project;
+      } catch (error) { await rm(root, { recursive: true, force: true }); throw error; }
+    });
   }
   // Call under mutations; the dotfile is deliberately outside generic source-file writes.
   async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {

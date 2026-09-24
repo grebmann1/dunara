@@ -15,10 +15,10 @@ Launch Kit is a secondary workflow under **Assets**, not a sixth workspace or a 
 
 Under the configured Dunara home, `launch-kits/<project UUID>/<bundle UUID>/` contains:
 
-- `manifest.json`: schema version, project display identity, creation time, capture metadata, optional approved asset/revision/rights note, listing draft, limitations and hashes/bytes of all other files. Its own download descriptor includes its hash; a manifest cannot contain its own hash.
+- `manifest.json`: schema version 2 (version 1 remains readable), project display identity, creation time, capture metadata, optional approved asset/revision/rights note, listing draft, limitations and hashes/bytes of all other files. Its own download descriptor includes its hash; a manifest cannot contain its own hash.
 - `screenshots/<capture UUID>.png`: unchanged original capture bytes.
 - Optional `icon.png`: unchanged approved icon-master bytes.
-- `listing.json`, `listing.md`, `credits.md`, `readiness.md`: portable plain-text drafts and factual checks, not generated marketing claims or completed native-readiness assertions.
+- `listing.json`, `listing.md`, `credits.md`, `readiness.md`: portable plain-text drafts and separate iPhone, Android and web readiness checks, not completed native-readiness assertions.
 
 Limits: 1–10 unique captures, one optional icon, 32 KiB combined listing JSON, 8,000-character attribution, 32 MiB/bundle, 5 bundles/project and 256 MiB/Dunara home. Manifest/file reads and inventory scans are bounded. Quotas are rechecked from disk after restart. Quota exhaustion requires deliberate deletion; existing user exports are never evicted.
 
@@ -26,9 +26,9 @@ Creates/removals share a serialized service. Creation also holds the project mut
 
 ## Capture semantics and readiness
 
-Captures are **React Native Web — not native App Store screenshots**. Every capture uses a fresh browser context at 375×812 or 430×932. It does not photograph the visible iframe's current input, storage or scroll state. It does not prove current source revision. Original retention remains at most 20 artifacts runtime-wide for one hour, with two concurrent captures. Missing/expired IDs require deliberate recapture and review.
+Captures are **React Native Web — not native App Store screenshots**. Every capture uses a fresh browser context at 375×812 or 430×932. It does not photograph the visible iframe's current input, storage or scroll state. New captures carry source revision and measured browser errors when available; they do not verify interactions. Original retention remains at most 20 artifacts runtime-wide for one hour, with two concurrent captures. Missing/expired IDs require deliberate recapture and review.
 
-Saved kits copy their files and survive capture expiry and Dunara restart. Reading/downloading them requires no managed preview. Native screenshot sizes, screenshot compositing, locales, marketing generation, arbitrary imports, native uploads, signing and submission are excluded. Native interaction/accessibility and installed-launcher appearance remain separate checks. Bonsai's native state remains session-only; Launch Kit is not native persistence. Human visual approval is separate from passing byte/geometry tests.
+Saved kits copy their files and survive capture expiry and Dunara restart. Reading/downloading them requires no managed preview. Native screenshot sizes, screenshot compositing, locales, marketing generation, arbitrary imports, native uploads, signing and submission are excluded. Native interaction/accessibility and installed-launcher appearance remain separate checks. Launch Kit does not implement or verify native persistence. Human visual approval is separate from passing byte/geometry tests.
 
 ## Shared API and MCP
 

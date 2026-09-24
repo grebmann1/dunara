@@ -26,7 +26,7 @@ test.beforeEach(async () => {
   await engine.mediaJobs.configureProvider({ action: 'replace', expectedRevision: engine.mediaJobs.providerStatus().revision, key: 'offline-suggestion-fixture', remember: false });
   behavior = async (_, callbacks) => { callbacks.text(idea); };
   assistant = new AssistantService({ home: path.join(root, 'home'), createHarness: () => ({ async run(...args) { calls.push(args[0]); await behavior(...args); }, async close() {} }), async createGateway() { throw Error('Suggestions must not create a tool gateway'); } });
-  studio = await startStudio(engine, path.resolve('dist/studio'), assistant);
+  studio = await startStudio(engine, path.resolve(process.env.DUNARA_STUDIO_TEST_ASSETS ?? 'dist/studio'), assistant);
 });
 test.afterEach(async ({ page }) => { if (process.env.VISUAL) return; await page.close(); await assistant.close(); await studio.close(); await engine.close(); await rm(root, { recursive: true, force: true }); });
 
@@ -74,9 +74,14 @@ test('supports icons, explicit fresh direction, failure recovery, and another ap
   await form.getByRole('button', { name: 'Suggest', exact: true }).click();
   await expect(form.getByRole('region', { name: 'Suggested image prompt' })).toContainText('bold bonsai');
   const other = await engine.projects.create({ name: 'Orbit Notes', slug: 'orbit-notes' });
+  let releaseContext!: () => void;
+  const contextReady = new Promise<void>(resolve => { releaseContext = resolve; });
+  await page.route(`**/api/projects/${other.id}`, async route => { await contextReady; await route.continue(); });
   await closeMediaDrawer(page); await selectProject(page, other.id); await closeMediaDrawer(page);
   await page.getByRole('button', { name: 'App Icons', exact: true }).click(); await page.getByRole('button', { name: 'Generate an icon', exact: true }).click();
   await expect(form.getByRole('region', { name: 'Suggested image prompt' })).toHaveCount(0);
+  await expect(form.getByRole('button', { name: 'Suggest', exact: true })).toBeDisabled();
+  releaseContext();
   behavior = async (_, callbacks) => { callbacks.text('A luminous orbit around a folded notebook.'); };
   await form.getByRole('button', { name: 'Suggest', exact: true }).click();
   await expect(form.getByRole('region', { name: 'Suggested image prompt' })).toContainText('luminous orbit');

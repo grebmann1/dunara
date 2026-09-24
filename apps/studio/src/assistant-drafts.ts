@@ -65,6 +65,7 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
       await target.tail;
       if (entries.current.get(key) !== target) return;
       const snapshot = await api<DraftSnapshot>('/assistant/drafts/configure', { scope, update: { context: target.snapshot.context, preferenceRevision: target.snapshot.preferenceRevision, enabled } });
+      window.dispatchEvent(new Event('builder-draft-preference-changed'));
       if (entries.current.get(key) !== target) return;
       for (const item of entries.current.values()) {
         item.snapshot = { ...item.snapshot, enabled, preferenceRevision: snapshot.preferenceRevision, ...(!enabled ? { revision: null, value: null } : {}) }; item.failed = false;

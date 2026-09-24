@@ -105,7 +105,7 @@
 .assistant-composer { flex-shrink: 0; padding: 8px 12px 6px; background: var(--surface); position: relative; z-index: 1; }
 .assistant-input-box { border: 1px solid var(--border); border-radius: 12px; padding: 4px; background: #fff; box-shadow: 0 2px 5px #22263805; transition: border-color .15s, box-shadow .15s; }
 .assistant-input-box:focus-within { border-color: var(--primary-border); box-shadow: 0 0 0 3px var(--primary-soft); }
-.assistant-composer textarea { display: block; width: 100%; min-height: 40px; max-height: 160px; resize: none; border: 0; background: transparent; padding: 8px 8px 6px; font-size: 13px; line-height: 1.6; outline: none; box-shadow: none; }
+.assistant-composer textarea { display: block; width: 100%; min-height: 88px; max-height: min(280px, 40dvh); resize: none; overflow-y: auto; overscroll-behavior: contain; border: 0; background: transparent; padding: 8px 8px 6px; font-size: 13px; line-height: 1.6; outline: none; box-shadow: none; }
 .assistant-composer textarea::placeholder { color: var(--muted-foreground); }
 .assistant-composer-toolbar { display: flex; align-items: center; gap: 4px; padding: 0 2px 2px; }
 .assistant-mode-select { flex: 0 0 65px; width: 65px; min-height: 36px; padding: 4px 2px 4px 6px; border: 0; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
@@ -164,7 +164,7 @@
   .assistant-composer:has(.assistant-disclosure[open]) { flex-shrink: 1; min-height: 0; display: flex; flex-direction: column; }
   .assistant-composer > :not(.assistant-disclosure) { flex-shrink: 0; }
   .assistant-disclosure { min-height: 28px; flex-shrink: 1; }
-  .assistant-composer textarea { min-height: 48px; max-height: 48px; }
+  .assistant-composer textarea { min-height: 72px; max-height: min(180px, 36dvh); }
   .assistant-history { min-height: 0; flex-shrink: 1; overflow-y: auto; }
   .assistant-disclosure[open] { max-height: 20dvh; }
   .assistant-composer:has(.assistant-disclosure[open] ~ .assistant-disclosure[open]) .assistant-disclosure[open] { max-height: 15dvh; }

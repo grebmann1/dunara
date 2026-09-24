@@ -114,7 +114,8 @@
     "ws": "8.21.3",
     "zod": "4.6.4",
     "@mobile-builder/plugin-sdk": "workspace:*",
-    "@mobile-builder/catalog": "workspace:*"
+    "@mobile-builder/catalog": "workspace:*",
+    "yauzl": "3.4.0"
   },
   "optionalDependencies": {
     "@earendil-works/pi-ai": "0.85.1",

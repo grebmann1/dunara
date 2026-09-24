@@ -28,6 +28,11 @@ export class Previews implements PreviewDriver {
   readonly processes = new Processes();
   constructor(readonly projects: Projects, readonly diagnostics: Diagnostics, readonly trusted: boolean, readonly lan = false, private readonly environment: (id: string) => Promise<AppEnvironment> = async () => ({}), private readonly beforeStart: (id: string) => Promise<void> = async () => {}) {}
   status(id: string): Preview { return this.sessions.get(id) ?? { projectId: id, status: 'stopped' }; }
+  async expoAccount(id: string) {
+    if (!this.trusted) throw new BuilderError('TRUST_REQUIRED', 'Authorize local app execution before checking Expo sign-in.');
+    const { expoAccountStatus } = await import('../../../core/src/expo-account.js');
+    return expoAccountStatus((await this.projects.get(id)).root);
+  }
   private transport(id: string) { return this.transports.get(id) ?? (this.lan ? 'lan' : 'localhost'); }
   async setTransport(id: string, input: unknown, signal?: AbortSignal) {
     const value = previewTransportInput.parse(input); await this.projects.get(id);

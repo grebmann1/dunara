@@ -251,6 +251,7 @@ test('Preview keeps metadata on demand and omits controls without a project', as
   }
   await page.getByLabel('Preview tools', { exact: true }).click();
   await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+  await page.getByText('Project details', { exact: true }).click();
   await expect(page.getByText(project.root, { exact: true })).toBeVisible();
   await expect(page.getByText(project.id, { exact: true })).toBeVisible();
 });

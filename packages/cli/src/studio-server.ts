@@ -1,3 +1,4 @@
+import { ProjectImports } from '../../core/src/project-import.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -48,6 +49,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
   });
   const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
   const projectExports = new ProjectExports(engine.projects);
+  const projectImports = new ProjectImports(engine.projects, () => engine.account.context().revision);
   await engine.plugins.ready;
   if (engine.plugins.isEnabled('builder.account')) await engine.account.restore();
   const drafts = new AssistantDrafts(engine.projects.home, assistant?.epoch ?? randomUUID(), () => engine.account.context());
@@ -145,6 +147,23 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (req.method === 'POST') return json(res, await engine.serviceRecipe.apply(id, await body(req, 8192)));
         return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
+      const androidRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/android-deliveries(?:\/(preflight|plan|build|install-plan|install|cancel|remove|apk)(?:\/([a-f0-9-]+))?)?$/);
+      if (androidRoute) {
+        engine.plugins.assertEnabled('builder.expo');
+        const id = z.uuid().parse(androidRoute[1]), action = androidRoute[2];
+        if (req.method === 'GET' && !action) return json(res, { deliveries: await engine.androidDeliveries.list(id) });
+        if (req.method === 'GET' && action === 'apk') { const value = await engine.androidDeliveries.artifact(id, z.uuid().parse(androidRoute[3])); res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="preview.apk"' }); return res.end(value.bytes); }
+        if (req.method !== 'POST' || androidRoute[3]) return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const input = await body(req, 8192);
+        if (action === 'preflight') { await engine.projects.get(id); z.object({}).strict().parse(input); return json(res, await engine.androidDeliveries.preflight()); }
+        if (action === 'plan') return json(res, await engine.androidDeliveries.plan(id, input));
+        if (action === 'build') return json(res, await engine.androidDeliveries.build(id, input));
+        if (action === 'install-plan') return json(res, await engine.androidDeliveries.installPlan(id, input));
+        if (action === 'install') return json(res, await engine.androidDeliveries.install(id, input));
+        if (action === 'cancel') return json(res, await engine.androidDeliveries.cancel(id, input));
+        if (action === 'remove') return json(res, await engine.androidDeliveries.remove(id, input));
+        return json(res, { error: { message: 'Unknown Android action' } }, 404);
+      }
       const deliveryRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/native-deliveries(?:\/(preflight|plan|build|install-plan|install|launch|cancel|remove))?$/);
       if (deliveryRoute) {
         const id = z.uuid().parse(deliveryRoute[1]), action = deliveryRoute[2];
@@ -233,6 +252,14 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           const value = z.object({ environment: environmentName, expectedRevision: z.string().regex(/^[a-f0-9]{64}$/).nullable() }).strict().parse(input);
           return json(res, action === 'types' ? await engine.backends.generateTypes(id, value.environment, value.expectedRevision) : await engine.backends.exportConfiguration(id, value.environment, value.expectedRevision));
         } catch (error) { return json(res, error instanceof BuilderError ? errorResult(error) : { error: publicError(error) }, error instanceof PlatformError ? error.status : error instanceof BuilderError && error.code === 'REVISION_CONFLICT' ? 409 : 400); }
+      }
+      if (url.pathname === '/api/workspace-drafts/read' || url.pathname === '/api/workspace-drafts/save') {
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const { projectId, update } = z.object({ projectId: z.uuid(), update: z.unknown().optional() }).strict().parse(await body(req, 256 * 1024));
+        const context = engine.account.context().revision;
+        await engine.projects.get(projectId);
+        if (accountChanging || context !== engine.account.context().revision) throw new BuilderError('REVISION_CONFLICT', 'Account changed while loading drafts.');
+        return json(res, url.pathname.endsWith('/save') ? drafts.saveWorkspace(projectId, update) : drafts.readWorkspace(projectId));
       }
       if (url.pathname === '/api/assistant/status') {
         if (req.method !== 'GET') return json(res, { error: { message: 'Method not allowed' } }, 405);
@@ -341,6 +368,16 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         const result = await engine.mediaJobs.configureProvider(await body(req, 8192));
         engine.diagnostics.emit('change'); return json(res, result);
       }
+      if (url.pathname === '/api/project-imports/review' || url.pathname === '/api/project-imports/apply') {
+        engine.plugins.assertEnabled('builder.expo');
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        if (accountChanging) throw new BuilderError('REVISION_CONFLICT', 'Account change is in progress.');
+        if (url.pathname.endsWith('/review')) {
+          const value = z.object({ zip: z.string().max(44_739_244).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict().parse(await body(req, 45_000_000));
+          return json(res, await projectImports.review(Buffer.from(value.zip, 'base64')));
+        }
+        const project = await projectImports.apply(await body(req, 8192)); engine.diagnostics.emit('change'); return json(res, project);
+      }
       if (url.pathname === '/api/projects' && req.method === 'GET') return json(res, { ...await engine.projects.catalog(), recipes, presets, trusted: engine.previews.trusted });
       if (url.pathname === '/api/projects' && req.method === 'POST') { const result = await engine.actions.value('project_create', createSchema.parse(await body(req))); engine.diagnostics.emit('change'); return json(res, result?.project); }
       const recovery = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/remove-unavailable$/);
@@ -384,7 +421,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         }
         return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
-      const media = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/media(?:\/(import|brief|approve|transform|job-request|job-approve|job-cancel|images|icon-check|icon-prepare|icon-preview|icon-apply)(?:\/([a-f0-9-]+))?)?$/);
+      const media = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/media(?:\/(import|screen-reference|brief|approve|transform|job-request|job-approve|job-cancel|images|icon-check|icon-prepare|icon-preview|icon-apply)(?:\/([a-f0-9-]+))?)?$/);
       if (media) {
         const id = z.uuid().parse(media[1]); await engine.projects.get(id);
         const action = media[2];
@@ -409,7 +446,18 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           const result = await engine.assets.import(id, input, Buffer.concat(chunks)); engine.diagnostics.emit('change', id); return json(res, result);
         }
         const input = await body(req); let result: unknown;
-        if (action === 'brief') { const value = briefUpdateSchema.parse(input); result = await engine.actions.value('media_brief', { projectId: id, input: value }); }
+        if (action === 'screen-reference') {
+          const value = z.object({ captureId: z.uuid(), expectedRevision: z.string().regex(/^[a-f0-9]{64}$/).nullable() }).strict().parse(input);
+          const capture = (await engine.boardCaptures.list(id)).find(item => item.id === value.captureId && !item.stale);
+          if (!capture) throw new BuilderError('REVISION_CONFLICT', 'Capture this screen again before using it as a visual reference.');
+          const previous = await engine.assets.list(id);
+          const imported = await engine.assets.import(id, { expectedRevision: value.expectedRevision, label: `Screen reference ${capture.route}`.slice(0, 100), role: 'other', mediaType: 'image/png' }, await engine.boardCaptures.get(id, capture.id));
+          const asset = imported.assets.find(item => !previous.assets.some(before => before.id === item.id));
+          if (!asset) throw new BuilderError('INVALID_INPUT', 'Screen reference was not imported.');
+          await engine.assets.approve(id, asset.id, imported.revision);
+          result = { assetId: asset.id };
+        }
+        else if (action === 'brief') { const value = briefUpdateSchema.parse(input); result = await engine.actions.value('media_brief', { projectId: id, input: value }); }
         else if (action === 'approve') { const value = approveAssetSchema.parse(input); result = await engine.actions.value('media_approve', { projectId: id, input: value }); }
         else if (action === 'transform') result = await engine.actions.value('media_transform', { projectId: id, input: transformSchema.parse(input) });
         else if (action === 'icon-check') result = await engine.actions.value('icon_check', { projectId: id, input: iconCheckSchema.parse(input) });
@@ -422,7 +470,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         else return json(res, { error: { message: 'Not found' } }, 404);
         engine.diagnostics.emit('change', id); return json(res, result);
       }
-      const match = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)(?:\/(design|start|stop|transport|phone-test|capture|artifacts|board-captures)(?:\/([a-f0-9-]+))?)?$/);
+      const match = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)(?:\/(design|start|stop|transport|expo-account|phone-test|capture|artifacts|board-captures)(?:\/([a-f0-9-]+))?)?$/);
       if (!match) return json(res, { error: { message: 'Not found' } }, 404);
       const id = z.uuid().parse(match[1]); await engine.projects.get(id);
       const action = match[2];
@@ -436,6 +484,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
       const input = await body(req);
       const controller = new AbortController(); res.on('close', () => { if (!res.writableEnded) controller.abort(); });
       if (action === 'design') { const design = await engine.designs.apply(id, designUpdateSchema.parse(input)); engine.diagnostics.emit('change', id); return json(res, design); }
+      if (action === 'expo-account') { z.object({}).strict().parse(input); return json(res, await engine.previews.expoAccount?.(id) ?? { state: 'unknown', message: 'Expo sign-in is checked in Dunara Desktop.' }); }
       if (action === 'transport') return json(res, await engine.setPreviewTransport(id, input, controller.signal));
       if (action === 'phone-test') return json(res, await engine.projects.mutations.run(() => engine.previews.recordPhoneTest(id, input)));
       if (action === 'start') { z.object({}).strict().parse(input); return json(res, await engine.previews.start(id, controller.signal)); }

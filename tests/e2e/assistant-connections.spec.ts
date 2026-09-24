@@ -152,6 +152,7 @@ test('explains provider-specific credentials and keeps startup guidance scoped t
   await expect(spending).toContainText('Messages use your selected provider and model.');
   await expect(spending).not.toContainText('OPENAI_API_KEY');
   const images = page.getByRole('region', { name: 'OpenAI configuration' });
+  await images.getByText('Use another image connection', { exact: true }).click();
   await images.getByText('OpenAI fallback and startup settings', { exact: true }).click();
   await expect(images.getByText(/Other Assistant providers use their own connections/)).toBeVisible();
   for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {

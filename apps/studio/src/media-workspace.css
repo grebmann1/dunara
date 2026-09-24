@@ -228,3 +228,13 @@
 .generation-drawer .creative-fields { padding-top: 18px; }
 .icon-settings .icon-prepare summary { display: list-item; }
 .icon-settings .icon-prepare summary > span { display: block; }
+
+.draft-storage-notice { margin: 0; padding: 8px 16px; font-size: 12px; color: var(--muted-foreground); }
+.asset-placement { margin-block: 16px; }
+.asset-placement-phone { position: relative; width: min(100%, 260px); aspect-ratio: 375 / 812; margin: 16px auto; overflow: hidden; border: 1px solid var(--border); border-radius: 24px; background: var(--background); }
+.asset-placement-phone > p { padding: 16px; font-size: 12px; }
+.asset-placement-screen { width: 100%; height: 100%; object-fit: contain; }
+.asset-placement-art { position: absolute; inset: 14% 6% auto; height: 30%; overflow: hidden; border: 2px dashed var(--primary); border-radius: 12px; background: var(--background); }
+.asset-placement-art img { width: 100%; height: 100%; object-fit: var(--placement-fit); }
+.asset-placement-phone[data-placement="avatar"] .asset-placement-art { inset: 18% auto auto 8%; width: 28%; height: auto; aspect-ratio: 1; border-radius: 50%; }
+.asset-placement-phone[data-placement="background"] .asset-placement-art { inset: 0; height: 100%; opacity: .5; border-radius: 0; }

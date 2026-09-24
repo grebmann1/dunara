@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { ArrowDown, ArrowUp, Check, ChevronRight, Hammer, History, LoaderCircle, Play, Plus, Sparkles, Square, X } from 'lucide-react';
 import { Button } from './ui/button';
@@ -26,6 +26,11 @@ const starters = [
   { requiresProject: true, title: 'Find and fix an issue', detail: 'Get things working again', prompt: 'Review this project for errors and help me fix what is not working.' },
 ];
 const toolLabel = (name: string) => name.replace(/^builder_mcp_/, '').replaceAll('_', ' ');
+function sizeMessageInput(element: HTMLTextAreaElement) {
+  const available = element.closest<HTMLElement>('.assistant-panel')?.clientHeight || window.innerHeight;
+  element.style.height = 'auto';
+  element.style.height = `${Math.min(element.scrollHeight, Math.max(72, Math.min(280, available * .36)))}px`;
+}
 export function AssistantPanel({ controller: a, open, desktop, container, onOpenChange, trigger, projectName, backendEnabled, onBackend, onSettings, preview, previewDisabled, onPreview }: Props) {
   const narrow = !desktop;
   const viewport = useOverlayViewport(open && narrow);
@@ -43,6 +48,21 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
   const imageDragDepth = useRef(0);
   const [deleting, setDeleting] = useState(false), [showHistory, setShowHistory] = useState(false), [count, setCount] = useState(40), [atBottom, setAtBottom] = useState(true);
   const title = useRef<HTMLHeadingElement>(null), scroll = useRef<HTMLDivElement>(null), input = useRef<HTMLTextAreaElement>(null), following = useRef(true), earlierHeight = useRef<number | null>(null);
+  // Portals can mount after the opening layout effect. Size at ref attachment
+  // too, so restored and staged prompts never fall back to a single row.
+  const messageRef = useCallback((element: HTMLTextAreaElement | null) => {
+    input.current = element; if (!element) return;
+    let width = -1, panelHeight = -1;
+    const resize = () => {
+      const nextWidth = element.clientWidth, nextHeight = element.closest<HTMLElement>('.assistant-panel')?.clientHeight ?? 0;
+      if (width !== nextWidth || panelHeight !== nextHeight) { width = nextWidth; panelHeight = nextHeight; sizeMessageInput(element); }
+    };
+    sizeMessageInput(element);
+    const observer = new ResizeObserver(resize); observer.observe(element);
+    const panel = element.closest('.assistant-panel'); if (panel) observer.observe(panel);
+    const frame = requestAnimationFrame(resize);
+    return () => { cancelAnimationFrame(frame); observer.disconnect(); if (input.current === element) input.current = null; };
+  }, []);
   const lastScroll = useRef<{ element: HTMLDivElement; top: number } | null>(null);
   const followLatest = () => { following.current = true; lastScroll.current = null; };
   useLayoutEffect(() => { setDeleting(false); setCount(40); followLatest(); earlierHeight.current = null; setAtBottom(true); }, [a.conversation?.id]);
@@ -50,7 +70,7 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
   const continueSetup = (message: string) => { a.setDraft(a.draft.trim() ? `${a.draft}\n\n${message}` : message); input.current?.focus(); };
   const setupDisabled = a.working || !!a.status?.busy || a.mode === 'plan';
   // Resize the composer before calculating the transcript’s new bottom.
-  useLayoutEffect(() => { const element = input.current; if (element) { element.style.height = 'auto'; element.style.height = `${Math.min(element.scrollHeight, 160)}px`; } }, [a.draft, open, desktop]);
+  useLayoutEffect(() => { if (input.current) sizeMessageInput(input.current); }, [a.draft, open, desktop]);
   useLayoutEffect(() => {
     const element = scroll.current; if (!element) return;
     // Native scroll events can follow a React layout commit. Respect an upward
@@ -143,7 +163,7 @@ export function AssistantPanel({ controller: a, open, desktop, container, onOpen
           {a.uploading && <p className="assistant-upload-notice" role="status">Adding images…</p>}
           <form className="assistant-input-box" onSubmit={event => { event.preventDefault(); send(); }}>
             <label htmlFor="assistant-message" className="sr-only">Message assistant</label>
-            <textarea ref={input} id="assistant-message" rows={1} placeholder={a.status?.configured ? a.status.busy ? 'Write your next message…' : a.projectId ? 'Ask anything about your app…' : 'Describe your app idea…' : 'Describe your idea…'} value={a.draft} onChange={event => a.setDraft(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void a.addImages(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} maxLength={maxBytes} readOnly={a.working || a.loading || a.persistence.loading} aria-describedby="assistant-composer-hint" />
+            <textarea ref={messageRef} id="assistant-message" rows={3} placeholder={a.status?.configured ? a.status.busy ? 'Write your next message…' : a.projectId ? 'Ask anything about your app…' : 'Describe your app idea…' : 'Describe your idea…'} value={a.draft} onChange={event => a.setDraft(event.target.value)} onPaste={event => { const files = Array.from(event.clipboardData.files); if (files.length) { event.preventDefault(); void a.addImages(files); } }} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); send(); } }} maxLength={maxBytes} readOnly={a.working || a.loading || a.persistence.loading} aria-describedby="assistant-composer-hint" />
             <div className="assistant-composer-toolbar">
               <select className="assistant-mode-select" aria-label="Assistant mode" aria-describedby="assistant-mode-description" title={a.mode === 'plan' ? 'Plan · explore without changing your app' : 'Build · make and verify changes'} value={a.mode} disabled={a.working || a.loading || a.status?.busy} onChange={event => a.setMode(event.target.value === 'plan' ? 'plan' : 'build')}><option value="plan">Plan</option><option value="build">Build</option></select>
               <span id="assistant-mode-description" className="sr-only">{a.mode === 'plan' ? 'Explore and plan. No app changes.' : 'Make changes and verify them.'}</span>

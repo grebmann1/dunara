@@ -67,6 +67,7 @@ async function create(page: Page) {
   await page.getByRole('button', { name: '+ New app', exact: true }).click();
   await page.getByLabel('App name', { exact: true }).fill('Bonsai Master');
   await page.getByLabel('The idea', { exact: false }).fill(brief);
+  await page.getByLabel('Build my idea with the Assistant').uncheck();
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(panel(page).getByLabel('Message assistant')).toHaveValue(new RegExp(brief.replaceAll('.', '\\.')));
   await expect(panel(page).getByRole('button', { name: 'Send message' })).toBeEnabled();
@@ -88,6 +89,7 @@ test('one-form creation stages the right project, retains other drafts, and pers
   await page.getByRole('button', { name: '+ New app', exact: true }).click();
   await page.getByLabel('App name', { exact: true }).fill('Bonsai Master');
   await page.getByLabel('The idea', { exact: false }).fill(brief);
+  await page.getByLabel('Build my idea with the Assistant').uncheck();
   await screenshots(page, info, 'create');
   await page.getByRole('button', { name: 'Create app', exact: true }).click();
   await expect(panel(page).getByLabel('Message assistant')).toHaveValue(/Build the first version of Bonsai Master/);

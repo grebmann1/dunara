@@ -33,7 +33,7 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   const stageProjectBuild = (target: string, prompt: string) => {
     const key = chosen.current.get(target) ?? `project:${target}`;
     const previous = drafts.current.get(key);
-    const next = previous?.trim() ? `${previous}\n\n${prompt}` : prompt;
+    const next = previous?.includes(prompt) ? previous : previous?.trim() ? `${previous}\n\n${prompt}` : prompt;
     drafts.current.set(key, next); modes.current.set(key, 'build');
     if (current.current === target) { setDraftState(next); renderMode(value => value + 1); }
   };
@@ -44,11 +44,11 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; }; }, []);
   const refresh = useCallback(async () => {
     const origin = current.current, version = ++generation.current;
-    const list = await api<AssistantConversationList>('/assistant/conversations/list', { projectId: origin === 'new' ? null : origin });
+    const list = (await api<AssistantConversationList>('/assistant/conversations/list', { projectId: origin === 'new' ? null : origin })).filter(item => item.task !== 'image-prompt');
     if (!mounted.current || version !== generation.current || current.current !== origin) return;
     const active = snapshot.current?.active;
     const preferred = desired.current ?? chosen.current.get(origin);
-    const id = preferred && list.some(item => item.id === preferred) ? preferred : (active?.projectId === (origin === 'new' ? null : origin) ? active.conversationId : list[0]?.id);
+    const id = preferred && list.some(item => item.id === preferred) ? preferred : (active?.projectId === (origin === 'new' ? null : origin) && list.some(item => item.id === active.conversationId) ? active.conversationId : list[0]?.id);
     const record = id ? await api<AssistantConversation>('/assistant/conversations/read', { conversationId: id }) : undefined;
     if (!mounted.current || version !== generation.current || current.current !== origin) return;
     if (record && record.projectId !== (origin === 'new' ? null : origin)) {
@@ -187,6 +187,22 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
       if (current.current === origin) { desired.current = value.id; drafts.current.set(value.id, ''); setLoading(true); }
     });
   }
+  async function buildProject(target: string, prompt: string) {
+    const identity = accountVersion.current;
+    const currentStatus = await api<AssistantStatus>('/assistant/status');
+    if (!currentStatus.available || !currentStatus.configured || currentStatus.busy || !currentStatus.epoch) throw new Error('Your app is created. Connect an available Assistant, then send the saved idea to build it.');
+    const record = await api<AssistantConversation>('/assistant/conversations/create', { projectId: target });
+    if (accountVersion.current !== identity) throw new Error('Account changed. The first build was not sent.');
+    chosen.current.set(target, record.id);
+    const stagedKey = `project:${target}`;
+    drafts.current.delete(stagedKey); modes.current.delete(stagedKey);
+    drafts.current.set(record.id, prompt); modes.current.set(record.id, 'build');
+    if (current.current === target) desired.current = record.id;
+    try {
+      await api('/assistant/turns/start', { epoch: currentStatus.epoch, accountContext: currentStatus.accountContext, turn: { conversationId: record.id, runId: crypto.randomUUID(), mode: 'build', prompt } });
+      drafts.current.delete(record.id);
+    } finally { await refreshSafely(); }
+  }
   function select(id: string) { if (operating.current) return; generation.current++; desired.current = id; chosen.current.set(current.current, id); setConversation(undefined); setDraftState(drafts.current.get(id) ?? ''); setLoading(true); setError(''); setAttachmentError(''); void refreshSafely(); }
   async function send() {
     const origin = current.current, text = draft, originalDraft = draftKey, identity = accountVersion.current;
@@ -241,6 +257,6 @@ export function useAssistant(ready: boolean, projectId: string | null, open: boo
   async function approve(review: AssistantPacket['approvals'][number], approve: boolean) {
     await operate(async () => { await api('/assistant/approvals', { id: review.id, epoch: review.epoch, runId: review.runId, conversationId: review.conversationId, projectId: review.projectId, approve }); });
   }
-  return { stageProjectBuild, selectModel, selectReasoning, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
+  return { stageProjectBuild, buildProject, selectModel, selectReasoning, status, conversation, history, approvals, activity, error, connectionError: historyError || connectionError, historyError, loading, working, uploading, attachmentError, addImages, persistence, draft, setDraft, mode, setMode, attachments, setAttachments, stageInspector, projectId, create, select, send, stop, remove, approve, refresh: refreshSafely };
 }
 export type AssistantController = ReturnType<typeof useAssistant>;

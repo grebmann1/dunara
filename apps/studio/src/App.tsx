@@ -1,8 +1,10 @@
+import { ProjectImport } from './components/ProjectImport';
 import { useStudioClient } from './api';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Camera, Layers3, MessageSquare, Play, RotateCw, SlidersHorizontal, Smartphone, Square, X } from 'lucide-react';
 import { projectBuildPrompt } from './project-build';
 import { useAssistant } from './assistant';
+import { useWorkspaceDrafts } from './workspace-drafts';
 import { AssistantPanel } from './components/AssistantPanel';
 import { Button } from './components/ui/button';
 import { CreateProjectDialog } from './components/CreateProjectDialog';
@@ -14,7 +16,7 @@ import { StudioShell, type Workspace } from './components/layout/StudioShell';
 import { useWorkspaceLayout, WorkspaceDockProvider } from './components/layout/WorkspaceDock';
 import { PreviewBoard } from './components/PreviewBoard';
 import { initialBoard, type PreviewBoardState, type BoardAction } from './preview-board';
-import { DesignPanel, type DesignDraft } from './components/DesignPanel';
+import { DesignPanel } from './components/DesignPanel';
 import { StudioConsole } from './components/StudioConsole';
 import { AssetsPanel } from './components/AssetsPanel';
 import { SettingsPanel } from './components/SettingsPanel';
@@ -27,9 +29,6 @@ import type { JourneyState } from '../../../packages/core/src/journey';
 import { BackendPanel } from './components/BackendPanel';
 import { PluginsPanel, usePlugins } from './plugins/PluginsPanel';
 import { workspaceOwner } from '../../../packages/builtin-plugins/src/contributions';
-import type { BriefDraft } from './components/BriefForm';
-import type { CreativeDraft } from './creative';
-import type { LaunchKitDraft } from './components/LaunchKitPanel';
 
 export function App() {
   const { api, authenticate, subscribe, capabilities } = useStudioClient();
@@ -47,7 +46,7 @@ export function App() {
   const [assistantOpen, setAssistantOpen] = useState(false), assistantButton = useRef<HTMLButtonElement>(null);
   const assistantEnabled = pluginEnabled('builder.assistant');
   const assistant = useAssistant(ready && assistantEnabled, selected || null, assistantOpen && assistantEnabled);
-  const generationDrafts = useRef(new Map<string, { assets?: CreativeDraft; icons?: CreativeDraft }>());
+  const creativeDrafts = useWorkspaceDrafts(selected, ready);
   const [state, setState] = useState<StudioState>(), [error, setError] = useState('');
   const [busy, setBusy] = useState(''), [busyProject, setBusyProject] = useState('');
   const [boards, setBoards] = useState<Record<string, PreviewBoardState>>({});
@@ -60,6 +59,7 @@ export function App() {
     if (activeView) changeBoard(selected, board?.mode === 'overview' ? { type: 'focus-screen', route } : { type: 'update', id: activeView.id, patch: { route } });
   };
   const setViewport = (viewport: 'compact' | 'large') => { if (activeView) changeBoard(selected, { type: 'update', id: activeView.id, patch: { viewport } }); };
+  const [importing, setImporting] = useState(false);
   const [creating, setCreating] = useState(false), [name, setName] = useState('My app'), [slug, setSlug] = useState('my-app');
   const [trusted, setTrusted] = useState(false);
   const [settings, setSettings] = useState<ProviderStatus>();
@@ -74,9 +74,6 @@ export function App() {
   const closePanelsForDialog = () => { setAssistantOpen(false); if (designOpen) { setLocalDesignOpen(false); setDesignOpen(false); } };
   const workspaceContent = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => { workspaceContent.current?.scrollTo(0, 0); }, [workspace, selected]);
-  const designDrafts = useRef(new Map<string, DesignDraft>());
-  const briefDrafts = useRef(new Map<string, BriefDraft | undefined>());
-  const kitDrafts = useRef(new Map<string, LaunchKitDraft>());
   const [assetsTab, setLocalAssetsTab] = useState<'library' | 'launch-kit'>('library');
   const setAssetsTab = (tab: 'library' | 'launch-kit') => { void control({ type: 'assets-tab', tab }); };
   const openLaunchKit = () => setAssetsTab('launch-kit');
@@ -191,8 +188,8 @@ export function App() {
         if (!dock.desktop) setAssistantOpen(false);
       }} backendEnabled={pluginEnabled('builder.supabase')} onBackend={() => setWorkspace('backend')} projectName={projects.find(project => project.id === selected)?.name} onSettings={() => setWorkspace('settings')} /> }}
     projectStatus={state && <div className="preview-status" data-state={busyProject === selected && busy ? 'busy' : state.preview.status} role="status"><i aria-hidden="true" />{(busyProject === selected && busy) || state.preview.status}</div>}
-    banners={<>{connectionError && <div className="error-banner" role="alert">{connectionError}</div>}{!creating && errorBanner}</>}
-    overlays={<><Dialog open={buildOpen && !!state} onOpenChange={setBuildOpen}><DialogContent placement="drawer" className="preview-tool-dialog" onOpenAutoFocus={event => { event.preventDefault(); buildTitle.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); workspaceContent.current?.querySelector<HTMLButtonElement>('.creation-guide-trigger')?.focus({ preventScroll: true }); }}><header><DialogTitle ref={buildTitle} tabIndex={-1}>Build setup</DialogTitle><DialogDescription>Prepare an installable version of your app.</DialogDescription></header><div className="preview-tool-body">{state && <NativeBuildPanel key={selected} projectId={selected} onRefresh={() => void reconcile()} />}</div></DialogContent></Dialog><CreateProjectDialog open={creating} onOpenChange={setCreating} busy={!!busy} backendEnabled={pluginEnabled('builder.supabase')} assistantEnabled={assistantEnabled && !!assistant.status?.available} name={name} slug={slug} onName={value => { setName(value); setSlug(value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')); }} onSlug={setSlug} error={errorBanner} onSubmit={async setup => {
+    banners={<>{connectionError && <div className="error-banner" role="alert">{connectionError}</div>}{!creating && errorBanner}{selected && creativeDrafts.notice && ['assets', 'icons'].includes(workspace) && <p className="draft-storage-notice" role="status">{creativeDrafts.notice}</p>}</>}
+    overlays={<><ProjectImport open={importing} onOpenChange={setImporting} onImported={async project => { await reconcile(); await control({ type: 'select-project', projectId: project.id }); }} /><Dialog open={buildOpen && !!state} onOpenChange={setBuildOpen}><DialogContent placement="drawer" className="preview-tool-dialog" data-tool="build" onOpenAutoFocus={event => { event.preventDefault(); buildTitle.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); workspaceContent.current?.querySelector<HTMLButtonElement>('.creation-guide-trigger')?.focus({ preventScroll: true }); }}><header><DialogTitle ref={buildTitle} tabIndex={-1}>Build setup</DialogTitle><DialogDescription>Prepare an installable version of your app.</DialogDescription></header><div className="preview-tool-body">{state && <NativeBuildPanel key={selected} projectId={selected} onRefresh={() => void reconcile()} />}</div></DialogContent></Dialog><CreateProjectDialog onImport={() => { setCreating(false); setImporting(true); }} open={creating} onOpenChange={setCreating} busy={!!busy} backendEnabled={pluginEnabled('builder.supabase')} assistantEnabled={assistantEnabled && !!assistant.status?.available && !!assistant.status?.configured && !assistant.status?.busy} name={name} slug={slug} onName={value => { setName(value); setSlug(value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')); }} onSlug={setSlug} error={errorBanner} onSubmit={async setup => {
       const result = createSchema.safeParse({ name, slug, recipe: 'wellness', preset: 'sage' });
       if (!result.success) { setError('Use a name with letters, numbers, spaces, periods, apostrophes or hyphens and a lowercase directory slug.'); return false; }
       let briefSaved = false;
@@ -206,6 +203,10 @@ export function App() {
           const progress = await api<JourneyState>(`/projects/${project.id}/journey`);
           await api(`/projects/${project.id}/journey`, { expectedRevision: progress.revision, patch: previous }); briefSaved = true;
         } catch { setError('Your app was created, but its brief could not be saved. Add it in Your app journey.'); }
+        if (setup.build && briefSaved) {
+          try { await assistant.buildProject(project.id, projectBuildPrompt(project.name, setup.brief)); }
+          catch (cause) { setError(cause instanceof Error ? cause.message : 'Your app is created. Review Assistant history before retrying the first build.'); }
+        }
         if (setup.backend === 'supabase' && selection.current === project.id) await control({ type: 'navigate', workspace: 'backend' }); });
       return created && briefSaved;
     }} /></>}>
@@ -230,14 +231,14 @@ export function App() {
             assistant.setAttachments({ images });
             showAssistant();
           } : undefined} onAskAssistant={assistant.status?.available ? attachment => { assistant.stageInspector(attachment); showAssistant(); } : undefined} key={`preview:${selected}`} suppressContext={assistantOpen} onRevealContext={() => setAssistantOpen(false)} preview={state.preview} project={state.project} board={board!} onChange={action => changeBoard(selected, action)} active={workspace === 'preview' && !creating} disabled={!usable || controlBusy || !!busy} perform={perform} /> : <div className="empty-workspace"><div className="empty-workspace-mark" aria-hidden><Layers3 /></div><h1>{authFailed ? 'Open a fresh Studio session.' : ready && !projects.length ? 'Create your first app' : 'Preparing your workspace…'}</h1><p>{authFailed ? 'Relaunch Studio from your Dunara runtime. Refresh cannot restore the lost authorization token.' : 'A little idea. A real app. Start with three working screens, then make every detail your own.'}</p><Button disabled={!usable || !!busy} onClick={() => setCreating(true)}>Create your first app</Button>{ready && !projects.length && <div className="empty-workspace-steps"><span><Smartphone aria-hidden />Live preview</span><span><SlidersHorizontal aria-hidden />Your design</span><span><Layers3 aria-hidden />Source you own</span></div>}</div>}</div>
-          {state && pluginEnabled('builder.design') && <DesignPanel key={selected} design={state.design} savedDraft={designDrafts.current.get(selected)} onDraft={draft => designDrafts.current.set(selected, draft)} disabled={!usable || !!busy} onApply={update => action('Applying design', 'design', update)} open={designOpen && (dock.desktop || !assistantOpen) && workspace === 'preview' && !creating} onOpenChange={setDesignOpen} trigger={designButton} />}
+          {state && creativeDrafts.loaded && pluginEnabled('builder.design') && <DesignPanel key={selected} design={state.design} savedDraft={creativeDrafts.value.design} onDraft={draft => creativeDrafts.update({ design: draft })} disabled={!usable || !!busy} onApply={update => action('Applying design', 'design', update)} open={designOpen && (dock.desktop || !assistantOpen) && workspace === 'preview' && !creating} onOpenChange={setDesignOpen} trigger={designButton} />}
         </div>
       </main>
-      {ready && selected && pluginEnabled('builder.media') && !workspaceUnavailable && <AssetsPanel assistantStatus={assistant.status} launchKitEnabled={pluginEnabled('builder.launch-kit')} key={`assets:${selected}`} projectId={selected} destination={workspace} settings={settings} state={state} savedBrief={briefDrafts.current.get(selected)} onBrief={draft => briefDrafts.current.set(selected, draft)} onNavigate={setWorkspace} onPending={setPendingReview} assetsTab={assetsTab} onAssetsTab={setAssetsTab} savedGeneration={generationDrafts.current.get(selected)} onGenerationDraft={(scope, draft) => generationDrafts.current.set(selected, { ...generationDrafts.current.get(selected), [scope]: draft })} onIntegrate={assistant.status?.available ? asset => {
-        const message = `Use the approved ${asset.role} asset "${asset.label}" in my app. Project: ${selected}. Asset ID: ${asset.id}. Local path: ${asset.path}. Inspect the screens and place it where it fits the design, preserving its aspect ratio. Use revision-safe writes.`;
-        assistant.setDraft(assistant.draft.trim() ? `${assistant.draft}\n\n${message}` : message);
+      {ready && selected && creativeDrafts.loaded && pluginEnabled('builder.media') && !workspaceUnavailable && <AssetsPanel assistantStatus={assistant.status} launchKitEnabled={pluginEnabled('builder.launch-kit')} key={`assets:${selected}`} projectId={selected} destination={workspace} settings={settings} state={state} savedBrief={creativeDrafts.value.brief} onBrief={draft => creativeDrafts.update({ brief: draft })} onNavigate={setWorkspace} onPending={setPendingReview} assetsTab={assetsTab} onAssetsTab={setAssetsTab} savedGeneration={creativeDrafts.value.generation} onGenerationDraft={(scope, draft) => creativeDrafts.update({ generation: { ...creativeDrafts.value.generation, [scope]: draft } })} onIntegrate={assistant.status?.available ? (asset, placement) => {
+        const message = `Use the approved ${asset.role} asset "${asset.label}" in my app. Project: ${selected}. Asset ID: ${asset.id}. Local path: ${asset.path}. Inspect the screen ${placement.route} and place it as ${placement.role} artwork using ${placement.fit} fit. Preserve its aspect ratio and the existing visual language. Use revision-safe writes.`;
+        assistant.stageProjectBuild(selected, message);
         showAssistant();
-      } : undefined} savedKitDraft={kitDrafts.current.get(selected)} onKitDraft={draft => kitDrafts.current.set(selected, draft)} />}
+      } : undefined} savedKitDraft={creativeDrafts.value.kit} onKitDraft={draft => creativeDrafts.update({ kit: draft })} />}
       {workspace === 'settings' && <SettingsPanel initialSection={settingsSection} enabledPlugins={enabledPlugins} project={state?.project} settings={settings} onSettings={setSettings} disabled={!usable} />}
       {workspace === 'plugins' && <PluginsPanel catalog={pluginCatalog} projectId={selected || null} />}
       {workspace === 'backend' && !workspaceUnavailable && (selected ? <BackendPanel key={`backend:${selected}`} projectId={selected} disabled={!usable} onSettings={() => setWorkspace('settings')} /> : <main className="destination"><h1>Backend</h1><p>Select or create an app to connect its Supabase backend.</p></main>)}

@@ -78,13 +78,12 @@ export class NativeDeliveries {
     if (!device.developerMode) throw new BuilderError('INVALID_INPUT', 'Enable Developer Mode on the selected iPhone before building.');
     const app = JSON.parse(source.snapshot.contents.get('app.json')!.toString('utf8'));
     const bundleIdentifier = nativeBuildConfiguration.shape.iosBundleIdentifier.parse(app.expo?.ios?.bundleIdentifier);
-    // Keep the first delivery path deliberately narrow. Generated native config/plugins execute with local trust.
-    if (source.record.backend.environment !== 'none') throw new BuilderError('INVALID_INPUT', 'Local iPhone delivery currently requires a No backend preparation.');
     const proposedRevision = revision(json({ selection, workspace: source.record.revision, prepared: source.snapshot.fingerprint, device, team, bundleIdentifier, xcode: host.xcode, cocoaPods: host.cocoaPods }));
     return { selection, device, team, bundleIdentifier, sourceFingerprint: source.record.sourceFingerprint, proposedRevision, consequences: [
       'Build a separate copy with Expo, CocoaPods and Xcode on this Mac. Dependencies and native templates may be downloaded; app source is not uploaded to a build service.',
       `Sign ${bundleIdentifier} with ${team.name} (${team.id}). Xcode automatic signing may contact Apple to create or update the app identifier, device registration and provisioning profile.`,
-      'Create an iOS Release app with bundled JavaScript. No Expo account, Supabase connection or running preview server is required to open it.',
+      'Create an iOS Release app with bundled JavaScript. No Expo account or running preview server is required to open it.',
+      source.record.backend.environment === 'none' ? 'This preparation has no backend connection.' : `Use the reviewed ${source.record.backend.environment} backend at ${source.record.backend.url}. Its public app key is bundled; sign-in and shared data require network access and that backend to remain available.`,
       `Review installation separately before changing ${device.name}. This build is for device testing, not App Store publication.`,
     ] };
   }

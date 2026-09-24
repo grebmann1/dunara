@@ -40,10 +40,11 @@ export function creativeSuggestionContext(draft: CreativeDraft, brief: Brief, st
     } : 'Propose a fresh visual direction; keep the app subject and selected visual style.',
   });
 }
-export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: StudioState): string {
+export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: StudioState, appIdea = ''): string {
   const purpose = creativePurposes[draft.purpose];
   const direction: string[] = [];
   if (draft.useAppDirection) {
+    if (appIdea.trim()) direction.push(`Original app idea: ${appIdea.trim().slice(0, 2000)}`);
     if (state?.project.name) direction.push(`App: ${state.project.name}`);
     for (const [key, label] of [['purpose', 'Purpose'], ['audience', 'Audience'], ['mood', 'Mood'], ['palette', 'Palette'], ['imageStyle', 'Image style'], ['avoid', 'Avoid']] as const) if (brief[key].trim()) direction.push(`${label}: ${brief[key].trim()}`);
     if (state?.design && 'tokens' in state.design) { const tokens = state.design.tokens; direction.push(`Interface colors: accent ${tokens.accent}, background ${tokens.background}, surface ${tokens.surface}, text ${tokens.text}.`); }
@@ -54,6 +55,7 @@ export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: Studi
     `Visual treatment:\n${creativeStyles[draft.style].detail}`,
     `Composition and delivery:\n${purpose.guidance}`,
     direction.length ? `App art direction:\n${direction.join('\n')}` : '',
+    draft.referenceIds.length ? 'Treat supplied references as the visual style source. Preserve their illustration technique, character design and level of realism. If a reference contains app UI, use only its art direction; do not copy its text, controls or phone frame into the artwork.' : '',
     'Resolve the composition, palette, materials and lighting as one coherent image. Avoid watermarks and accidental text. Return a finished image, not a written plan.',
   ].filter(Boolean).join('\n\n');
 }

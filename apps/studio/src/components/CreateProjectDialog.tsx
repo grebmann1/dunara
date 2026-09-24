@@ -9,13 +9,15 @@ import { Label } from './ui/label';
 import { SupabaseSettings } from './BackendPanel';
 import '../project-creation.css';
 
-export type CreationSetup = { brief: string; backend: 'supabase' | 'none' };
-type Props = { open: boolean; onOpenChange: (open: boolean) => void; busy: boolean; backendEnabled: boolean; assistantEnabled: boolean; name: string; slug: string; onName: (value: string) => void; onSlug: (value: string) => void; onSubmit: (setup: CreationSetup) => Promise<boolean>; error: ReactNode };
-export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, assistantEnabled, name, slug, onName, onSlug, onSubmit, error }: Props) {
+export type CreationSetup = { brief: string; backend: 'supabase' | 'none'; build: boolean };
+type Props = { open: boolean; onOpenChange: (open: boolean) => void; busy: boolean; backendEnabled: boolean; assistantEnabled: boolean; name: string; slug: string; onName: (value: string) => void; onSlug: (value: string) => void; onImport(): void; onSubmit: (setup: CreationSetup) => Promise<boolean>; error: ReactNode };
+export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, assistantEnabled, name, slug, onName, onSlug, onSubmit, onImport, error }: Props) {
   const { api } = useStudioClient();
   const returnFocus = useRef<HTMLElement | null>(null), heading = useRef<HTMLHeadingElement>(null);
   const [step, setStep] = useState<'idea' | 'backend'>('idea'), [brief, setBrief] = useState('');
   const [backend, setBackend] = useState<CreationSetup['backend']>('none');
+  const [build, setBuild] = useState(true);
+  const buildNow = assistantEnabled && build && !!brief.trim();
   const [connection, setConnection] = useState<ReturnType<Backends['status']>>();
   const [connectionError, setConnectionError] = useState(''), [checking, setChecking] = useState(false);
   const alive = useRef(false), submitting = useRef(false), connectionVersion = useRef(0);
@@ -40,7 +42,7 @@ export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, 
         setConnection(current);
         if (!current.configured || !backendEnabled) throw new Error('Connect your Supabase account before creating this app, or choose No backend for now.');
       }
-      if (await onSubmit({ brief: brief.trim(), backend })) setBrief('');
+      if (await onSubmit({ brief: brief.trim(), backend, build: buildNow })) setBrief('');
     } catch (cause) { if (alive.current) setConnectionError(cause instanceof Error ? cause.message : 'App creation failed. Try again.'); }
     finally { submitting.current = false; if (alive.current) setChecking(false); }
   }
@@ -60,9 +62,11 @@ export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, 
               {backendEnabled && <Button variant="ghost" className="creation-backend-link" onClick={() => setStep('backend')}><Database size={16} aria-hidden /><span><strong>Accounts &amp; shared data</strong><small>{backend === 'supabase' ? 'Supabase selected · change setup' : 'Optional · you can connect this later'}</small></span><ArrowRight size={16} aria-hidden /></Button>}
             </div>
           </details>
-          <p className="creation-next-note">{assistantEnabled ? 'Next, shape your app with the Assistant. Nothing is sent automatically.' : 'Start with an editable app. Customize it at your own pace.'}</p>
+          {assistantEnabled && <label className="creation-build-choice"><input type="checkbox" checked={build} onChange={event => setBuild(event.target.checked)} />Build my idea with the Assistant</label>}
+          <p className="creation-next-note">{buildNow ? 'Create and build sends this idea to your connected Assistant and starts the first version.' : 'Create an editable workspace. You can ask the Assistant to build it later.'}</p>
           {connectionError && <p role="alert">{connectionError}</p>}
-          <footer><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit">{locked ? 'Creating…' : 'Create app'}<ArrowRight size={14} aria-hidden /></Button></footer>
+          <footer><Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button><Button type="submit">{locked ? 'Creating…' : buildNow ? 'Create and build' : 'Create app'}<ArrowRight size={14} aria-hidden /></Button></footer>
+          <Button variant="ghost" type="button" disabled={locked} onClick={onImport}>Import an existing app</Button>
         </fieldset>
       </form> : <>
         <fieldset className="creation-backend-options" disabled={locked}>
@@ -73,7 +77,7 @@ export function CreateProjectDialog({ open, onOpenChange, busy, backendEnabled, 
         {backend === 'supabase' && (connection?.configured ? <div className="creation-account-ready" role="status"><Check size={16} aria-hidden /><div><strong>Account connection saved</strong><p>After creation, choose a Supabase project and review the connection in Backend.</p></div></div> : <SupabaseSettings compact disabled={locked} onConnected={async () => { const version = ++connectionVersion.current; const value = await api<ReturnType<Backends['status']>>('/backend/connection'); if (alive.current && version === connectionVersion.current) { setConnection(value); setConnectionError(''); } }} />)}
         {connectionError && <p role="alert">{connectionError}</p>}
         <p className="creation-recipe-note">You can change this setup later in Backend.</p>
-        <footer><Button variant="ghost" disabled={locked} onClick={() => setStep('idea')}><ArrowLeft size={14} aria-hidden />Back</Button><Button disabled={locked || !backend || (backend === 'supabase' && (!connection?.configured || !backendEnabled))} onClick={() => void create()}>{locked ? 'Creating…' : 'Create app'}</Button></footer>
+        <footer><Button variant="ghost" disabled={locked} onClick={() => setStep('idea')}><ArrowLeft size={14} aria-hidden />Back</Button><Button disabled={locked || !backend || (backend === 'supabase' && (!connection?.configured || !backendEnabled))} onClick={() => void create()}>{locked ? 'Creating…' : buildNow ? 'Create and build' : 'Create app'}</Button></footer>
       </>}
     </DialogContent>
   </Dialog>;

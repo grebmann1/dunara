@@ -27,7 +27,7 @@ const fileSchema = z.object({
   id: kitFileIdSchema, name: z.string().max(100), mediaType: z.enum(['application/json', 'text/markdown', 'image/png']),
   bytes: z.number().int().positive().max(KIT_BYTES), sha256: revisionSchema,
 }).strict();
-export const kitLimitations = [
+export const legacyKitLimitations = [
   'React Native Web — not native App Store screenshots.',
   'Captures use a fresh browser context, not the visible phone input or storage state. Capture time does not prove current source revision.',
   'Listing and attribution are user-authored drafts; rights, marketing claims and URL contents are not verified.',
@@ -35,13 +35,22 @@ export const kitLimitations = [
   'Native persistence is not provided by this kit. Bonsai native changes remain session-only.',
   'No store-size certification, signing, submission, publication or provider request was performed.',
 ] as const;
+export const kitLimitations = [
+  'React Native Web — not native App Store screenshots.',
+  'Captures use a fresh browser context, not the visible phone input or storage state. Revision metadata identifies captured source when available; it does not verify interactions.',
+  'Listing and attribution are user-authored drafts; rights, marketing claims and URL contents are not verified.',
+  'Native interaction, safe areas, keyboard, accessibility and installed launcher appearance require separate qualification.',
+  'Native sign-in, persistence and operation with Metro stopped must be checked on the installed app.',
+  'No store-size certification, signing, submission, publication or provider request was performed.',
+] as const;
 export const launchKitManifestSchema = z.object({
-  schemaVersion: z.literal(1), id: z.uuid(), createdAt: z.iso.datetime(),
+  schemaVersion: z.union([z.literal(1), z.literal(2)]), id: z.uuid(), createdAt: z.iso.datetime(),
   project: z.object({ id: z.uuid(), name: portableText(100).min(1), slug: z.string().regex(/^[a-z][a-z0-9-]{0,47}$/) }).strict(),
   captures: z.array(z.object({
     id: z.uuid(), projectId: z.uuid(), route: routeSchema, viewport: viewportSchema,
     width: z.number().int(), height: z.number().int(), createdAt: z.iso.datetime(), rendering: z.literal('React Native Web'), bytes: z.number().int().positive().max(2_000_000),
     environment: z.enum(['development', 'staging', 'production']).optional(), configurationRevision: revisionSchema.optional(),
+    sourceRevision: revisionSchema.optional(), changedDuringCapture: z.boolean().optional(), runtimeErrors: z.number().int().nonnegative().optional(),
   }).strict().refine(c => c.viewport === 'compact' ? c.width === 375 && c.height === 812 : c.width === 430 && c.height === 932)).min(1).max(10),
   icon: z.object({ assetId: z.uuid(), mediaRevision: revisionSchema, sha256: revisionSchema, width: z.literal(1024), height: z.literal(1024), status: z.literal('approved'), rightsNote: portableText(2000) }).strict().optional(),
   listing: listingSchema, attribution: portableText(8000),

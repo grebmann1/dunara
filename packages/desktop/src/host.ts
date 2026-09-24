@@ -14,13 +14,13 @@ export class DesktopHost extends EventEmitter {
   previews = new Set<string>();
   get pid() { return this.child?.pid; }
   get running() { return !!this.child && this.child.exitCode === null && this.child.signalCode === null && this.child.connected; }
-  constructor(private config: { node: string; workspace: string; home: string; trusted: boolean; assistantOfflineFixture?: string; startupEnvironment?: StartupEnvironment; envFile?: string; protectSecrets?: () => SecretProtection | undefined }) { super(); }
+  constructor(private config: { node: string; workspace: string; home: string; trusted: boolean; assistantOfflineFixture?: string; startupEnvironment?: StartupEnvironment; envFile?: string; browserPath?: string; protectSecrets?: () => SecretProtection | undefined }) { super(); }
   async start() {
     if (this.child) throw new Error('Desktop runtime already started');
     const startup = this.config.assistantOfflineFixture ? { credentials: {}, services: {}, extraCaCertificates: process.env.NODE_EXTRA_CA_CERTS } : startupConfiguration(this.config.envFile, { NODE_EXTRA_CA_CERTS: process.env.NODE_EXTRA_CA_CERTS, ...this.config.startupEnvironment });
     if (!startup.services.encryptionKey) startup.services.secretProtection = this.config.protectSecrets?.();
     const child = fork(fileURLToPath(new URL('./runtime.js', import.meta.url)), [], {
-      execPath: this.config.node, execArgv: [], env: { ...desktopEnvironment(process.env), NODE_EXTRA_CA_CERTS: startup.extraCaCertificates },
+      execPath: this.config.node, execArgv: [], env: { ...desktopEnvironment(process.env), NODE_EXTRA_CA_CERTS: startup.extraCaCertificates, ...(this.config.browserPath ? { PLAYWRIGHT_BROWSERS_PATH: this.config.browserPath } : {}) },
       stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
     this.child = child;

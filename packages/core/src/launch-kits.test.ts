@@ -8,7 +8,7 @@ import { Engine } from './engine.js';
 import { Projects } from './projects.js';
 import { BuilderError } from './contracts.js';
 import type { Artifact } from './capture.js';
-import { KIT_STORAGE_BYTES, type LaunchKitCreate } from './launch-kit-contracts.js';
+import { KIT_STORAGE_BYTES, kitLimitations, legacyKitLimitations, type LaunchKitCreate } from './launch-kit-contracts.js';
 
 let dir: string, engine: Engine, id: string, capture: { meta: Artifact; png: Buffer }, input: LaunchKitCreate;
 const digest = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
@@ -47,6 +47,20 @@ it('copies unchanged original PNGs and inert listing drafts, without reading arb
   expect((await engine.launchKits.readFile(id, kit.manifest.id, 'listing')).bytes.toString()).not.toContain('<script>');
   expect(JSON.stringify(kit)).not.toContain(dir);
   expect(await engine.launchKits.list(id)).toEqual([kit]);
+});
+
+it('retains revision evidence in new kits and still reads immutable version-one exports', async () => {
+  Object.assign(capture.meta, { sourceRevision: 'a'.repeat(64), changedDuringCapture: false, runtimeErrors: 0 });
+  const kit = await engine.launchKits.create(id, input);
+  expect(kit.manifest.schemaVersion).toBe(2);
+  expect(kit.manifest.captures[0]?.sourceRevision).toBe('a'.repeat(64));
+  const file = path.join(bundlePath(kit.manifest.id), 'readiness.md');
+  const current = await readFile(file, 'utf8'); expect(current).toContain('## Android / Google Play');
+  const legacy = Buffer.from(current.split('\n\n## iPhone / App Store')[0]!.replace(kitLimitations.map(item => `- ${item}`).join('\n'), legacyKitLimitations.map(item => `- ${item}`).join('\n')) + '\n');
+  await writeFile(file, legacy);
+  const manifest = { ...kit.manifest, schemaVersion: 1, limitations: [...legacyKitLimitations], files: kit.manifest.files.map(file => file.id === 'readiness' ? { ...file, bytes: legacy.length, sha256: digest(legacy) } : file) };
+  await writeFile(path.join(bundlePath(kit.manifest.id), 'manifest.json'), JSON.stringify(manifest));
+  expect((await engine.launchKits.readFile(id, kit.manifest.id, 'readiness')).bytes).toEqual(legacy);
 });
 it('persists after restart and missing or expired originals, and requires confirmed project-scoped deletion', async () => {
   const kit = await engine.launchKits.create(id, input);

@@ -2,7 +2,7 @@
 .assistant-preferences-toggle[aria-expanded=true] svg { transform: rotate(90deg); }
 .assistant-panel[data-short-viewport] .assistant-header { padding-block: 6px; }
 .assistant-panel[data-short-viewport] .assistant-composer { padding-top: 4px; }
-.assistant-panel[data-short-viewport] .assistant-composer textarea { min-height: 48px; max-height: 64px; }
+.assistant-panel[data-short-viewport] .assistant-composer textarea { min-height: 72px; max-height: min(180px, 36dvh); }
 .assistant-panel[data-short-viewport] .assistant-setup-menu > summary { min-height: 32px; padding-block: 6px; }
 .assistant-panel[data-short-viewport] .assistant-history { min-height: 0; flex-shrink: 1; overflow-y: auto; }
 .assistant-panel[data-short-viewport] .assistant-preferences { max-height: 110px; overflow-y: auto; overscroll-behavior: contain; }

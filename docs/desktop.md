@@ -1,6 +1,6 @@
-# macOS desktop prototype
+# macOS desktop
 
-Electron hosts the existing Studio in a sandboxed desktop window. It supervises one separate Node backend that owns Projects, Engine, authenticated Studio, Preview processes and a local MCP socket. Browser/headless CLI modes remain available; the desktop is not a packaged or distributed application.
+Electron hosts Studio in a sandboxed desktop window. It supervises one separate Node backend that owns Projects, Engine, authenticated Studio, Preview processes and a local MCP socket. Browser/headless CLI modes remain available. Source launches and local application bundles are supported; signed public distribution requires the separate [packaging and update qualification](desktop-packaging.md).
 
 ## Launch
 
@@ -12,7 +12,7 @@ pnpm build
 pnpm desktop
 ```
 
-The pinned Electron dependency downloads its binary during installation. If install scripts were previously disabled, run `pnpm rebuild electron`. The prototype runs only on macOS. No signing, installer, application bundle, auto-update service or publication is included.
+The pinned Electron dependency downloads its binary during installation. If install scripts were previously disabled, run `pnpm rebuild electron`. Desktop currently runs only on macOS. `pnpm desktop:package` creates a local DMG/ZIP candidate with its own Node, npm, capture browser and image runtime. Installed builds expose a manual update check; creating artifacts does not publish or qualify a signed release.
 
 Default generated-app workspace, Dunara registry and Chromium profile locations are separate directories under `.builder/desktop/`. Explicit `--workspace`, `--home` and `--user-data` overrides are supported. Do not point it at directories already owned by a running CLI/Studio. Existing MCP configuration is not changed automatically.
 

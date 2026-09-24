@@ -135,3 +135,16 @@ it('honors pre-cancellation', async () => {
   vi.spyOn(previews, 'status').mockReturnValue({ projectId: id, status: 'ready', url: 'http://127.0.0.1:1' });
   await expect(captures.capture(id, '/', 'compact', AbortSignal.abort())).rejects.toThrow();
 });
+
+
+it('binds rendering evidence to source and measures browser errors without claiming interaction verification', async () => {
+  const url = await listen(createServer((_req, res) => { res.setHeader('Content-Type', 'text/html'); res.end('<h1>Capture evidence</h1><script>throw Error("fixture")</script>'); }));
+  vi.spyOn(previews, 'status').mockReturnValue({ projectId: id, status: 'ready', url });
+  const revision = vi.fn().mockResolvedValue('source-a');
+  const verified = new Captures(previews, undefined, revision);
+  try {
+    expect((await verified.capture(id, '/', 'large')).meta).toMatchObject({ sourceRevision: 'source-a', changedDuringCapture: false, runtimeErrors: 1 });
+    revision.mockResolvedValueOnce('source-a').mockResolvedValueOnce('source-b');
+    expect((await verified.capture(id, '/', 'compact')).meta.changedDuringCapture).toBe(true);
+  } finally { await verified.close(); }
+});

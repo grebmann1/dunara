@@ -34,7 +34,7 @@ export function PreviewTools({ state, route, viewport, screenActions, onRoute, o
       </div>
     </details>
     <Dialog open={!!tool} onOpenChange={value => { if (!value) setTool(null); }}>
-      <DialogContent placement="drawer" className="preview-tool-dialog" onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); (trigger.current?.isConnected ? trigger.current : menu.current?.querySelector('summary'))?.focus({ preventScroll: true }); }}>
+      <DialogContent placement="drawer" className="preview-tool-dialog" data-tool={tool} onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); (trigger.current?.isConnected ? trigger.current : menu.current?.querySelector('summary'))?.focus({ preventScroll: true }); }}>
         <header><DialogTitle ref={title} tabIndex={-1}>{tool ? labels[tool][0] : ''}</DialogTitle><DialogDescription>{tool ? labels[tool][1] : ''}</DialogDescription></header>
         <div className="preview-tool-body">
           {tool === 'routes' && <ScreenList route={route} onRoute={value => { onRoute(value); setTool(null); }} routes={state.routeCandidates} onRefresh={onRefresh} manualPath={manualPath} onManualPath={setManualPath} />}

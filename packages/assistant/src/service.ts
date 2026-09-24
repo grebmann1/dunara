@@ -1,3 +1,4 @@
+import { recoveryKind, recoveryMessage } from './recovery.js';
 import { AssistantConnections, assistantProviderSchema, providerDefinition, type AssistantProvider } from './connections.js';
 import { reasoningPreferenceSchema, type ReasoningPreference } from './provider-contracts.js';
 import { randomUUID } from 'node:crypto';
@@ -206,7 +207,7 @@ export class AssistantService {
     return (await (await this.store()).list(projectId))
       .map(record => this.active?.binding.conversationId === record.id ? this.active.conversation : record)
       .filter(record => !search || [record.title, ...record.turns.flatMap(turn => [turn.prompt, turn.response, ...(turn.tasks?.map(task => task.label) ?? [])])].some(text => text.toLocaleLowerCase().includes(search)))
-      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null }));
+      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null, task: turns[0]?.task ?? null }));
   }
   async conversation(id: string) {
     z.uuid().parse(id);
@@ -411,7 +412,7 @@ export class AssistantService {
       }, run.controller.signal), run.controller.signal);
       this.guard(run); this.text(run, '', true); run.turn.state = 'completed';
     } catch (error) {
-      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof AssistantModelUnavailable ? new AssistantModelUnavailable().message : error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
+      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof AssistantModelUnavailable ? new AssistantModelUnavailable().message : error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : recoveryMessage(recoveryKind(error), 'The assistant'); }
     } finally {
       clearTimeout(run.timer);
       run.controller.abort();

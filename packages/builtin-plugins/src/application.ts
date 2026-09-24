@@ -1,3 +1,4 @@
+import { AndroidDeliveries } from './features/android-deliveries.js';
 import type { PreviewDriver } from '../../core/src/preview-driver.js';
 import { Projects } from "../../core/src/projects.js";
 import { Assets } from "../../core/src/assets.js";
@@ -52,6 +53,7 @@ export class Engine extends BuilderKernel {
   readonly recipeUpgrades: RecipeUpgrades;
   readonly nativeBuilds: NativeBuilds;
   readonly nativeWorkspaces: NativeBuildWorkspaces;
+  readonly androidDeliveries: AndroidDeliveries;
   readonly nativeDeliveries: NativeDeliveries;
   constructor(projects: Projects, trusted: boolean, lan = false, imageProvider?: ImageProvider, providerOptions: ProviderOptions = {}, backendOptions: BackendOptions = {}, accountProvider?: AccountProvider, services: ServiceConfig = serviceConfiguration(), runtime: {
     hosted?: boolean;
@@ -71,13 +73,14 @@ export class Engine extends BuilderKernel {
     const environment = (id: string) => this.backends.appEnvironment(id);
     const beforeStart = async (id: string) => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); };
     this.previews = runtime.previews?.(environment, beforeStart, this.diagnostics, projects) ?? new Previews(projects, this.diagnostics, trusted, lan, environment, beforeStart);
-    this.captures = new Captures(this.previews, runtime.capture);
+    this.captures = new Captures(this.previews, runtime.capture, id => this.boardCaptures.sourceRevision(id));
     this.recipeUpgrades = new RecipeUpgrades(projects, this.previews);
     this.nativeBuilds = new NativeBuilds(projects, this.previews);
     this.nativeWorkspaces = new NativeBuildWorkspaces(projects, trusted && !runtime.hosted, async (id, selection) => {
       const binding = selection.environment === 'none' ? null : await this.backends.binding(id, selection.environment);
       return { app: binding ? { EXPO_PUBLIC_SUPABASE_URL: binding.url, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: binding.publishableKey, EXPO_PUBLIC_BUILDER_ENVIRONMENT: binding.environment } : {}, revision: revision(JSON.stringify({ binding, previewConfiguration: await this.previews.configurationRevision(id) })) };
     }, async id => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); }, id => this.diagnostics.emit('change', id));
+    this.androidDeliveries = new AndroidDeliveries(projects, this.nativeWorkspaces, trusted, !runtime.hosted, id => this.diagnostics.emit('change', id));
     this.nativeDeliveries = new NativeDeliveries(projects, this.nativeWorkspaces, trusted, !runtime.hosted, id => this.diagnostics.emit('change', id));
     this.serviceRecipe = new ServiceRecipe(this.files, this.previews);
     this.boardCaptures = new BoardCaptures(this.captures, this.files);
@@ -146,7 +149,7 @@ export class Engine extends BuilderKernel {
   close() { return this.shutdown ??= this.dispose(); }
   private async dispose() {
     const errors = [];
-    for (const close of [() => this.nativeDeliveries.close(), () => this.plugins.close(), () => this.account.clear(), () => this.nativeWorkspaces.close(), () => this.launchKits.close(), () => this.appIcons.close(), () => this.mediaJobs.close(), () => this.assets.close(), () => this.captures.close(), () => this.previews.close(), () => this.backends.close(), () => this.projects.closeState()]) {
+    for (const close of [() => this.androidDeliveries.close(), () => this.nativeDeliveries.close(), () => this.plugins.close(), () => this.account.clear(), () => this.nativeWorkspaces.close(), () => this.launchKits.close(), () => this.appIcons.close(), () => this.mediaJobs.close(), () => this.assets.close(), () => this.captures.close(), () => this.previews.close(), () => this.backends.close(), () => this.projects.closeState()]) {
       try { await close(); } catch (error) { errors.push(error); }
     }
     if (errors.length) throw new AggregateError(errors, 'Runtime shutdown completed with storage errors');

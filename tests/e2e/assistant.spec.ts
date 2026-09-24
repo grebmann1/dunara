@@ -1,3 +1,5 @@
+import { AssistantDrafts } from '../../packages/assistant/src/drafts.js';
+import { closeMediaDrawer } from './media-workspace-helpers.js';
 import { test, expect } from '@playwright/test';
 import { mkdtemp, rm, readFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -35,6 +37,7 @@ test('one masked OpenAI key configures both features and the selected model reac
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const section = page.getByRole('region', { name: 'Assistant configuration' });
   const key = page.getByLabel('OpenAI API key', { exact: true });
+  await page.getByText('Use another image connection', { exact: true }).click();
   await expect(key).toHaveAttribute('type', 'password');
   await expect(section.locator('input[type="password"]:visible')).toHaveCount(0);
   await key.fill(secret); await page.getByRole('button', { name: 'Save for this Dunara session', exact: true }).click();
@@ -68,6 +71,7 @@ test('one masked OpenAI key configures both features and the selected model reac
 test('Remember persists a shared key and independent model choice across restart', async ({ page }) => {
   await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
   const section = page.getByRole('region', { name: 'OpenAI configuration' });
+  await section.getByText('Use another image connection', { exact: true }).click();
   await section.getByLabel('OpenAI API key', { exact: true }).fill(secret);
   await section.getByLabel('Remember on this computer').check();
   await section.getByRole('button', { name: 'Save on this computer', exact: true }).click();
@@ -282,6 +286,7 @@ test('project switching isolates drafts and late results while polling fallback 
 });
 
 test('composer supports suggestions, multiline and IME input, Enter to send and safe formatted responses', async ({ page }) => {
+  await engine.projects.create({ name: 'Composer App', slug: 'composer-app' });
   await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
   behavior = async (_, callbacks) => callbacks.text('## A calmer home screen\n\nStart with **clear hierarchy** and a little more room.\n\n- Keep the primary action visible\n- Use `spacing.md` consistently\n\n```tsx\nconst spacing = 16;\n```\n\n[Preview guide](https://example.com/guide)\n\n<script>window.chatInjected = true</script>\n\n[Unsafe](javascript:alert(1))');
   await page.setViewportSize({ width: 1440, height: 1000 }); await page.goto(studio.launchUrl);
@@ -561,6 +566,7 @@ test('reading earlier messages stays put during streaming and Latest message ret
 });
 
 test('a staged message waits for draft restoration before Send becomes available', async ({ page }) => {
+  await engine.projects.create({ name: 'Draft App', slug: 'draft-app' });
   await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
   let release!: () => void;
   const pending = new Promise<void>(resolve => { release = resolve; });
@@ -577,7 +583,7 @@ test('a staged message waits for draft restoration before Send becomes available
     await expect(message).not.toHaveAttribute('readonly');
     await panel.getByRole('button', { name: 'Send message', exact: true }).click();
     await expect(panel.getByText('A local fixture answer.')).toBeVisible(); expect(calls).toBe(1);
-  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+  } finally { release(); await page.unrouteAll({ behavior: 'ignoreErrors' }); }
 });
 
 test('failed turns can be edited without resubmitting automatically', async ({ page }) => {
@@ -638,7 +644,7 @@ test('creating a conversation keeps the composer locked until its history is sel
     const records = await assistant.conversations(null);
     expect(records).toHaveLength(2);
     expect((await Promise.all(records.map(record => assistant.conversation(record.id)))).map(record => record.turns[0]?.prompt).sort()).toEqual(['First conversation', 'Second conversation']);
-  } finally { release(); await page.unrouteAll({ behavior: 'wait' }); }
+  } finally { release(); await page.unrouteAll({ behavior: 'ignoreErrors' }); }
 });
 
 test('approved artwork opens a retained integration draft in existing chat history without sending', async ({ page }) => {
@@ -662,6 +668,12 @@ test('approved artwork opens a retained integration draft in existing chat histo
   const message = panel.getByLabel('Message assistant');
   await expect(panel.getByRole('button', { name: 'Send message' })).toBeEnabled();
   await expect(message).toHaveValue(new RegExp(asset.id));
+  await panel.getByLabel('Assistant mode').selectOption('plan');
+  await message.press('Escape');
+  await page.getByRole('button', { name: 'Quiet landscape', exact: true }).click();
+  await page.getByRole('button', { name: 'Use in my app', exact: true }).click();
+  await expect(panel.getByLabel('Assistant mode')).toHaveValue('build');
+  expect((await message.inputValue()).split('Asset ID:')).toHaveLength(2);
   await expect.poll(() => panel.evaluate(node => node.contains(document.activeElement))).toBe(true);
   await page.setViewportSize({ width: 1440, height: 900 });
   await expect.poll(async () => {
@@ -796,4 +808,47 @@ test('a fresh workspace offers app creation without suggesting a screen or proje
   await expect(panel.getByRole('button', { name: /Refine this screen/ })).toBeVisible();
   await expect(panel.getByRole('button', { name: /Find and fix an issue/ })).toBeVisible();
   expect(calls).toBe(0);
+});
+
+
+test('remembered creative work survives a fresh renderer and stays in its project', async ({ page }) => {
+  const project = await engine.projects.create({ name: 'Creative Memory', slug: 'creative-memory' });
+  const other = await engine.projects.create({ name: 'Other Memory', slug: 'other-memory' });
+  const drafts = new AssistantDrafts(engine.projects.home, assistant.epoch, () => engine.account.context());
+  const scope = { projectId: project.id, conversationId: null }, snapshot = drafts.read(scope);
+  drafts.configure(scope, { context: snapshot.context, preferenceRevision: snapshot.preferenceRevision, enabled: true });
+  await page.goto(studio.launchUrl); await selectProject(page, project.id);
+  await page.getByRole('button', { name: 'Assets', exact: true }).click(); await closeMediaDrawer(page);
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await page.getByLabel('Image prompt').fill('Anime bonsai under the moon, keep this unfinished artwork.');
+  await expect.poll(() => drafts.readWorkspace(project.id).value?.generation?.assets?.prompt).toContain('Anime bonsai');
+  await page.goto('about:blank'); await page.goto(studio.issueLaunchUrl());
+  await page.getByRole('button', { name: 'Assets', exact: true }).click(); await closeMediaDrawer(page);
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(page.getByLabel('Image prompt')).toHaveValue('Anime bonsai under the moon, keep this unfinished artwork.');
+  for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await page.screenshot({ path: test.info().outputPath(`creative-restored-${width}.png`) });
+  }
+  await closeMediaDrawer(page); await selectProject(page, other.id);
+  await page.getByRole('button', { name: 'Assets', exact: true }).click(); await closeMediaDrawer(page);
+  await page.getByRole('button', { name: 'Generate', exact: true }).click();
+  await expect(page.getByLabel('Image prompt')).toHaveValue(''); expect(calls).toBe(0);
+});
+
+test('Create and build sends the idea once to the newly created app', async ({ page }) => {
+  await engine.mediaJobs.configureProvider({ action: 'replace', key: secret, expectedRevision: engine.mediaJobs.providerStatus().revision });
+  behavior = async (input, callbacks) => { expect(input.mode).toBe('build'); expect(input.projectId).toBeTruthy(); expect(input.prompt).toContain('A neon astronomy app with a working observation log'); callbacks.text('First version fixture completed.'); };
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: '+ New app' }).click();
+  await page.getByLabel('App name', { exact: true }).fill('Star Atlas');
+  await page.getByLabel('The idea').fill('A neon astronomy app with a working observation log');
+  await expect(page.getByRole('button', { name: 'Create and build', exact: true })).toBeEnabled();
+  for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]]) {
+    await page.setViewportSize({ width: width!, height: height! });
+    await page.screenshot({ path: test.info().outputPath(`create-build-${width}.png`) });
+  }
+  await page.getByRole('button', { name: 'Create and build', exact: true }).click();
+  await expect(page.getByText('First version fixture completed.', { exact: true })).toBeVisible();
+  expect(calls).toBe(1);
+  await expect(page.getByLabel('Message assistant')).toHaveValue('');
 });
