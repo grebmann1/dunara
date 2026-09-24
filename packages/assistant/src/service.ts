@@ -18,6 +18,8 @@ import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
 import { ManagedAiUnavailable, type ManagedAiConnection } from '../../core/src/managed-ai.js';
 import { AssistantModelUnavailable } from './provider-failure.js';
+import { codexImageCommand, runChatGPTImage, type ChatGPTImageAuth } from './chatgpt-images.js';
+import { ProviderFailure } from '../../core/src/openai-images.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -34,6 +36,7 @@ type ServiceOptions = {
   home: string;
   managedAi?: ManagedAiConnection;
   chatgptLogin?: 'browser' | 'device_code';
+  imageRuntime?: false | { command?: string; run?: typeof runChatGPTImage };
   startupKey?: string;
   secretProtection?: SecretProtection;
   createHarness?: () => RunHarness;
@@ -57,7 +60,7 @@ export class AssistantService {
   private sourceChanges?: SourceChanges;
   private sourceSelection?: (projectId: string) => Promise<void>;
   useSourceChanges(changes: SourceChanges, selection: (projectId: string) => Promise<void>) { this.idle(); this.sourceChanges = changes; this.sourceSelection = selection; }
-  async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
+  async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; this.imageController?.abort(); if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
   private legacyOpenAIKey = '';
@@ -68,6 +71,8 @@ export class AssistantService {
   private model = 'gpt-6-astra';
   private provider: AssistantProvider = 'openai';
   private connections: AssistantConnections;
+  private imageCommand?: string;
+  private imageController?: AbortController;
   private get models() { return this.connections.models(this.provider); }
   private reasoningEffort: ReasoningPreference = 'auto';
   private modelSettings: PrivateSettingsStore<{ model: string; provider?: AssistantProvider; reasoningEffort?: ReasoningPreference }>;
@@ -97,13 +102,14 @@ export class AssistantService {
   private credentials: CredentialStore;
   private source: 'environment' | 'saved' | 'session' | 'none' = 'none';
   constructor(private options: ServiceOptions) {
+    this.imageCommand = options.imageRuntime === false ? undefined : options.imageRuntime?.command ?? codexImageCommand();
     this.limits = { ...ASSISTANT_LIMITS, ...options.limits }; this.harnessAvailable = !!options.createHarness || piAvailable();
     this.credentials = sharedOpenAIStore(options.home, options.secretProtection);
     this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional(), reasoningEffort: reasoningPreferenceSchema.optional() }).strict());
     const selection = this.modelSettings.load();
     this.model = selection?.model ?? this.model; this.provider = selection?.provider ?? 'openai';
     this.reasoningEffort = selection?.reasoningEffort ?? 'auto';
-    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle(), undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
+    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => { this.idle(); if (this.shared?.providerStatus().busy) throw new BuilderError('REVISION_CONFLICT', 'Wait for image generation to finish before changing AI connections.'); }, undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
     this.legacyOpenAIKey = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
@@ -120,6 +126,36 @@ export class AssistantService {
     if (piAvailable()) {
       await this.connections.initialize();
     }
+    shared.useChatGPT({
+      status: () => {
+        const state = this.connections.status({ key: '', source: 'none' });
+        const connected = !this.closed && !!state.connections.find(item => item.id === 'chatgpt')?.configured;
+        return { connected, available: connected && !!this.imageCommand, revision: `${state.connectionRevision}:${this.accountVersion}:${this.closed}`, reason: this.options.imageRuntime === false ? 'ChatGPT image generation is not enabled on this host. Choose another image connection.' : !connected ? 'Sign in to ChatGPT in AI connections to create images.' : !this.imageCommand ? 'Install or update Codex on the Dunara host, then restart Dunara to enable ChatGPT images.' : undefined };
+      },
+      run: async (request, references, signal) => {
+        if (!this.imageCommand || this.closed || this.imageController) throw new ProviderFailure('ChatGPT image generation is unavailable or already running.');
+        const controller = new AbortController(); this.imageController = controller;
+        const activeSignal = AbortSignal.any([signal, controller.signal]);
+        const account = this.accountContext(), version = this.accountVersion;
+        try {
+          await this.connections.prepare('chatgpt');
+          activeSignal.throwIfAborted();
+          if (account !== this.accountContext() || version !== this.accountVersion) throw new ProviderFailure('The account changed. Create a new image request.');
+          const accessToken = this.connections.credential('chatgpt', { key: '', source: 'none' }).key;
+          let auth: ChatGPTImageAuth;
+          try {
+            const claims = JSON.parse(Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8'));
+            const accountClaims = z.object({ chatgpt_account_id: z.string().min(1), chatgpt_plan_type: z.string().optional() }).parse(claims['https://api.openai.com/auth']);
+            auth = { accessToken, chatgptAccountId: accountClaims.chatgpt_account_id, chatgptPlanType: accountClaims.chatgpt_plan_type };
+          } catch { throw new ProviderFailure('Reconnect ChatGPT in AI connections to enable image generation.'); }
+          const run = this.options.imageRuntime && this.options.imageRuntime.run || runChatGPTImage;
+          const result = await run(this.imageCommand, auth, request, references, activeSignal);
+          activeSignal.throwIfAborted();
+          if (account !== this.accountContext() || version !== this.accountVersion || this.closed) throw new ProviderFailure('The account changed during image generation.');
+          return result;
+        } finally { if (this.imageController === controller) this.imageController = undefined; }
+      },
+    });
   }
   configure(input: unknown) {
     this.idle();
@@ -411,6 +447,7 @@ export class AssistantService {
   }
   async close() {
     if (this.closed) return;
+    this.imageController?.abort();
     const run = this.active;
     if (run) this.cancel(run, 'interrupted', 'The assistant closed. Send a new message to continue; no prompt will be resubmitted.');
     this.connections.close(); this.closed = true; this.legacyOpenAIKey = ''; this.unsubscribeCredential?.(); this.listeners.clear();

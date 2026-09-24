@@ -10,7 +10,7 @@ import { startStudio } from '../../packages/cli/src/studio-server.js';
 import { closeMediaDrawer } from './media-workspace-helpers.js';
 
 test.use({ trace: 'off' });
-test('acknowledges ChatGPT while explaining image API setup, focuses settings and retains the draft', async ({ page }, info) => {
+test('acknowledges ChatGPT while explaining missing image runtime setup, focuses settings and retains the draft', async ({ page }, info) => {
   test.skip(!!process.env.VISUAL, 'Visual suite only');
   const root = await mkdtemp(path.join(os.tmpdir(), 'image-connection-'));
   const home = path.join(root, 'home'), protection = { kind: 'configured' as const, key: 'a'.repeat(64) };
@@ -27,7 +27,7 @@ test('acknowledges ChatGPT while explaining image API setup, focuses settings an
     await expect.poll(() => manager.status({ key: '', source: 'none' }).signIn?.state).toBe('connected');
     manager.close();
     const project = await engine.projects.create({ name: 'Bonsai Master', slug: 'bonsai-master' });
-    assistant = new AssistantService({ home, secretProtection: protection,
+    assistant = new AssistantService({ home, secretProtection: protection, imageRuntime: { command: '' },
       createHarness: () => ({ async run(input, callbacks) { expect(input.provider).toBe('chatgpt'); expect(input.tools).toEqual([]); calls++; callbacks.text(suggestion); }, async close() {} }),
       async createGateway() { throw Error('No tools in suggestions'); },
     });
@@ -39,8 +39,8 @@ test('acknowledges ChatGPT while explaining image API setup, focuses settings an
     const form = page.getByRole('form', { name: 'Image generation', exact: true });
     const notice = form.getByRole('region', { name: 'Image generation setup', exact: true });
     await expect(notice).toContainText('ChatGPT is connected');
-    await expect(notice).toContainText('OpenAI API key');
-    await expect(notice).toContainText('billed separately from ChatGPT');
+    await expect(notice).toContainText('Install or update Codex');
+    await expect(notice).not.toContainText('requires an OpenAI API key');
     await expect(form.getByRole('button', { name: 'Connect OpenAI', exact: true })).toHaveCount(0);
     await form.getByRole('button', { name: 'Suggest', exact: true }).click();
     await form.getByRole('button', { name: 'Use suggestion', exact: true }).click();
@@ -53,7 +53,7 @@ test('acknowledges ChatGPT while explaining image API setup, focuses settings an
     await notice.getByRole('button', { name: 'Set up image generation' }).click();
     const images = page.getByRole('region', { name: 'OpenAI configuration', exact: true });
     await expect(images).toBeFocused();
-    await expect(images).toContainText('ChatGPT sign-in connects Assistant and Suggest.');
+    await expect(images).toContainText('Install or update Codex');
     await expect(images.getByLabel('OpenAI API key', { exact: true })).toBeInViewport();
     for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
       await page.setViewportSize({ width, height }); await images.scrollIntoViewIfNeeded();

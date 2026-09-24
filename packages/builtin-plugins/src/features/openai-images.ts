@@ -1,6 +1,6 @@
 import OpenAI, { toFile } from 'openai';
 import { MEDIA_BYTES } from "../../../core/src/media-contracts.js";
-import { ASTRA_MODEL, IMAGE_MODEL, jobRequestSchema, type JobRequest } from "../../../core/src/media-job-contracts.js";
+import { ASTRA_MODEL, CHATGPT_IMAGE_MODEL, IMAGE_MODEL, jobRequestSchema, type JobRequest } from "../../../core/src/media-job-contracts.js";
 export interface ImageProvider {
   run(request: JobRequest, references: Buffer[], signal: AbortSignal): Promise<Buffer[]>;
 }
@@ -30,6 +30,7 @@ export function openAIImages(apiKey: string, baseURL = 'https://api.openai.com/v
     async run(request, references, signal) {
       try {
         request = jobRequestSchema.parse(request);
+        if (request.model === CHATGPT_IMAGE_MODEL) throw new ProviderFailure('Select the ChatGPT connection for this request. No API request was made.');
         signal.throwIfAborted();
         let images: (string | null | undefined)[];
         if (request.model === ASTRA_MODEL) {

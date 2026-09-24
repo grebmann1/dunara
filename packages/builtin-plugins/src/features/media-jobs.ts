@@ -6,7 +6,7 @@ import { Assets } from "../../../core/src/assets.js";
 import { BuilderError } from "../../../core/src/contracts.js";
 import { IMAGE_MODEL, mediaModelLabel, jobGuidance, jobRequestSchema, jobSchema, type MediaJob } from "../../../core/src/media-job-contracts.js";
 import { type ImageProvider, ProviderFailure } from "../../../core/src/openai-images.js";
-import { ProviderSettings, type ProviderOptions } from "../../../core/src/provider-settings.js";
+import { ProviderSettings, type ProviderOptions, type ChatGPTImageConnection } from "../../../core/src/provider-settings.js";
 import { atomicWrite, exists, noSymlinks, readText, SerialQueue } from "../../../core/src/storage.js";
 
 const pending = (j: MediaJob) => ['awaiting-approval', 'queued', 'running'].includes(j.state);
@@ -23,6 +23,7 @@ export class MediaJobs {
   #inFlight = false;
   constructor(readonly assets: Assets, provider?: ImageProvider, private timeoutMs = 180_000, options: ProviderOptions = {}) { this.#settings = new ProviderSettings(provider, options); }
   providerCredential() { return this.#settings.credential(); }
+  useChatGPT(connection: ChatGPTImageConnection) { this.#settings.useChatGPT(connection); }
   subscribeProvider(changed: () => void, beforeChange: () => void) { return this.#settings.subscribe(changed, beforeChange); }
   providerStatus() { return this.#settings.status(this.#inFlight || this.jobs.some(job => job.state === 'queued' || job.state === 'running')); }
   async configureProvider(input: unknown) {
@@ -30,7 +31,7 @@ export class MediaJobs {
   }
   capabilities() {
     const provider = this.providerStatus(), models = this.#settings.models();
-    return { provider, available: provider.configured && models.length > 0 && !this.storageFailed && !this.closed, model: IMAGE_MODEL, models, qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: 2, approval: 'Explicit Studio approval per request', cost: 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : !models.length ? 'No image models are available with the selected connection. Choose a personal image key in Settings.' : provider.configured ? null : 'OpenAI image generation is not configured. Open Settings → Image generation; offline assets remain available.' };
+    return { provider, available: provider.configured && models.length > 0 && !this.storageFailed && !this.closed, model: models[0]?.id ?? IMAGE_MODEL, models, qualities: ['low', 'medium', 'high'], sizes: ['1024x1024', '1536x1024', '1024x1536'], maxCandidates: provider.source === 'chatgpt' ? 1 : 2, approval: 'Explicit Studio approval per request', cost: provider.source === 'chatgpt' ? 'Uses your ChatGPT/Codex allowance. No automatic retries or API fallback.' : 'Billable; exact cost unknown. No automatic retries.', reason: this.storageFailed ? 'Job storage unavailable; generation disabled' : !models.length ? 'No image models are available with the selected connection. Choose a personal image key in Settings.' : provider.configured ? null : provider.chatgpt?.selected ? provider.chatgpt.reason : 'Choose an image connection in Settings → Image generation; offline assets remain available.' };
   }
   private file() { return path.join(this.assets.projects.home, 'media-jobs.json'); }
   private async load() {
@@ -101,7 +102,7 @@ export class MediaJobs {
       const job = this.jobs.find(j => j.id === jobId && j.projectId === projectId);
       if (!job || job.state !== 'awaiting-approval') throw new BuilderError('INVALID_INPUT', 'Job is not awaiting approval');
       this.#settings.assertModel(job.request.model);
-      if (!this.providerStatus().configured) throw new BuilderError('INVALID_INPUT', 'OpenAI image generation is not configured. Connect an image key in Settings → Image generation; OPENAI_API_KEY is an optional startup fallback. No provider call was made.');
+      if (!this.providerStatus().configured) throw new BuilderError('INVALID_INPUT', this.capabilities().reason ?? 'Choose an image connection in Settings. No provider call was made.');
       await this.validate(job); this.active(); job.state = 'queued'; job.approvedAt = new Date().toISOString();
       try { await this.persist(); } catch (error) { job.state = 'awaiting-approval'; delete job.approvedAt; throw error; }
       return this.result(job);

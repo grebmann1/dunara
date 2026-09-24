@@ -5,9 +5,10 @@ import { providerUpdateSchema, type ProviderStatus } from "../../../core/src/pro
 import { PrivateSettingsStore, type CredentialStore } from "../../../core/src/credentials.js";
 import { z } from 'zod';
 import { managedAiEndpoint, type ManagedAiConnection } from '../../../core/src/managed-ai.js';
-import { ASTRA_MODEL, IMAGE_MODEL, type JobRequest } from '../../../core/src/media-job-contracts.js';
+import { ASTRA_MODEL, CHATGPT_IMAGE_MODEL, IMAGE_MODEL, type JobRequest } from '../../../core/src/media-job-contracts.js';
 
 export type ManagedImageConnection = ManagedAiConnection & { estimate?: (request: JobRequest) => number | undefined };
+export type ChatGPTImageConnection = ImageProvider & { status(): { connected: boolean; available: boolean; revision: string; reason?: string } };
 
 export interface ProviderOptions {
   home?: string;
@@ -27,8 +28,15 @@ export class ProviderSettings {
   #source: ProviderStatus['source'];
   #revision = randomUUID();
   #locked = false;
-  #funding: 'managed' | 'personal' | 'none';
-  #selection?: PrivateSettingsStore<'managed' | 'personal' | 'none'>;
+  #funding: 'managed' | 'personal' | 'none' | 'chatgpt';
+  #selection?: PrivateSettingsStore<'managed' | 'personal' | 'none' | 'chatgpt'>;
+  #chatgpt?: ChatGPTImageConnection;
+  #chatgptRevision?: string;
+  useChatGPT(connection: ChatGPTImageConnection) {
+    this.#chatgpt = connection;
+    if (!this.#selection?.load() && !this.#provider && !this.#locked && !this.#managed && this.#funding === 'personal') this.#funding = 'chatgpt';
+    this.#revision = randomUUID();
+  }
   #managed?: ImageProvider;
   constructor(provider?: ImageProvider, private options: ProviderOptions = {}) {
     this.#factory = options.createProvider ?? openAIImages;
@@ -39,7 +47,7 @@ export class ProviderSettings {
     this.#key = saved ?? (this.#locked ? '' : options.startupKey ?? '');
     this.#source = saved ? 'saved' : this.#provider ? 'environment' : 'none';
     if (options.managed) this.#managed = openAIImages(options.managed.apiKey, managedAiEndpoint(options.managed.baseUrl));
-    if (options.home) this.#selection = new PrivateSettingsStore(options.home, 'image-funding', z.enum(['managed', 'personal', 'none']));
+    if (options.home) this.#selection = new PrivateSettingsStore(options.home, 'image-funding', z.enum(['managed', 'personal', 'none', 'chatgpt']));
     this.#funding = this.#selection?.load() ?? (saved || this.#locked || this.#provider ? 'personal' : options.managed ? 'managed' : 'personal');
   }
   // Backend-only access: callers must never serialize this credential snapshot.
@@ -53,9 +61,12 @@ export class ProviderSettings {
     catch { throw new BuilderError('INVALID_INPUT', 'Provider configuration failed. No verification request was made.'); }
   }
   status(busy: boolean): ProviderStatus {
-    return { configured: this.#funding === 'managed' ? !!this.#managed : this.#funding === 'personal' && !!this.#provider, source: this.#funding === 'managed' ? 'managed' : this.#funding === 'none' ? 'none' : this.#source, revision: this.#revision, busy, environmentAvailable: !!this.#startup, storage: this.#locked ? 'locked' : this.options.credentials?.protection?.kind ?? 'session', rememberAvailable: !this.#locked && !!this.options.credentials?.protection, ...(this.options.managed ? { managed: { label: this.options.managed.label, selected: this.#funding === 'managed', personalConfigured: !!this.#provider, balance: this.options.managed.balance?.() } } : {}) };
+    const chatgpt = this.#chatgpt?.status();
+    if (chatgpt?.revision !== this.#chatgptRevision) { this.#chatgptRevision = chatgpt?.revision; if (this.#funding === 'chatgpt') this.#revision = randomUUID(); }
+    return { configured: this.#funding === 'chatgpt' ? !!chatgpt?.available : this.#funding === 'managed' ? !!this.#managed : this.#funding === 'personal' && !!this.#provider, source: this.#funding === 'chatgpt' ? 'chatgpt' : this.#funding === 'managed' ? 'managed' : this.#funding === 'none' ? 'none' : this.#source, revision: this.#revision, busy, personalConfigured: !!this.#provider, environmentAvailable: !!this.#startup, storage: this.#locked ? 'locked' : this.options.credentials?.protection?.kind ?? 'session', rememberAvailable: !this.#locked && !!this.options.credentials?.protection, ...(chatgpt ? { chatgpt: { connected: chatgpt.connected, available: chatgpt.available, reason: chatgpt.reason, selected: this.#funding === 'chatgpt' } } : {}), ...(this.options.managed ? { managed: { label: this.options.managed.label, selected: this.#funding === 'managed', personalConfigured: !!this.#provider, balance: this.options.managed.balance?.() } } : {}) };
   }
   models() {
+    if (this.#funding === 'chatgpt') return [{ id: CHATGPT_IMAGE_MODEL, label: 'ChatGPT', maxCandidates: 1 }];
     const models = [{ id: ASTRA_MODEL, label: 'Astra + GPT Image', maxCandidates: 1 }, { id: IMAGE_MODEL, label: 'GPT Image direct', maxCandidates: 2 }];
     return this.#funding === 'managed' ? models.filter(model => this.options.managed?.models.some(allowed => allowed.id === model.id)) : models;
   }
@@ -64,6 +75,7 @@ export class ProviderSettings {
   }
   estimate(request: JobRequest) { return this.#funding === 'managed' && this.models().some(model => model.id === request.model) ? this.options.managed?.estimate?.(request) : undefined; }
   assertRevision(revision: unknown) {
+    this.status(false);
     if (revision !== this.#revision) throw new BuilderError('REVISION_CONFLICT', 'OpenAI configuration changed. Refresh and review the current configuration before approving or saving again.');
   }
   update(input: unknown, busy: boolean) {
@@ -74,7 +86,10 @@ export class ProviderSettings {
     if (this.#locked && value.action !== 'disconnect') throw new BuilderError('INVALID_INPUT', 'Saved credentials are locked. Restore the original protection and restart, or explicitly disconnect to forget them. Saved data was retained.');
     if (busy) throw new BuilderError('INVALID_INPUT', 'Wait for queued or running media work to finish, or cancel and wait for the active request to settle. Charges may already have occurred.');
     for (const listener of this.#listeners) listener.beforeChange();
-    if (value.action === 'managed') {
+    if (value.action === 'chatgpt') {
+      if (!this.#chatgpt?.status().available) throw new BuilderError('INVALID_INPUT', this.#chatgpt?.status().reason ?? 'Connect ChatGPT in AI connections first.');
+      this.#funding = 'chatgpt';
+    } else if (value.action === 'managed') {
       if (!this.#managed) throw new BuilderError('INVALID_INPUT', 'Included credits are unavailable.');
       this.#funding = 'managed';
     } else if (value.action === 'personal') {
@@ -85,22 +100,26 @@ export class ProviderSettings {
       if (value.remember && !this.options.credentials?.protection) throw new BuilderError('INVALID_INPUT', 'Protected credential storage is unavailable. Use this key for the current session.');
       if (value.remember) this.options.credentials?.save(value.key); else this.options.credentials?.remove();
       this.#key = value.key; this.#provider = provider; this.#source = value.remember ? 'saved' : 'session';
-      if (!this.options.managed) this.#funding = 'personal';
+      if (!this.options.managed && (this.#funding !== 'chatgpt' || !this.#selection?.load() && !this.#chatgpt?.status().connected)) this.#funding = 'personal';
     } else if (value.action === 'disconnect') {
       this.options.credentials?.remove(); this.#locked = false; this.#key = ''; this.#provider = undefined; this.#source = 'none';
-      if (this.#funding !== 'managed') this.#funding = 'none';
+      if (this.#funding === 'personal') this.#funding = 'none';
     } else {
       if (!this.#startup) throw new BuilderError('INVALID_INPUT', 'No startup environment key is available in this Dunara session.');
       this.options.credentials?.remove(); this.#key = this.options.startupKey ?? ''; this.#provider = this.#startup; this.#source = 'environment';
       this.#funding = 'personal';
     }
-    if (this.options.managed || this.#selection?.load()) this.#selection?.save(this.#funding);
+    this.#selection?.save(this.#funding);
     this.#revision = randomUUID();
     for (const listener of this.#listeners) listener.changed();
     return this.status(false);
   }
   run(...args: Parameters<ImageProvider['run']>) {
     this.assertModel(args[0].model);
+    if (this.#funding === 'chatgpt') {
+      if (!this.#chatgpt?.status().available) throw new BuilderError('INVALID_INPUT', 'ChatGPT image generation is unavailable. Reconnect in Settings.');
+      return this.#chatgpt.run(...args);
+    }
     if (this.#funding === 'managed') {
       if (!this.#managed) throw new BuilderError('INVALID_INPUT', 'Included credits are unavailable. Choose another connection.');
       return this.#managed.run(...args);
@@ -109,5 +128,5 @@ export class ProviderSettings {
     if (!this.#provider) throw new BuilderError('INVALID_INPUT', 'OpenAI image generation is not configured. Connect an image key in Settings → Image generation; OPENAI_API_KEY is an optional startup fallback. No provider call was made.');
     return this.#provider.run(...args);
   }
-  close() { this.#key = ''; this.#listeners.clear(); this.#provider = undefined; this.#managed = undefined; this.#startup = undefined; this.#source = 'none'; }
+  close() { this.#key = ''; this.#listeners.clear(); this.#provider = undefined; this.#managed = undefined; this.#startup = undefined; this.#chatgpt = undefined; this.#source = 'none'; this.#funding = 'none'; }
 }
