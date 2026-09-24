@@ -67,7 +67,8 @@ export function App() {
   const [workspace, setLocalWorkspace] = useState<Workspace>('preview');
   const workspaceUnavailable = hiddenDestinations.includes(workspace);
   const [designOpen, setLocalDesignOpen] = useState(false);
-  const setWorkspace = (workspace: Workspace) => { if (!selection.current) setLocalWorkspace(workspace); else void control({ type: 'navigate', workspace }); };
+  const [settingsSection, setSettingsSection] = useState<'images' | undefined>(undefined);
+  const setWorkspace = (workspace: Workspace, section?: 'images') => { setSettingsSection(section); if (!selection.current) setLocalWorkspace(workspace); else void control({ type: 'navigate', workspace }); };
   const showAssistant = () => setAssistantOpen(true);
   const setDesignOpen = (open: boolean) => { if (open && !dock.desktop) setAssistantOpen(false); void control({ type: 'design', open }); };
   const closePanelsForDialog = () => { setAssistantOpen(false); if (designOpen) { setLocalDesignOpen(false); setDesignOpen(false); } };
@@ -232,12 +233,12 @@ export function App() {
           {state && pluginEnabled('builder.design') && <DesignPanel key={selected} design={state.design} savedDraft={designDrafts.current.get(selected)} onDraft={draft => designDrafts.current.set(selected, draft)} disabled={!usable || !!busy} onApply={update => action('Applying design', 'design', update)} open={designOpen && (dock.desktop || !assistantOpen) && workspace === 'preview' && !creating} onOpenChange={setDesignOpen} trigger={designButton} />}
         </div>
       </main>
-      {ready && selected && pluginEnabled('builder.media') && !workspaceUnavailable && <AssetsPanel launchKitEnabled={pluginEnabled('builder.launch-kit')} key={`assets:${selected}`} projectId={selected} destination={workspace} settings={settings} state={state} savedBrief={briefDrafts.current.get(selected)} onBrief={draft => briefDrafts.current.set(selected, draft)} onNavigate={setWorkspace} onPending={setPendingReview} assetsTab={assetsTab} onAssetsTab={setAssetsTab} savedGeneration={generationDrafts.current.get(selected)} onGenerationDraft={(scope, draft) => generationDrafts.current.set(selected, { ...generationDrafts.current.get(selected), [scope]: draft })} onIntegrate={assistant.status?.available ? asset => {
+      {ready && selected && pluginEnabled('builder.media') && !workspaceUnavailable && <AssetsPanel assistantStatus={assistant.status} launchKitEnabled={pluginEnabled('builder.launch-kit')} key={`assets:${selected}`} projectId={selected} destination={workspace} settings={settings} state={state} savedBrief={briefDrafts.current.get(selected)} onBrief={draft => briefDrafts.current.set(selected, draft)} onNavigate={setWorkspace} onPending={setPendingReview} assetsTab={assetsTab} onAssetsTab={setAssetsTab} savedGeneration={generationDrafts.current.get(selected)} onGenerationDraft={(scope, draft) => generationDrafts.current.set(selected, { ...generationDrafts.current.get(selected), [scope]: draft })} onIntegrate={assistant.status?.available ? asset => {
         const message = `Use the approved ${asset.role} asset "${asset.label}" in my app. Project: ${selected}. Asset ID: ${asset.id}. Local path: ${asset.path}. Inspect the screens and place it where it fits the design, preserving its aspect ratio. Use revision-safe writes.`;
         assistant.setDraft(assistant.draft.trim() ? `${assistant.draft}\n\n${message}` : message);
         showAssistant();
       } : undefined} savedKitDraft={kitDrafts.current.get(selected)} onKitDraft={draft => kitDrafts.current.set(selected, draft)} />}
-      {workspace === 'settings' && <SettingsPanel enabledPlugins={enabledPlugins} project={state?.project} settings={settings} onSettings={setSettings} disabled={!usable} />}
+      {workspace === 'settings' && <SettingsPanel initialSection={settingsSection} enabledPlugins={enabledPlugins} project={state?.project} settings={settings} onSettings={setSettings} disabled={!usable} />}
       {workspace === 'plugins' && <PluginsPanel catalog={pluginCatalog} projectId={selected || null} />}
       {workspace === 'backend' && !workspaceUnavailable && (selected ? <BackendPanel key={`backend:${selected}`} projectId={selected} disabled={!usable} onSettings={() => setWorkspace('settings')} /> : <main className="destination"><h1>Backend</h1><p>Select or create an app to connect its Supabase backend.</p></main>)}
       {['assets', 'icons', 'activity'].includes(workspace) && !selected && <main className="destination"><h1>{workspace === 'icons' ? 'App Icons' : workspace === 'activity' ? 'Activity' : 'Assets'}</h1><p>Select or create a project to use this workspace. Settings is available without a project.</p></main>}

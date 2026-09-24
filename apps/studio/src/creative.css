@@ -79,7 +79,9 @@
 .creative-submit small { display: block; color: var(--muted); font-size: 11px; margin-top: 4px; }
 .creative-generator .creative-cost-note { color: var(--muted); font-size: 11px; margin-top: -12px; }
 .creative-connect { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; padding: 12px; border-radius: 10px; background: var(--primary-soft); font-size: 12px; }
-.creative-connect p { flex: 1 1 200px; }
+.creative-connect > div { flex: 1 1 240px; min-width: 0; }
+.creative-connect strong { display: block; margin-bottom: 6px; }
+.creative-connect p { margin: 0; line-height: 1.6; }
 .creative-jobs { display: grid; gap: 16px; }
 .creative-jobs > .asset-section-heading p { color: var(--muted); font-size: 13px; margin-top: 6px; }
 .creative-jobs .media-job { margin-top: 0; }
