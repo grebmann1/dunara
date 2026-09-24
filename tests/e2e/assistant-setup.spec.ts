@@ -79,6 +79,7 @@ test('chat guides connection, private app key and exact approval without exposin
     await page.screenshot({ path: info.outputPath(`chat-private-input-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(panel).not.toHaveAttribute('aria-modal', 'true');
   await expect(panel.getByRole('button', { name: 'Drag Assistant panel', exact: true })).toHaveCount(0);
   await expect(privateInput).toBeVisible();
   await privateInput.fill(appKey); await card.getByRole('button', { name: 'Save private input' }).click();

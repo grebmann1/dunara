@@ -103,7 +103,7 @@ Each checkpoint is bounded to 100 paths and 8 MiB, and local checkpoint storage 
 Limits:
 
 - One active turn for the whole desktop runtime, with no silent queue.
-- 20-second startup; 10-minute turn; 40 sequential tool calls.
+- 20-second startup; 10-minute turn; 64 sequential tool calls. This includes inspection, edits and compact/large captures across a multi-screen app; all calls still use the same approval and execution checks.
 - 16 KiB user prompt; 16 KiB Inspector attachment; two images, each at most 4 MiB of base64-encoded PNG data (approximately 3 MiB of image bytes).
 - 64 KiB recent context, at most 20 turns; 256 KiB response.
 - 20 conversations/project; 2 MiB text/conversation; 100 MiB total history. Overflow requires explicit deletion, not silent eviction.

@@ -10,7 +10,7 @@ export type ImageReference = z.infer<typeof imageReferenceSchema>;
 export const attachmentsSchema = z.object({ inspector: inspectorAttachmentSchema.optional(), images: z.array(imageReferenceSchema).max(2).refine(images => new Set(images.map(image => `${image.kind}:${image.id}`)).size === images.length).optional() }).strict();
 export type AssistantAttachments = z.infer<typeof attachmentsSchema>;
 
-export const ASSISTANT_LIMITS = Object.freeze({ startupMs: 20_000, turnMs: 600_000, shutdownMs: 5_000, tools: 40, promptBytes: 16 * 1024, inspectorBytes: 16 * 1024, images: 2, responseBytes: 256 * 1024, conversationBytes: 2 * 1024 * 1024, totalBytes: 100 * 1024 * 1024, conversationsPerProject: 20, events: 512, eventBytes: 2 * 1024 * 1024 });
+export const ASSISTANT_LIMITS = Object.freeze({ startupMs: 20_000, turnMs: 600_000, shutdownMs: 5_000, tools: 64, promptBytes: 16 * 1024, inspectorBytes: 16 * 1024, images: 2, responseBytes: 256 * 1024, conversationBytes: 2 * 1024 * 1024, totalBytes: 100 * 1024 * 1024, conversationsPerProject: 20, events: 512, eventBytes: 2 * 1024 * 1024 });
 export type AssistantLimits = { readonly [Key in keyof typeof ASSISTANT_LIMITS]: number };
 export const assistantText = (bytes: number) => z.string().max(bytes).refine(value => Buffer.byteLength(value) <= bytes, 'Text exceeds its byte limit');
 export const turnStateSchema = z.enum(['starting', 'running', 'completed', 'cancelled', 'interrupted', 'failed', 'limited']);
