@@ -17,6 +17,10 @@
 
 ![An ivory-suited explorer looks across sunlit desert ruins toward a new settlement.](docs/images/readme/dunara-frontier.webp)
 
+[![Bonsai Master: two phones show an illustrated Japanese garden app beneath the line “Small trees. Big imagination.”](docs/images/readme/bonsai-master-poster.jpg)](docs/media/bonsai-master.mp4)
+
+*Bonsai Master — [watch the two-minute film](docs/media/bonsai-master.mp4). A narrated walk from idea to app. Simulated workflow, not a recording of live generation.*
+
 <p align="center">
   <a href="https://github.com/grebmann1/dunara/actions/workflows/check.yml"><img src="https://github.com/grebmann1/dunara/actions/workflows/check.yml/badge.svg" alt="Build and test status" /></a>
   <a href="https://github.com/grebmann1/dunara/releases"><img src="https://img.shields.io/github/v/release/grebmann1/dunara?color=c43c2b&labelColor=272729" alt="Latest release" /></a>
