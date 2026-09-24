@@ -70,6 +70,16 @@ it('runs the pinned real worker with no native tools or inherited configuration 
   expect(text).toBe('Offline worker complete.'); expect(fixture.requests).toHaveLength(1); expect(fixture.requests[0]?.tools).toEqual([]);
   await expect(worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow('not available');
 }, 20000);
+it('gives image suggestions a dedicated art-direction instruction without build tools', async () => {
+  const fixture = await provider('text'); const worker = harness(fixture.baseUrl);
+  await worker.run({ ...input(), mode: 'plan', task: 'image-prompt' }, { text() {}, async tool() { throw new Error('No tools allowed'); } }, new AbortController().signal);
+  expect(fixture.requests).toHaveLength(1);
+  expect(fixture.requests[0]?.tools).toEqual([]);
+  const request = JSON.stringify(fixture.requests[0]);
+  expect(request).toContain('art director'); expect(request).toContain('plain text');
+  expect(request).not.toContain('Current mode: BUILD');
+});
+
 it('never sends provider credentials to an explicitly selected offline fixture', async () => {
   const fixture = await provider('text'), worker = harness(fixture.baseUrl);
   await expect(worker.run({ ...input(), apiKey: 'not-a-real-provider-key-but-not-the-fixture-sentinel' }, { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow();

@@ -27,6 +27,31 @@ async function setup(behavior: RunHarness['run'] = async () => {}, limits: Parti
 }
 async function finished(service: AssistantService) { await vi.waitFor(() => expect(service.status().busy).toBe(false)); }
 afterEach(async () => { await Promise.all(services.splice(0).map(service => service.close())); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+it('runs app image suggestions with the selected model and no gateway or tool access', async () => {
+  const { service, gateway, harness } = await setup(async (input, callbacks, signal) => {
+    expect(input).toMatchObject({ mode: 'plan', task: 'image-prompt', model: 'gpt-6-astra', apiKey: key, tools: [] });
+    for (const name of ['project_inspect', 'file_write', 'assistant_update_tasks', 'assistant_request_setup']) {
+      await expect(callbacks.tool(name, {}, signal)).rejects.toThrow('cannot call tools');
+    }
+    callbacks.text('A windswept bonsai in a warm Japanese garden.');
+  });
+  const conversation = await service.createConversation(randomUUID());
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), mode: 'plan', task: 'image-prompt', prompt: 'Suggest artwork for Bonsai Master.' });
+  await finished(service);
+  expect(service.status().imageSuggestions).toBe(true);
+  expect(harness.run).toHaveBeenCalledTimes(1);
+  expect(gateway.call).not.toHaveBeenCalled(); expect(gateway.close).not.toHaveBeenCalled();
+  expect((await service.conversation(conversation.id)).turns[0]).toMatchObject({ task: 'image-prompt', state: 'completed', tools: [], response: 'A windswept bonsai in a warm Japanese garden.' });
+});
+
+it('rejects image suggestions without an app, with Build mode or with attachments', async () => {
+  const { service, input, harness } = await setup();
+  await expect(service.start({ ...input, task: 'image-prompt' })).rejects.toThrow('Plan mode');
+  await expect(service.start({ ...input, mode: 'plan', task: 'image-prompt', attachments: {} })).rejects.toThrow('without attachments');
+  await expect(service.start({ ...input, mode: 'plan', task: 'image-prompt' })).rejects.toThrow('Select an app');
+  expect(harness.run).not.toHaveBeenCalled();
+});
+
 it('persists an actionable model-access failure without raw provider text or automatic retry', async () => {
   const error = new AssistantModelUnavailable(); error.message = 'PRIVATE-PROVIDER-DETAIL';
   const { service, input, harness } = await setup(async () => { throw error; });

@@ -22,6 +22,24 @@ export const creativeStyles = {
 export type CreativeStyle = keyof typeof creativeStyles;
 export type CreativeDraft = Pick<JobRequest, 'model' | 'operation' | 'referenceIds' | 'quality' | 'size' | 'count' | 'label'> & { prompt: string; purpose: CreativePurpose; style: CreativeStyle; useAppDirection: boolean };
 export type CreativeSeed = { key: number; referenceId: string; label: string; role: string };
+export function creativeSuggestionContext(draft: CreativeDraft, brief: Brief, state?: StudioState): string {
+  const design = state?.design && 'tokens' in state.design ? state.design : undefined;
+  return JSON.stringify({
+    app: state?.project.name,
+    purpose: brief.purpose.slice(0, 600), audience: brief.audience.slice(0, 400),
+    screens: state?.screens?.slice(0, 12).map(screen => ({ name: screen.name, route: screen.route })),
+    assetType: creativePurposes[draft.purpose].label,
+    composition: creativePurposes[draft.purpose].guidance,
+    visualStyle: creativeStyles[draft.style].detail,
+    operation: draft.operation, size: draft.size, currentIdea: draft.prompt.slice(0, 1600),
+    matchAppDirection: draft.useAppDirection,
+    artDirection: draft.useAppDirection ? {
+      mood: brief.mood.slice(0, 400), palette: brief.palette.slice(0, 400),
+      imageStyle: brief.imageStyle.slice(0, 400), avoid: brief.avoid.slice(0, 400),
+      colors: design ? { accent: design.tokens.accent, background: design.tokens.background, surface: design.tokens.surface, text: design.tokens.text } : undefined,
+    } : 'Propose a fresh visual direction; keep the app subject and selected visual style.',
+  });
+}
 export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: StudioState): string {
   const purpose = creativePurposes[draft.purpose];
   const direction: string[] = [];
