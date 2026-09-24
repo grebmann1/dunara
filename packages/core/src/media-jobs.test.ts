@@ -54,7 +54,7 @@ it('binds Astra approval to the model, preserves provenance and reads legacy job
 });
 it('keeps missing-key operation offline, isolates jobs and validates duplicate IDs', async () => {
   jobs = new MediaJobs(assets); const input = request(); const job = await jobs.request(id, input);
-  await expect(jobs.approve(id, job.id, jobs.providerStatus().revision)).rejects.toThrow('OPENAI_API_KEY');
+  await expect(jobs.approve(id, job.id, jobs.providerStatus().revision)).rejects.toThrow('Choose an image connection');
   expect((await jobs.list(id)).capabilities.available).toBe(false);
   await expect(jobs.request(id, { ...input, prompt: 'Different' })).rejects.toThrow('different');
   const other = await assets.projects.create({ name: 'Other', slug: 'other' });

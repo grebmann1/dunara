@@ -231,6 +231,7 @@
 .preview-action-menu .preview-menu-group { padding: 2px 0 6px; margin-bottom: 4px; }
 .preview-action-menu .preview-menu-group:last-child { margin-bottom: 0; padding-bottom: 2px; border-bottom: 0; }
 .preview-tool-dialog { top: 50%; left: 50%; transform: translate(-50%, -50%); width: min(540px, calc(100% - 32px)); max-height: calc(100dvh - 32px); display: flex; flex-direction: column; overflow: hidden; padding: 0; }
+.preview-tool-dialog[data-tool="build"] { height: calc(100dvh - 32px); }
 .preview-tool-dialog > header { padding: 24px 56px 18px 24px; border-bottom: 1px solid var(--line); flex-shrink: 0; }
 .preview-tool-dialog h2 { font-size: 20px; outline: none; }
 .preview-tool-dialog header p { color: var(--muted); font-size: 13px; margin-top: 6px; }

@@ -15,7 +15,7 @@ import type { PiHarness } from './pi.js';
 const built: { PiHarness: typeof PiHarness } = await import(new URL('../../../dist/packages/assistant/src/pi.js', import.meta.url).href);
 const cleanups: Array<() => Promise<unknown>> = [];
 const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() })).default([]), input: z.unknown() }).passthrough();
-type Mode = 'text' | 'tool' | 'hold' | '429' | '500';
+type Mode = 'text' | 'tool' | 'hold' | '401' | '429' | '500' | 'network' | 'model-unavailable';
 async function provider(mode: Mode) {
   const requests: Array<z.infer<typeof requestSchema>> = [];
   const server = createServer((req, res) => { void (async () => {
@@ -23,7 +23,9 @@ async function provider(mode: Mode) {
     expect(req.url).toBe('/v1/responses'); expect(req.headers.authorization).toBe('Bearer offline-worker-credential-sentinel');
     const body = requestSchema.parse(JSON.parse(text)); requests.push(body);
     expect(body.store).toBe(false); expect(text).not.toContain('offline-worker-credential-sentinel'); expect(text).not.toContain('INHERITED_POISON');
-    if (mode === '429' || mode === '500') { res.writeHead(Number(mode), { 'Content-Type': 'application/json', 'Retry-After': '0' }).end(JSON.stringify({ error: { message: 'Offline fixture rejection' } })); return; }
+    if (mode === 'model-unavailable') { res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: "The 'fixture' model is not supported when using this account. PRIVATE-PROVIDER-DETAIL" } })); return; }
+    if (mode === 'network') { req.socket.destroy(); return; }
+    if (mode === '401' || mode === '429' || mode === '500') { res.writeHead(Number(mode), { 'Content-Type': 'application/json', 'Retry-After': '0' }).end(JSON.stringify({ error: { message: 'Offline fixture rejection PRIVATE-PROVIDER-DETAIL' } })); return; }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     send(res, { type: 'response.created', response: { id: 'resp_fixture', status: 'in_progress' } });
     if (mode === 'hold') return;
@@ -46,6 +48,11 @@ function harness(baseUrl: string, reasoning = false): RunHarness {
   cleanups.push(() => value.close()); return value;
 }
 afterEach(async () => { vi.unstubAllEnvs(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+it('reports an unavailable account model with a fixed recovery notice and no provider details or retry', async () => {
+  const fixture = await provider('model-unavailable'), worker = harness(fixture.baseUrl);
+  await expect(worker.run(input(), { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal)).rejects.toThrow('This model is not available for your connected account. Choose another model, then send your message again. No automatic retry was made.');
+  expect(fixture.requests).toHaveLength(1);
+}, 20000);
 it.each(['low', 'high'] as const)('sends explicit %s reasoning through the real worker and Responses adapter', async reasoningEffort => {
   const fixture = await provider('text'), worker = harness(fixture.baseUrl, true);
   await worker.run({ ...input(), reasoningEffort }, { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal);
@@ -64,6 +71,16 @@ it('runs the pinned real worker with no native tools or inherited configuration 
   expect(text).toBe('Offline worker complete.'); expect(fixture.requests).toHaveLength(1); expect(fixture.requests[0]?.tools).toEqual([]);
   await expect(worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow('not available');
 }, 20000);
+it('gives image suggestions a dedicated art-direction instruction without build tools', async () => {
+  const fixture = await provider('text'); const worker = harness(fixture.baseUrl);
+  await worker.run({ ...input(), mode: 'plan', task: 'image-prompt' }, { text() {}, async tool() { throw new Error('No tools allowed'); } }, new AbortController().signal);
+  expect(fixture.requests).toHaveLength(1);
+  expect(fixture.requests[0]?.tools).toEqual([]);
+  const request = JSON.stringify(fixture.requests[0]);
+  expect(request).toContain('art director'); expect(request).toContain('plain text');
+  expect(request).not.toContain('Current mode: BUILD');
+});
+
 it('never sends provider credentials to an explicitly selected offline fixture', async () => {
   const fixture = await provider('text'), worker = harness(fixture.baseUrl);
   await expect(worker.run({ ...input(), apiKey: 'not-a-real-provider-key-but-not-the-fixture-sentinel' }, { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow();
@@ -76,11 +93,19 @@ it.each(['plan', 'build'] as const)('passes trusted %s mode instructions to the 
   const request = JSON.stringify(fixture.requests[0]);
   expect(request).toContain(`Current mode: ${mode.toUpperCase()}`);
   expect(request).toContain('assistant_update_tasks');
+  if (mode === 'build') {
+    expect(request).toContain('specific visual direction');
+    expect(request).toContain('Capture each changed route at compact and large sizes');
+    expect(request).toContain('consistent state');
+  } else expect(request).not.toContain('For a new app brief');
   expect(request).toContain(mode === 'plan' ? 'This mode is fixed for the entire turn' : 'Implement the user');
 }, 20000);
-it.each(['429', '500'] as const)('makes exactly one request and no automatic retries after HTTP %s', async mode => {
+it.each([['401', 'sign-in'], ['429', 'usage'], ['500', 'unknown'], ['network', 'network']] as const)('preserves safe %s recovery through the real worker without retry or provider details', async (mode, recovery) => {
   const fixture = await provider(mode); const worker = harness(fixture.baseUrl);
-  await expect(worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow();
+  const error = await worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal).catch(error => error);
+  expect(error).toMatchObject({ name: 'AssistantProviderFailure', recovery });
+  expect(error.message).not.toContain('PRIVATE-PROVIDER-DETAIL');
+  expect(error.message).not.toContain('offline-worker-credential-sentinel');
   expect(fixture.requests).toHaveLength(1);
 }, 20000);
 it('forwards validated tool calls and actual PNG content through the real Responses adapter', async () => {

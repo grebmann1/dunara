@@ -33,7 +33,7 @@ test('icon stages keep exact diff review bounded, invalidate stale media and res
     await page.setViewportSize({ width, height: 900 });
     for (const zoom of [1, 2]) {
       await page.evaluate(value => { document.documentElement.style.zoom = String(value); }, zoom);
-      await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+      await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
       const dialog = page.getByRole('dialog', { name: 'Proposed app.json change' });
       await expect(dialog).toBeVisible();
       const config = await engine.files.read(projectId, 'app.json');
@@ -47,22 +47,22 @@ test('icon stages keep exact diff review bounded, invalidate stale media and res
       await consent.check(); await expect(dialog.getByRole('button', { name: 'Confirm and apply icon' })).toBeEnabled();
       const cancel = dialog.getByRole('button', { name: 'Cancel config proposal' });
       await cancel.scrollIntoViewIfNeeded(); await expect(cancel).toBeInViewport(); await cancel.click();
-      await expect(page.getByRole('button', { name: 'Review app.json changes' })).toBeFocused();
+      await expect(page.getByRole('button', { name: 'Review icon changes' })).toBeFocused();
       expect((await engine.files.read(projectId, 'app.json')).revision).toBe(config.revision);
     }
   }
   await page.evaluate(() => { document.documentElement.style.zoom = '1'; });
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await page.getByRole('dialog').getByRole('checkbox').check();
   await engine.assets.import(projectId, { expectedRevision: library.revision, label: 'External library update', mediaType: 'image/png' }, bytes);
   await expect(page.getByRole('dialog').getByRole('alert')).toContainText('Library changed');
   await expect(page.getByRole('dialog').getByRole('checkbox')).not.toBeChecked();
   await expect(page.getByRole('button', { name: 'Confirm and apply icon' })).toBeDisabled();
   await page.getByRole('button', { name: 'Cancel config proposal' }).click();
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await expect(page.getByRole('dialog').getByRole('checkbox')).not.toBeChecked();
   await page.keyboard.press('Escape');
-  await expect(page.getByRole('button', { name: 'Review app.json changes' })).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Review icon changes' })).toBeFocused();
 });
 
 test('icon proposal waits for its refresh so immediate Escape restores an enabled trigger', async ({ page }) => {
@@ -82,7 +82,7 @@ test('icon proposal waits for its refresh so immediate Escape restores an enable
     if (proposalRequested) { refreshHeld = true; await released; }
     await route.continue();
   });
-  const trigger = page.getByRole('button', { name: 'Review app.json changes' });
+  const trigger = page.getByRole('button', { name: 'Review icon changes' });
   try {
     await trigger.click();
     await expect.poll(() => refreshHeld).toBe(true);

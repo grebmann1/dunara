@@ -6,7 +6,7 @@ The macOS Electron app includes an optional, default-closed Assistant panel. It 
 
 1. Use the repository's pinned Node/pnpm environment, install with `pnpm install --frozen-lockfile`, and run `pnpm build`.
 2. Start `pnpm desktop`. Preview execution still requires the existing explicit `--trust-execution` operator flag; chatting cannot grant execution trust.
-3. Open **Settings → AI connections**. Sign in with **ChatGPT** or **Grok**, or expand **API keys & endpoints** to configure OpenAI, Anthropic, Google Gemini, Mistral or xAI. Keep several connections at once, then choose an Assistant provider/model and save it. The installed adapters supply the model list without a network request; model access is checked when you send a message.
+3. Open **Settings → AI connections**. Sign in with **ChatGPT** or **Grok**, or expand **API keys & endpoints** to configure OpenAI, Anthropic, Google Gemini, Mistral or xAI. Signing in or choosing **Connect & use** also selects a supported model. The active connection appears as **Ready**; **Change model** saves immediately, with no separate Save step. Other accounts and API keys stay under **Manage connections**. The installed adapters supply the model list without a network request; model access is checked when you send a message.
 4. Open **Assistant** in the topbar. Select or create a local conversation, review the external-data disclosure, and press **Send message**. With no project selected, explicitly ask to create one and review its project-creation approval.
 5. Review source changes and Preview normally. The assistant can open routes, manage up to two independently routed views, navigate workspaces, and request canonical captures.
 
@@ -16,7 +16,9 @@ Pi (`@earendil-works/pi-coding-agent` and `pi-ai` 0.85.1) and typebox 1.3.7 are 
 
 ChatGPT opens its browser sign-in flow, with **Having trouble returning?** for a callback URL or authorization code. Grok uses its current device-code flow: choose **Continue in browser**, enter the displayed code, and return to Studio. Cancel ends the pending flow; late results cannot restore a cancelled connection. These use the pinned Pi provider adapters and public CLI subscription integration surfaces. Availability and model access depend on the provider account; the sign-in flow does not guarantee access to every listed model.
 
-**Remember new connections** opts into encrypted persistence when protected storage is available. Otherwise connections are session-only. Sign-in/out preserves unfinished API-key entry. API-key forms clear on submission, provider-form switching and navigation; keys and access/refresh tokens never appear in status/history responses or browser storage. Subscription refresh happens in the service before a new turn; only that turn's access token reaches its isolated worker. Failed refresh requires a new sign-in.
+Only the connection you explicitly connect is activated. Cancelling sign-in keeps the previous selection, and a later provider/model or account change takes precedence over a pending login. Leaving Settings does not interrupt an in-progress login; reopening the entire Studio ends its UI handoff, and a connected account can then be selected with **Use**. Connecting never sends an Assistant message.
+
+**Privacy & storage** contains the optional draft preference. **Remember new connections** opts into encrypted persistence when protected storage is available. Otherwise connections are session-only. Sign-in/out preserves unfinished API-key entry. API-key forms clear on submission, provider-form switching and navigation; keys and access/refresh tokens never appear in status/history responses or browser storage. Subscription refresh happens in the service before a new turn; only that turn's access token reaches its isolated worker. Failed refresh requires a new sign-in.
 
 The chat footer also selects a model from connected providers. Selection is saved for future messages across conversations; each sent turn retains its provider/model. Active turns block connection/model changes. API providers may use an explicit HTTPS base URL; saving a key or selection makes no inference request. A custom endpoint receives the selected API key, messages and requested tool content.
 
@@ -101,7 +103,7 @@ Each checkpoint is bounded to 100 paths and 8 MiB, and local checkpoint storage 
 Limits:
 
 - One active turn for the whole desktop runtime, with no silent queue.
-- 20-second startup; 10-minute turn; 40 sequential tool calls.
+- 20-second startup; 10-minute turn; 64 sequential tool calls. This includes inspection, edits and compact/large captures across a multi-screen app; all calls still use the same approval and execution checks.
 - 16 KiB user prompt; 16 KiB Inspector attachment; two images, each at most 4 MiB of base64-encoded PNG data (approximately 3 MiB of image bytes).
 - 64 KiB recent context, at most 20 turns; 256 KiB response.
 - 20 conversations/project; 2 MiB text/conversation; 100 MiB total history. Overflow requires explicit deletion, not silent eviction.

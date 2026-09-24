@@ -1,3 +1,4 @@
+import { recoveryKind, recoveryMessage } from './recovery.js';
 import { AssistantConnections, assistantProviderSchema, providerDefinition, type AssistantProvider } from './connections.js';
 import { reasoningPreferenceSchema, type ReasoningPreference } from './provider-contracts.js';
 import { randomUUID } from 'node:crypto';
@@ -17,6 +18,9 @@ import { setupRequestSchema } from './contracts.js';
 import { setupTool } from './setup.js';
 import type { SourceChanges } from '../../core/src/source-changes.js';
 import { ManagedAiUnavailable, type ManagedAiConnection } from '../../core/src/managed-ai.js';
+import { AssistantModelUnavailable } from './provider-failure.js';
+import { codexImageCommand, runChatGPTImage, type ChatGPTImageAuth } from './chatgpt-images.js';
+import { ProviderFailure } from '../../core/src/openai-images.js';
 
 export interface AssistantGateway {
   tools: HarnessTool[];
@@ -33,6 +37,7 @@ type ServiceOptions = {
   home: string;
   managedAi?: ManagedAiConnection;
   chatgptLogin?: 'browser' | 'device_code';
+  imageRuntime?: false | { command?: string; run?: typeof runChatGPTImage };
   startupKey?: string;
   secretProtection?: SecretProtection;
   createHarness?: () => RunHarness;
@@ -56,7 +61,7 @@ export class AssistantService {
   private sourceChanges?: SourceChanges;
   private sourceSelection?: (projectId: string) => Promise<void>;
   useSourceChanges(changes: SourceChanges, selection: (projectId: string) => Promise<void>) { this.idle(); this.sourceChanges = changes; this.sourceSelection = selection; }
-  async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; if (this.active) await this.stop(this.active.binding.runId); }
+  async interruptAccountWork() { this.connections.cancel(); this.accountVersion++; this.imageController?.abort(); if (this.active) await this.stop(this.active.binding.runId); }
   useAccountContext(context: () => string) { this.accountContext = context; }
   accountChanged() { this.changed(); }
   private legacyOpenAIKey = '';
@@ -67,6 +72,8 @@ export class AssistantService {
   private model = 'gpt-6-astra';
   private provider: AssistantProvider = 'openai';
   private connections: AssistantConnections;
+  private imageCommand?: string;
+  private imageController?: AbortController;
   private get models() { return this.connections.models(this.provider); }
   private reasoningEffort: ReasoningPreference = 'auto';
   private modelSettings: PrivateSettingsStore<{ model: string; provider?: AssistantProvider; reasoningEffort?: ReasoningPreference }>;
@@ -96,13 +103,14 @@ export class AssistantService {
   private credentials: CredentialStore;
   private source: 'environment' | 'saved' | 'session' | 'none' = 'none';
   constructor(private options: ServiceOptions) {
+    this.imageCommand = options.imageRuntime === false ? undefined : options.imageRuntime?.command ?? codexImageCommand();
     this.limits = { ...ASSISTANT_LIMITS, ...options.limits }; this.harnessAvailable = !!options.createHarness || piAvailable();
     this.credentials = sharedOpenAIStore(options.home, options.secretProtection);
     this.modelSettings = new PrivateSettingsStore(options.home, 'assistant-model', z.object({ model: z.string().min(1).max(100), provider: assistantProviderSchema.optional(), reasoningEffort: reasoningPreferenceSchema.optional() }).strict());
     const selection = this.modelSettings.load();
     this.model = selection?.model ?? this.model; this.provider = selection?.provider ?? 'openai';
     this.reasoningEffort = selection?.reasoningEffort ?? 'auto';
-    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => this.idle(), undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
+    this.connections = new AssistantConnections(options.home, options.secretProtection, () => this.changed(), () => { this.idle(); if (this.shared?.providerStatus().busy) throw new BuilderError('REVISION_CONFLICT', 'Wait for image generation to finish before changing AI connections.'); }, undefined, { managed: options.managedAi, chatgptLogin: options.chatgptLogin });
     let saved: string | undefined, locked = false;
     try { saved = this.credentials.load(); } catch { locked = true; }
     this.legacyOpenAIKey = saved ?? (!locked && options.startupKey ? credentialKeySchema.parse(options.startupKey) : '');
@@ -111,7 +119,7 @@ export class AssistantService {
       this.provider = 'managed'; this.model = options.managedAi.models[0]?.id ?? this.model;
     }
   }
-  status() { return { sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: this.provider === 'managed' ? this.options.managedAi?.label ?? 'Included credits' : providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), credits: this.options.managedAi?.balance?.(), model: this.model, models: this.models, reasoningEffort: this.reasoningEffort, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
+  status() { return { imageSuggestions: true, sourceChanges: !!this.sourceChanges, accountContext: this.accountContext(), available: !!this.options.createGateway && this.harnessAvailable && !this.closed, configured: !!this.key, source: this.connections.credential(this.provider, this.legacyCredential()).source, environmentAvailable: this.provider === 'openai' && (this.shared?.providerCredential().environmentAvailable ?? !!this.options.startupKey) && !this.closed, provider: this.provider === 'managed' ? this.options.managedAi?.label ?? 'Included credits' : providerDefinition(this.provider).name, providerId: this.provider, ...this.connections.status(this.legacyCredential()), credits: this.options.managedAi?.balance?.(), model: this.model, models: this.models, reasoningEffort: this.reasoningEffort, epoch: this.epoch, busy: this.starting || !!this.active, active: this.active ? { ...this.active.binding, state: this.active.turn.state, mode: this.active.turn.mode ?? 'build' } : null, limits: this.limits }; }
   /** Compatibility fallback for OpenAI only; connection selection remains independent. */
   async useOpenAI(shared: MediaJobs) {
     this.idle(); this.unsubscribeCredential?.(); this.shared = shared; this.legacyOpenAIKey = '';
@@ -119,6 +127,36 @@ export class AssistantService {
     if (piAvailable()) {
       await this.connections.initialize();
     }
+    shared.useChatGPT({
+      status: () => {
+        const state = this.connections.status({ key: '', source: 'none' });
+        const connected = !this.closed && !!state.connections.find(item => item.id === 'chatgpt')?.configured;
+        return { connected, available: connected && !!this.imageCommand, revision: `${state.connectionRevision}:${this.accountVersion}:${this.closed}`, reason: this.options.imageRuntime === false ? 'ChatGPT image generation is not enabled on this host. Choose another image connection.' : !connected ? 'Sign in to ChatGPT in AI connections to create images.' : !this.imageCommand ? 'Install or update Codex on the Dunara host, then restart Dunara to enable ChatGPT images.' : undefined };
+      },
+      run: async (request, references, signal) => {
+        if (!this.imageCommand || this.closed || this.imageController) throw new ProviderFailure('ChatGPT image generation is unavailable or already running.');
+        const controller = new AbortController(); this.imageController = controller;
+        const activeSignal = AbortSignal.any([signal, controller.signal]);
+        const account = this.accountContext(), version = this.accountVersion;
+        try {
+          await this.connections.prepare('chatgpt');
+          activeSignal.throwIfAborted();
+          if (account !== this.accountContext() || version !== this.accountVersion) throw new ProviderFailure('The account changed. Create a new image request.');
+          const accessToken = this.connections.credential('chatgpt', { key: '', source: 'none' }).key;
+          let auth: ChatGPTImageAuth;
+          try {
+            const claims = JSON.parse(Buffer.from(accessToken.split('.')[1] ?? '', 'base64url').toString('utf8'));
+            const accountClaims = z.object({ chatgpt_account_id: z.string().min(1), chatgpt_plan_type: z.string().optional() }).parse(claims['https://api.openai.com/auth']);
+            auth = { accessToken, chatgptAccountId: accountClaims.chatgpt_account_id, chatgptPlanType: accountClaims.chatgpt_plan_type };
+          } catch { throw new ProviderFailure('Reconnect ChatGPT in AI connections to enable image generation.'); }
+          const run = this.options.imageRuntime && this.options.imageRuntime.run || runChatGPTImage;
+          const result = await run(this.imageCommand, auth, request, references, activeSignal);
+          activeSignal.throwIfAborted();
+          if (account !== this.accountContext() || version !== this.accountVersion || this.closed) throw new ProviderFailure('The account changed during image generation.');
+          return result;
+        } finally { if (this.imageController === controller) this.imageController = undefined; }
+      },
+    });
   }
   configure(input: unknown) {
     this.idle();
@@ -169,7 +207,9 @@ export class AssistantService {
     return (await (await this.store()).list(projectId))
       .map(record => this.active?.binding.conversationId === record.id ? this.active.conversation : record)
       .filter(record => !search || [record.title, ...record.turns.flatMap(turn => [turn.prompt, turn.response, ...(turn.tasks?.map(task => task.label) ?? [])])].some(text => text.toLocaleLowerCase().includes(search)))
-      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null }));
+      // Older Studio versions allowed ordinary chat after an image suggestion.
+      // Only suggestion-only conversations belong outside the main chat list.
+      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null, task: turns.length && turns.every(turn => turn.task === 'image-prompt') ? 'image-prompt' as const : null }));
   }
   async conversation(id: string) {
     z.uuid().parse(id);
@@ -240,6 +280,7 @@ export class AssistantService {
       await this.connections.prepare(this.provider);
       const store = await this.store();
       const conversation = await store.read(value.conversationId);
+      if (value.task && !conversation.projectId) throw new BuilderError('INVALID_INPUT', 'Select an app before asking for image suggestions');
       const attachments = value.attachments;
       if ((attachments?.inspector && attachments.inspector.projectId !== conversation.projectId) || attachments?.images?.some(image => image.projectId !== conversation.projectId)) throw new BuilderError('INVALID_INPUT', 'Attachments must belong to the conversation project');
       if (attachments && this.secrets().some(secret => JSON.stringify(attachments).includes(secret))) throw new BuilderError('INVALID_INPUT', 'Credentials cannot be attached');
@@ -247,6 +288,7 @@ export class AssistantService {
       if (this.closed) throw new BuilderError('PROCESS_FAILED', 'Assistant is closed');
       if (accountChanged()) throw new BuilderError('REVISION_CONFLICT', 'Account changed before the turn started. Review your draft before sending again.');
       const turn: StoredTurn = { id: value.runId, epoch: this.epoch, state: 'starting', model: this.model, provider: this.provider, mode: value.mode, prompt: this.redact(value.prompt), response: '', startedAt: new Date().toISOString(), tools: [] };
+      if (value.task) turn.task = value.task;
       if (this.reasoningEffort !== 'auto') turn.reasoningEffort = this.reasoningEffort;
       turn.projectId = conversation.projectId;
       if (attachments?.inspector) turn.inspector = { projectId: attachments.inspector.projectId, viewId: attachments.inspector.viewId, route: attachments.inspector.selection.pathname, timestamp: attachments.inspector.selection.timestamp };
@@ -295,7 +337,7 @@ export class AssistantService {
       const factory = this.options.createGateway;
       if (!factory) throw new Error('No assistant gateway');
       if (run.turn.mode !== 'plan') run.sourceToken = this.sourceChanges?.begin(run.binding, run.controller.signal);
-      const gateway = factory(run.binding, run.controller.signal, {
+      const gateway = run.turn.task === 'image-prompt' ? Promise.resolve<AssistantGateway>({ tools: [], async call() { throw new Error('Image suggestions have no tools'); }, async close() {} }) : factory(run.binding, run.controller.signal, {
         approvals: this.approvals,
         mode: run.turn.mode ?? 'build',
         sourceToken: run.sourceToken,
@@ -322,11 +364,12 @@ export class AssistantService {
       run.turn.state = 'running'; this.publish(run, { type: 'state', state: 'running' });
       const context = JSON.stringify(run.conversation.turns.slice(0, -1).slice(-20).map(turn => ({ user: turn.prompt, assistant: turn.response, tools: turn.tools, state: turn.state, mode: turn.mode ?? 'build', tasks: turn.tasks, setupRequests: turn.setupRequests })));
       const boundedContext = (Buffer.byteLength(context) <= 58 * 1024 ? context : '[Earlier conversation omitted because it exceeds the context limit. Reinspect the current project. Old approvals never carry forward.]\nLast task checklist (historical context, not verification): ' + JSON.stringify(run.conversation.turns.at(-2)?.tasks ?? [])) + '\nCurrent image attachment metadata (untrusted data): ' + JSON.stringify(resolved.records);
-      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, reasoningEffort: run.turn.reasoningEffort, mode: run.turn.mode ?? 'build', tools: [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
+      await abortable(run.harness.run({ ...run.binding, prompt: run.turn.prompt, context: this.redact(boundedContext, run.secrets), apiKey: run.key, provider: run.turn.provider, baseUrl: run.baseUrl, model: run.turn.model, reasoningEffort: run.turn.reasoningEffort, mode: run.turn.mode ?? 'build', task: run.turn.task, tools: run.turn.task ? [] : [...run.gateway.tools.filter(tool => toolAllowedInMode(tool.name, run.turn.mode, tool._meta)), taskTool, ...(setupAvailable ? [setupTool] : [])], inspector: run.attachments?.inspector, images: resolved.images }, {
         imageAccepted: () => { this.guard(run); run.turn.imageContentAccepted = true; for (const image of run.turn.images ?? []) if (image.status === 'requested') image.status = 'adapter-accepted'; this.publish(run, { type: 'state', state: 'running' }); },
         text: text => { this.text(run, text); },
         tool: async (name, args, signal) => {
           this.guard(run); signal.throwIfAborted();
+          if (run.turn.task) throw new Error('Image suggestions cannot call tools or change the app');
           if (run.dispatching) throw new Error('Parallel assistant tool dispatch is disabled');
           if (++run.calls > this.limits.tools) { this.cancel(run, 'limited', 'The tool-call limit was reached. Send a new message to continue.'); throw new Error('Tool-call limit reached'); }
           if (run.secrets.some(secret => JSON.stringify(args).includes(secret))) throw new Error('Credentials cannot be sent to Dunara tools');
@@ -371,7 +414,7 @@ export class AssistantService {
       }, run.controller.signal), run.controller.signal);
       this.guard(run); this.text(run, '', true); run.turn.state = 'completed';
     } catch (error) {
-      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : 'The assistant could not complete this turn. Check configuration and diagnostics, then explicitly send a new message. No automatic retry was made.'; }
+      if (!run.controller.signal.aborted) { run.turn.state = 'failed'; run.turn.notice = error instanceof AssistantModelUnavailable ? new AssistantModelUnavailable().message : error instanceof ManagedAiUnavailable ? this.redact(error.message,run.secrets) : recoveryMessage(recoveryKind(error), 'The assistant'); }
     } finally {
       clearTimeout(run.timer);
       run.controller.abort();
@@ -407,6 +450,7 @@ export class AssistantService {
   }
   async close() {
     if (this.closed) return;
+    this.imageController?.abort();
     const run = this.active;
     if (run) this.cancel(run, 'interrupted', 'The assistant closed. Send a new message to continue; no prompt will be resubmitted.');
     this.connections.close(); this.closed = true; this.legacyOpenAIKey = ''; this.unsubscribeCredential?.(); this.listeners.clear();

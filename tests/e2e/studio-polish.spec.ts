@@ -51,9 +51,7 @@ test('Studio polish remains usable across desktop and phone layouts', async ({ p
     await expect(dialog.getByLabel('App name', { exact: true })).toBeFocused();
     await dialog.getByLabel('App name', { exact: true }).fill('Bonsai Studio');
     await dialog.locator('.creation-folder summary').click();
-    await dialog.getByLabel('Directory slug', { exact: true }).fill('bonsai-studio');
-    await dialog.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('radio', { name: /No backend for now/ }).check();
+    await dialog.getByLabel('Project folder', { exact: true }).fill('bonsai-studio');
     const create = dialog.getByRole('button', { name: 'Create app', exact: true });
     await create.scrollIntoViewIfNeeded();
     await expect(create).toBeInViewport();

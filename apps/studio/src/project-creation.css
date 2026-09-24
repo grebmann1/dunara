@@ -8,11 +8,15 @@
 .creation-field textarea { font-size: 13px; line-height: 1.5; min-height: 80px; }
 .creation-field small { font-size: 11px; color: var(--muted-foreground); }
 .optional-label { color: var(--muted-foreground); font-weight: 400; font-size: 11px; margin-left: 4px; }
-.creation-folder { font-size: 12px; }
-.creation-folder summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; padding: 4px 0; color: var(--muted-foreground); }
-.creation-folder summary span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 65%; }
-.creation-folder label { display: block; margin: 8px 0 6px; }
-.project-creation-dialog footer { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; }
+.creation-folder { font-size: 12px; border-top: 1px solid var(--border); }
+.creation-folder summary { display: flex; align-items: center; gap: 8px; min-height: var(--control-size); padding: 8px 0; color: var(--muted-foreground); list-style: none; }
+.creation-folder summary::-webkit-details-marker { display: none; }
+.creation-folder summary > span { flex: 1; }
+.creation-folder summary > small { font-size: 11px; }
+.creation-folder summary > svg { flex-shrink: 0; }
+.creation-folder[open] summary > svg:last-child { transform: rotate(180deg); }
+.creation-options-body { display: grid; gap: 12px; padding: 12px 0 4px; }
+.project-creation-dialog footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 0; padding-top: 16px; border-top: 1px solid var(--border); position: sticky; bottom: -20px; padding-bottom: 16px; background: var(--card); z-index: 1; }
 .project-creation-dialog .creation-backend-options { gap: 8px; margin: 20px 0 16px; }
 .creation-backend-options label { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 9px; cursor: pointer; }
 .creation-backend-options label[data-selected=true] { border-color: var(--primary-border); background: var(--primary-soft); }
@@ -33,3 +37,14 @@
 .project-creation-dialog .backend-connection fieldset > p { margin: 0; font-size: 11px; }
 .project-creation-dialog .backend-actions { gap: 6px; }
 @media (max-width: 600px) { .project-creation-dialog { padding: 20px; } }
+
+.creation-backend-link { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 56px; padding: 10px 12px; border: 1px solid var(--border); background: var(--background); color: var(--foreground); font-size: 12px; text-align: left; }
+.creation-backend-link > span { flex: 1; min-width: 0; }
+.creation-backend-link strong, .creation-backend-link small { display: block; }
+.creation-backend-link strong { font-size: 12px; font-weight: 500; }
+.creation-backend-link small { font-size: 11px; font-weight: 400; color: var(--muted-foreground); margin-top: 2px; line-height: 1.4; }
+.creation-backend-link svg { flex-shrink: 0; }
+.creation-next-note { margin: 0; color: var(--muted-foreground); font-size: 12px; line-height: 1.5; }
+
+.project-creation-dialog .creation-build-choice { display: flex; align-items: center; gap: 10px; min-height: 44px; font-size: 13px; }
+.project-creation-dialog .creation-build-choice input { flex: 0 0 18px; width: 18px; height: 18px; margin: 0; }

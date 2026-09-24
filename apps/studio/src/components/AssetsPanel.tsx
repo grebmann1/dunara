@@ -1,6 +1,7 @@
+import type { AssetPlacement, AssetPlacementDraft } from './AssetPlacement';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Activity, Palette, PanelRight, RefreshCw, Sparkles, Upload } from 'lucide-react';
-import { type MediaState, type ProviderStatus, type StudioState, useStudioClient } from '../api';
+import { type AssistantStatus, type MediaState, type ProviderStatus, type StudioState, useStudioClient } from '../api';
 import { MEDIA_BYTES, mediaTypeSchema, roleSchema, type Asset } from '../../../../packages/core/src/media-contracts';
 import type { JobRequest } from '../../../../packages/core/src/media-job-contracts';
 import type { CreativeDraft, CreativeSeed } from '../creative';
@@ -20,10 +21,11 @@ import { Textarea } from './ui/textarea';
 import { FieldSelect } from './ui/field-select';
 
 type Tool = '' | 'import' | 'generate' | 'icon-generate' | 'brief' | 'request';
-type Props = { launchKitEnabled?: boolean; projectId: string; destination: string; settings?: ProviderStatus; state?: StudioState; savedBrief?: BriefDraft; onBrief(draft: BriefDraft | undefined): void; onNavigate(destination: 'assets' | 'icons' | 'activity' | 'settings' | 'backend'): void; onPending(count: number): void; assetsTab: 'library' | 'launch-kit'; onAssetsTab(tab: 'library' | 'launch-kit'): void; savedKitDraft?: LaunchKitDraft; onKitDraft(draft: LaunchKitDraft): void; savedGeneration?: { assets?: CreativeDraft; icons?: CreativeDraft }; onGenerationDraft?(scope: 'assets' | 'icons', draft: CreativeDraft): void; onIntegrate?(asset: Asset): void };
+type Props = { launchKitEnabled?: boolean; projectId: string; destination: string; settings?: ProviderStatus; state?: StudioState; assistantStatus?: AssistantStatus; savedBrief?: BriefDraft; onBrief(draft: BriefDraft | undefined): void; onNavigate(destination: 'assets' | 'icons' | 'activity' | 'settings' | 'backend', section?: 'images'): void; onPending(count: number): void; assetsTab: 'library' | 'launch-kit'; onAssetsTab(tab: 'library' | 'launch-kit'): void; savedKitDraft?: LaunchKitDraft; onKitDraft(draft: LaunchKitDraft): void; savedGeneration?: { assets?: CreativeDraft; icons?: CreativeDraft }; onGenerationDraft?(scope: 'assets' | 'icons', draft: CreativeDraft): void; onIntegrate?(asset: Asset, placement?: AssetPlacement): void };
 
-export function AssetsPanel({ launchKitEnabled = true, projectId, destination, settings, state, savedBrief, onBrief, onNavigate, onPending, assetsTab, onAssetsTab, savedKitDraft, onKitDraft, savedGeneration, onGenerationDraft, onIntegrate }: Props) {
+export function AssetsPanel({ launchKitEnabled = true, projectId, destination, settings, state, assistantStatus, savedBrief, onBrief, onNavigate, onPending, assetsTab, onAssetsTab, savedKitDraft, onKitDraft, savedGeneration, onGenerationDraft, onIntegrate }: Props) {
   const { api, uploadMedia } = useStudioClient();
+  const [placements, setPlacements] = useState<Record<string, AssetPlacementDraft>>({});
   const [library, setData] = useState<MediaState>(), [error, setError] = useState(''), [notice, setNotice] = useState<{ destination: string; message: string }>(), [busy, setBusy] = useState(false);
   const data = library && settings ? { ...library, capabilities: { ...library.capabilities, available: library.capabilities.available && settings.configured, provider: settings } } : library;
   const [tool, setTool] = useState<Tool>(''), [selected, setSelected] = useState(''), [iconSelected, setIconSelected] = useState(''), [compare, setCompare] = useState(''), [selectedJob, setSelectedJob] = useState('');
@@ -78,13 +80,18 @@ export function AssetsPanel({ launchKitEnabled = true, projectId, destination, s
     if (saved && created) { setSelectedJob(created.id); setGenerationSeed(undefined); setTool('request'); }
     return saved;
   }
+  async function addScreenReference(captureId: string) {
+    let assetId: string | undefined;
+    await perform(async () => { const result = await api<{ assetId: string }>(`/projects/${projectId}/media/screen-reference`, { captureId, expectedRevision: data?.revision ?? null }); assetId = result.assetId; });
+    return assetId;
+  }
   function selectAsset(id: string) { setSelected(id); setCompare(''); setReviewOpen((workspace.current?.clientWidth ?? 850) < 850); focusReview.current = tool === 'request'; requestAnimationFrame(() => { reviewHeading.current?.focus({ preventScroll: true }); }); }
   function revealAsset(id: string) { revealAfterNavigation.current = destination !== 'assets' || assetsTab !== 'library'; onAssetsTab('library'); onNavigate('assets'); selectAsset(id); }
   function remix(asset: Asset) { setGenerationSeed({ key: Date.now(), referenceId: asset.id, label: asset.label, role: asset.role }); setReviewOpen(false); openTool(destination === 'icons' ? 'icon-generate' : 'generate'); }
   const asset = data?.assets.find(a => a.id === selected), iconAsset = data?.assets.find(a => a.id === iconSelected);
   const comparison = data?.assets.find(a => a.id === compare || (!compare && a.id === asset?.parentId));
   const job = data?.jobs.find(item => item.id === selectedJob);
-  const review = data && asset && <AssetReview projectId={projectId} asset={asset} assets={data.assets} comparison={comparison} onCompare={setCompare} busy={busy} onApprove={() => void save('approve', { assetId: asset.id, expectedRevision: data.revision })} onIcons={() => { setIconSelected(asset.id); setReviewOpen(false); setIconReveal(value => value + 1); onNavigate('icons'); }} onRemix={() => remix(asset)} onIntegrate={onIntegrate ? () => { setReviewOpen(false); onIntegrate(asset); } : undefined} headingRef={reviewHeading}>
+  const review = data && asset && <AssetReview key={asset.id} state={state} projectId={projectId} asset={asset} placement={placements[asset.id] ?? { route: state?.screens?.[0]?.route ?? '/', role: 'hero', fit: 'contain', expanded: false }} onPlacementChange={value => setPlacements(previous => ({ ...previous, [asset.id]: value }))} assets={data.assets} comparison={comparison} onCompare={setCompare} busy={busy} onApprove={() => void save('approve', { assetId: asset.id, expectedRevision: data.revision })} onIcons={() => { setIconSelected(asset.id); setReviewOpen(false); setIconReveal(value => value + 1); onNavigate('icons'); }} onRemix={() => remix(asset)} onIntegrate={onIntegrate ? placement => { setReviewOpen(false); onIntegrate(asset, placement); } : undefined} headingRef={reviewHeading}>
     <details><summary>Crop and resize a new version</summary><form onSubmit={e => { e.preventDefault(); void save('transform', { assetId: asset.id, expectedRevision: data.revision, width, height, fit, focalX, focalY, background }); }}>
               <h3>Crop and resize a new version</h3><p>Creates an unapproved candidate linked to this source. No provider call.</p><fieldset disabled={busy}><div className="media-fields">
                 <Label>Width<Input type="number" required min={16} max={4096} value={width} onChange={e => setWidth(Number(e.target.value))} /></Label>
@@ -112,7 +119,7 @@ export function AssetsPanel({ launchKitEnabled = true, projectId, destination, s
         <AssetLibrary projectId={projectId} assets={data.assets} selected={selected} onSelect={id => { returnFocus.current = document.activeElement as HTMLElement; selectAsset(id); }} />
         {!compact && review}
       </div>
-      {destination !== 'activity' && <footer className="media-workspace-footer"><span>{pending ? `${pending} ${pending === 1 ? 'request' : 'requests'} awaiting approval` : running ? `${running} ${running === 1 ? 'request' : 'requests'} creating artwork` : data.capabilities.available ? 'Your creative workspace' : 'Offline assets ready · AI unavailable'}</span><Button variant="ghost" onClick={() => onNavigate('activity')}><Activity size={16} aria-hidden />View activity{pending + running > 0 ? ` · ${pending + running}` : ''}</Button></footer>}
+      {destination !== 'activity' && <footer className="media-workspace-footer"><span>{pending ? `${pending} ${pending === 1 ? 'request' : 'requests'} awaiting approval` : running ? `${running} ${running === 1 ? 'request' : 'requests'} creating artwork` : data.capabilities.available ? 'Your creative workspace' : 'Asset library ready · Image generation needs setup'}</span><Button variant="ghost" onClick={() => onNavigate('activity')}><Activity size={16} aria-hidden />View activity{pending + running > 0 ? ` · ${pending + running}` : ''}</Button></footer>}
       <WorkspaceDrawer open={!!tool} title={toolTitles[tool]} description={tool === 'request' ? 'Review the request, its status and generated images.' : 'Your library stays in place while you work.'} onOpenChange={open => { if (!open) closeTool(); }} restoreFocus={restoreFocus} className={tool === 'generate' || tool === 'icon-generate' ? 'generation-drawer' : ''}>
         {error && <div role="alert" className="error-banner">{error}</div>}
         {notice?.destination === destination && <p className="drawer-notice" role="status">{notice.message}</p>}
@@ -133,7 +140,7 @@ export function AssetsPanel({ launchKitEnabled = true, projectId, destination, s
             <Button type="submit" disabled={!file}>Import candidate</Button>
           </fieldset>
         </form>}
-        {(tool === 'generate' || tool === 'icon-generate') && <AssetGenerator key={tool} projectId={projectId} data={data} state={state} busy={busy} active iconOnly={tool === 'icon-generate'} seed={generationSeed} savedDraft={drafts?.[tool === 'icon-generate' ? 'icons' : 'assets']} onDraft={draft => saveDraft(tool === 'icon-generate' ? 'icons' : 'assets', draft)} onClose={closeTool} onSettings={() => { closeTool(); onNavigate('settings'); }} onStage={stage} />}
+        {(tool === 'generate' || tool === 'icon-generate') && <AssetGenerator key={tool} projectId={projectId} data={data} state={state} assistantStatus={assistantStatus} busy={busy} active iconOnly={tool === 'icon-generate'} seed={generationSeed} savedDraft={drafts?.[tool === 'icon-generate' ? 'icons' : 'assets']} onDraft={draft => saveDraft(tool === 'icon-generate' ? 'icons' : 'assets', draft)} onClose={closeTool} onSettings={section => { closeTool(); onNavigate('settings', section); }} onStage={stage} onScreenReference={addScreenReference} />}
         {tool === 'request' && (job ? <JobCard key={`${job.id}:${data.capabilities.provider.revision}`} job={job} data={data} projectId={projectId} focused disabled={busy} save={save} onRemix={remix} onResult={id => { closeTool(); if (destination === 'icons') { setIconSelected(id); setIconReveal(value => value + 1); } else revealAsset(id); }} /> : <p>This request is no longer retained. Open Activity to see available requests.</p>)}
       </WorkspaceDrawer>
       <WorkspaceDrawer open={compact && reviewOpen && destination === 'assets' && assetsTab === 'library' && !tool} title="Asset details" description="Review this image and choose how to use it." onOpenChange={setReviewOpen} restoreFocus={() => { focusReview.current = false; returnFocus.current?.focus({ preventScroll: true }); }} className="asset-details-drawer">{review}</WorkspaceDrawer>

@@ -3,9 +3,9 @@ import { createServer } from 'node:net';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { BuilderError } from './contracts.js';
 import { runtimeEnvironment, type AppEnvironment } from './runtime-environment.js';
-export async function freePort() {
+export async function freePort(preferred = 0) {
   const server = createServer();
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(preferred, '127.0.0.1', resolve); });
   const address = server.address();
   if (!address || typeof address === 'string') throw new Error('Port allocation failed');
   await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
@@ -13,8 +13,10 @@ export async function freePort() {
 }
 export class Processes {
   private owned = new Set<ChildProcess>();
-  spawn(command: string, args: string[], cwd: string, log: (text: string) => void, appEnvironment: AppEnvironment = {}) {
+  spawn(command: string, args: string[], cwd: string, log: (text: string) => void, appEnvironment: AppEnvironment = {}, options: { expoOnline?: boolean } = {}) {
     const env = runtimeEnvironment(process.env, appEnvironment);
+    // Expo Go resolves the computer's signed-in account online for physical-device previews.
+    if (options.expoOnline) env.EXPO_OFFLINE = '0';
     const child = spawn(command, args, { cwd, shell: false, detached: process.platform !== 'win32', stdio: ['ignore', 'pipe', 'pipe'], env });
     this.owned.add(child);
     child.stdout?.on('data', buffer => log(String(buffer)));

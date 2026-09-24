@@ -4,6 +4,6 @@ import '../../../apps/studio/src/theme.css';
 
 const client = createStudioClient({
   auth: { kind: 'launch-ticket' },
-  capabilities: { ...localCapabilities, connectionLabel: 'Cloud workspace', localPaths: false, accountSettings: false, credentialLocation: 'workspace' },
+  capabilities: { ...localCapabilities, connectionLabel: 'Cloud workspace', privatePreview: true, localPaths: false, accountSettings: false, credentialLocation: 'workspace' },
 });
 createRoot(document.getElementById('root')!).render(<Studio client={client} />);

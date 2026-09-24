@@ -34,7 +34,7 @@
   button, input, select { min-height: 36px; }
   button { min-width: 36px; padding: 7px 12px; font-size: 13px; }
   input, select { padding-block: 7px; }
-  .studio .toolbar button, .studio .toolbar > details > summary, .studio .preview-tools > summary { height: 34px; min-height: 34px; width: 34px; min-width: 34px; padding: 7px; }
+  .studio .toolbar > button, .studio .toolbar > details > summary, .studio .preview-tools > summary { height: 34px; min-height: 34px; width: 34px; min-width: 34px; padding: 7px; }
   .studio .toolbar .labelled-action { width: auto; padding-inline: 10px; }
   .studio .canvas-modes button { height: 32px; min-height: 32px; padding: 4px 10px; font-size: 11px; }
   .studio .focus-screens button { min-height: 32px; padding: 5px 10px; font-size: 11px; }

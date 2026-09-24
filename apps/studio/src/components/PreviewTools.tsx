@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { CircleHelp, Ellipsis, Package, Settings, Smartphone, Waypoints } from 'lucide-react';
-import type { StudioState } from '../api';
+import { useStudioClient, type StudioState } from '../api';
 import { ScreenList } from './ScreenList';
 import { Button } from './ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './ui/dialog';
@@ -9,6 +9,7 @@ import { NativeBuildPanel } from './NativeBuildPanel';
 
 type Tool = 'routes' | 'help' | 'device' | 'build';
 export function PreviewTools({ state, route, viewport, screenActions, onRoute, onRefresh, onSettings, onOpenDialog }: { state: StudioState; route: string; viewport: 'compact' | 'large'; screenActions: ReactNode; onRoute(route: string): void; onRefresh(): void; onSettings(): void; onOpenDialog(): void }) {
+  const { capabilities } = useStudioClient();
   const menu = useRef<HTMLDetailsElement>(null), deviceButton = useRef<HTMLButtonElement>(null), trigger = useRef<HTMLElement | null>(null), title = useRef<HTMLHeadingElement>(null);
   const [tool, setTool] = useState<Tool | null>(null), [manualPath, setManualPath] = useState('');
   function open(next: Tool) {
@@ -22,7 +23,7 @@ export function PreviewTools({ state, route, viewport, screenActions, onRoute, o
     document.addEventListener('pointerdown', dismiss);
     return () => document.removeEventListener('pointerdown', dismiss);
   }, []);
-  const labels = { routes: ['Project routes', 'Open a discovered screen or enter a custom path.'], help: ['Canvas help', 'Move around the canvas and preview your app.'], device: ['Connect a device', state.preview.transport === 'cloud' ? 'Open this private preview in your phone browser.' : 'Open this preview in Expo Go on your phone.'], build: ['Build setup', 'Prepare an installable version of your app.'] };
+  const labels = { routes: ['Project routes', 'Open a discovered screen or enter a custom path.'], help: ['Canvas help', 'Move around the canvas and preview your app.'], device: ['Connect a device', capabilities.privatePreview || state.preview.transport === 'cloud' ? 'Open this private preview in your phone browser.' : 'Open this preview in Expo Go on your phone.'], build: ['Build setup', 'Prepare an installable version of your app.'] };
   return <>
     <Button ref={deviceButton} variant="ghost" aria-label="Connect a device" title="Connect a device" onClick={() => open('device')}><Smartphone aria-hidden /></Button>
     <details ref={menu} className="preview-tools" onKeyDown={event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); event.currentTarget.open = false; event.currentTarget.querySelector('summary')?.focus(); } }}>
@@ -33,7 +34,7 @@ export function PreviewTools({ state, route, viewport, screenActions, onRoute, o
       </div>
     </details>
     <Dialog open={!!tool} onOpenChange={value => { if (!value) setTool(null); }}>
-      <DialogContent placement="drawer" className="preview-tool-dialog" onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); (trigger.current?.isConnected ? trigger.current : menu.current?.querySelector('summary'))?.focus({ preventScroll: true }); }}>
+      <DialogContent placement="drawer" className="preview-tool-dialog" data-tool={tool} onOpenAutoFocus={event => { event.preventDefault(); title.current?.focus(); }} onCloseAutoFocus={event => { event.preventDefault(); (trigger.current?.isConnected ? trigger.current : menu.current?.querySelector('summary'))?.focus({ preventScroll: true }); }}>
         <header><DialogTitle ref={title} tabIndex={-1}>{tool ? labels[tool][0] : ''}</DialogTitle><DialogDescription>{tool ? labels[tool][1] : ''}</DialogDescription></header>
         <div className="preview-tool-body">
           {tool === 'routes' && <ScreenList route={route} onRoute={value => { onRoute(value); setTool(null); }} routes={state.routeCandidates} onRefresh={onRefresh} manualPath={manualPath} onManualPath={setManualPath} />}

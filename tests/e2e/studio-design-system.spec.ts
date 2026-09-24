@@ -251,6 +251,7 @@ test('Preview keeps metadata on demand and omits controls without a project', as
   }
   await page.getByLabel('Preview tools', { exact: true }).click();
   await page.getByRole('button', { name: 'Project settings', exact: true }).click();
+  await page.getByText('Project details', { exact: true }).click();
   await expect(page.getByText(project.root, { exact: true })).toBeVisible();
   await expect(page.getByText(project.id, { exact: true })).toBeVisible();
 });
@@ -456,7 +457,7 @@ test('creation and Design dialogs fit at 200 percent zoom with reachable actions
       await expect(apply).toBeInViewport();
     } else {
       await dialog.locator('.creation-folder summary').click();
-      await dialog.getByLabel('Directory slug').focus();
+      await dialog.getByLabel('Project folder').focus();
       await page.keyboard.press('Tab');
       await expect(dialog.getByRole('button', { name: 'Cancel', exact: true })).toBeInViewport();
     }

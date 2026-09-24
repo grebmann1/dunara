@@ -9,23 +9,27 @@ import { startupEnvironment, startupVariableNames } from '../../core/src/service
 import { diagnosticWriter } from './diagnostics.js';
 import { PlatformError } from '../../platform/src/contracts.js';
 import { BuilderError } from '../../core/src/contracts.js';
+import { readDesktopProfile, saveDesktopProfile } from './profile.js';
+import { desktopUpdateCheck } from './updates.js';
 
 const entry = process.argv.indexOf(fileURLToPath(import.meta.url));
-const { values } = parseArgs({ args: process.argv.slice(entry >= 0 ? entry + 1 : 2), options: {
+const { values } = parseArgs({ args: process.argv.slice(entry >= 0 ? entry + 1 : app.isPackaged ? 1 : 2), options: {
   node: { type: 'string' }, workspace: { type: 'string' }, home: { type: 'string' }, 'builder-env-file': { type: 'string' },
   'user-data': { type: 'string' }, 'trust-execution': { type: 'boolean', default: false },
   'assistant-offline-fixture': { type: 'string' },
 } });
 if (process.platform !== 'darwin') throw new Error('This desktop prototype is macOS-only');
-if (!values.node || !values.workspace || !values.home || !values['user-data']) throw new Error('Launch with pnpm desktop');
+if (!app.isPackaged && (!values.node || !values.workspace || !values.home || !values['user-data'])) throw new Error('Launch with pnpm desktop');
 const environment = values['assistant-offline-fixture'] ? {} : startupEnvironment(process.env);
 for (const name of startupVariableNames) delete process.env[name];
 const logDiagnostic = diagnosticWriter(process.stderr);
-const config = { node: path.resolve(values.node), workspace: path.resolve(values.workspace), home: path.resolve(values.home), trusted: values['trust-execution'], assistantOfflineFixture: values['assistant-offline-fixture'], startupEnvironment: environment, envFile: path.resolve(values['builder-env-file'] ?? '.env') };
 // Electron binds macOS Keychain service/account names before ready. Keep the
 // existing vault identity during bootstrap; change only the display name after it.
 app.setName('Mobile App Builder');
-app.setPath('userData', path.resolve(values['user-data']));
+const userData = path.resolve(values['user-data'] ?? path.join(app.getPath('appData'), 'Mobile App Builder'));
+app.setPath('userData', userData);
+const config = { node: path.resolve(values.node ?? path.join(process.resourcesPath, 'runtime/bin/node')), workspace: path.resolve(values.workspace ?? path.join(app.getPath('documents'), 'Dunara Apps')), home: path.resolve(values.home ?? path.join(userData, 'builder-home')), trusted: values['trust-execution'], assistantOfflineFixture: values['assistant-offline-fixture'], startupEnvironment: environment, envFile: values['builder-env-file'] ? path.resolve(values['builder-env-file']) : app.isPackaged ? path.join(userData, 'startup.env') : path.resolve('.env'), browserPath: app.isPackaged ? path.join(process.resourcesPath, 'browsers') : undefined };
+if (app.isPackaged) process.env.PATH = [path.dirname(config.node), path.join(app.getAppPath(), 'node_modules/.bin'), '/opt/homebrew/bin', '/usr/local/bin', process.env.PATH ?? '/usr/bin:/bin'].join(path.delimiter);
 app.enableSandbox();
 
 let window: BrowserWindow | undefined;
@@ -33,6 +37,7 @@ let host: DesktopHost | undefined;
 let quitting = false;
 let finished = false;
 let reconnecting = false;
+const checkUpdates = desktopUpdateCheck(() => window, async () => { quitting = true; await host?.stop(); finished = true; });
 const show = () => { window?.show(); window?.focus(); };
 const failure = () => {
   if (!quitting) dialog.showErrorBox('Dunara is unavailable', 'The backend or Studio could not load. Use Studio → Restart backend to recover. Project files are retained; unsaved drafts and transient captures may be lost. No automatic retry was attempted.');
@@ -60,6 +65,8 @@ async function start() {
   try {
     const launchUrl = await host.start();
     logDiagnostic(`Desktop MCP socket: ${host.socketPath}\n`);
+    // The remembered origin is unchanged; a fragment-only ticket must still create a fresh document.
+    await window?.loadURL('about:blank');
     await window?.loadURL(launchUrl); show();
   } catch (error) {
     if (error instanceof PlatformError && error.code === 'CONFIGURATION_REQUIRED' || error instanceof BuilderError && error.code === 'INVALID_INPUT') dialog.showErrorBox('Dunara configuration needs attention', error.message);
@@ -101,11 +108,26 @@ if (!app.requestSingleInstanceLock()) {
   });
   void app.whenReady().then(async () => {
   app.setName('Dunara');
+  if (app.isPackaged && !values.workspace && !values.home && !values['user-data']) {
+    const filename = path.join(userData, 'desktop-profile.json');
+    let profile;
+    try { profile = await readDesktopProfile(filename); }
+    catch { dialog.showErrorBox('Saved desktop setup needs attention', 'Dunara could not read its desktop profile. Existing apps and settings have not been changed. Restore desktop-profile.json from your backup.'); app.quit(); return; }
+    if (!profile) {
+      const folder = await dialog.showOpenDialog({ title: 'Choose a folder for your Dunara apps', defaultPath: config.workspace, properties: ['openDirectory', 'createDirectory'], buttonLabel: 'Use this folder' });
+      if (folder.canceled || !folder.filePaths[0]) { app.quit(); return; }
+      const choice = await dialog.showMessageBox({ type: 'question', message: 'Allow this desktop workspace to build apps?', detail: 'Preview and build tools run project code on this Mac with your user permissions. Choose a folder containing projects you trust. Existing profiles are not moved or imported.', buttons: ['Cancel', 'Allow local builds'], defaultId: 0, cancelId: 0 });
+      if (choice.response !== 1) { app.quit(); return; }
+      profile = { version: 1 as const, workspace: folder.filePaths[0], home: config.home, trusted: true }; await saveDesktopProfile(filename, profile);
+    }
+    Object.assign(config, { workspace: profile.workspace, home: profile.home, trusted: profile.trusted });
+  }
   const appIcon = fileURLToPath(new URL('../assets/app-icon.png', import.meta.url));
   app.dock?.setIcon(appIcon);
   app.setAboutPanelOptions({ applicationName: 'Dunara', iconPath: appIcon });
-  // Ephemeral browser storage; provider credentials remain only in the Node backend.
-  const browserSession = session.fromPartition('builder-desktop');
+  // Retain Studio layout and generated-app browser data across full desktop quits.
+  // Assistant provider credentials remain in the backend's encrypted stores.
+  const browserSession = session.fromPartition('persist:builder-desktop');
   browserSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
   browserSession.setPermissionCheckHandler(() => false);
   browserSession.setDevicePermissionHandler(() => false);
@@ -119,7 +141,7 @@ if (!app.requestSingleInstanceLock()) {
     item.once('done', (_event, state) => { if (state === 'interrupted' && !quitting) dialog.showErrorBox('Download interrupted', 'The file could not be saved. Try the download again from Studio.'); });
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate([
-    { label: 'Dunara', submenu: [{ role: 'about' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
+    { label: 'Dunara', submenu: [{ role: 'about' }, { label: 'Check for updates…', click: () => { void checkUpdates(); } }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] },
     { label: 'Studio', submenu: [
       { label: 'Show Studio', click: show },
       { label: 'Reconnect Studio…', accelerator: 'CmdOrCtrl+R', click: () => { void confirmReconnect(); } },

@@ -1,15 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { chromium, type Browser } from 'playwright';
-import { BuilderError, routeSchema, viewportSchema } from "../../../core/src/contracts.js";
+import { BuilderError, captureRouteSchema, viewportSchema } from "../../../core/src/contracts.js";
 import type { PreviewDriver } from "../../../core/src/preview-driver.js";
 export const viewports = { compact: { width: 375, height: 812 }, large: { width: 430, height: 932 } } as const;
-export type Artifact = { id: string; projectId: string; route: string; viewport: string; width: number; height: number; createdAt: string; rendering: 'React Native Web'; bytes: number; environment?: string; configurationRevision?: string };
+export type Artifact = { id: string; projectId: string; route: string; viewport: string; width: number; height: number; createdAt: string; rendering: 'React Native Web'; bytes: number; environment?: string; configurationRevision?: string; sourceRevision?: string; changedDuringCapture?: boolean; runtimeErrors?: number };
 export class Captures {
   private artifacts: { meta: Artifact; png: Buffer }[] = [];
   private browsers = new Set<Browser>();
   private active = 0;
   private closed = false;
-  constructor(readonly previews: PreviewDriver, private readonly remoteCapture?: (id: string, route: string, viewport: {width: number; height: number}, signal?: AbortSignal) => Promise<Buffer>) {}
+  constructor(readonly previews: PreviewDriver, private readonly remoteCapture?: (id: string, route: string, viewport: {width: number; height: number}, signal?: AbortSignal) => Promise<Buffer>, private readonly sourceRevision?: (id: string) => Promise<string>) {}
   private prune() { this.artifacts = this.artifacts.filter(a => Date.now() - Date.parse(a.meta.createdAt) < 3_600_000).slice(-20); }
   list(id: string) { this.prune(); return this.artifacts.filter(a => a.meta.projectId === id).map(a => a.meta); }
   get(projectId: string, artifactId: string) {
@@ -19,7 +19,7 @@ export class Captures {
     return artifact;
   }
   async capture(projectId: string, inputRoute: string, inputViewport: string, signal?: AbortSignal) {
-    const route = routeSchema.parse(inputRoute), viewport = viewportSchema.parse(inputViewport);
+    const route = captureRouteSchema.parse(inputRoute), viewport = viewportSchema.parse(inputViewport);
     await this.previews.projects.get(projectId);
     const session = this.previews.status(projectId);
     if (session.status !== 'ready' || !session.url) throw new BuilderError('PREVIEW_NOT_READY', 'Start a managed preview before capturing');
@@ -31,11 +31,13 @@ export class Captures {
     signal?.addEventListener('abort', abort, { once: true });
     const timer = setTimeout(abort, 40_000);
     try {
+      const before = await this.sourceRevision?.(projectId);
+      const evidence = async () => ({ sourceRevision: before, changedDuringCapture: before !== await this.sourceRevision?.(projectId) });
       if (this.remoteCapture) {
         const png = await this.remoteCapture(projectId, route, viewports[viewport], controller.signal);
         controller.signal.throwIfAborted();
         if (this.closed || png.length > 2_000_000) throw new BuilderError('LIMIT_EXCEEDED', 'Capture unavailable or exceeds 2 MB');
-        const meta: Artifact = { id: randomUUID(), projectId, route, viewport, ...viewports[viewport], createdAt: new Date().toISOString(), rendering: 'React Native Web', bytes: png.length, configurationRevision: session.configurationRevision, ...(session.environment ? {environment:session.environment} : {}) };
+        const meta: Artifact = { ...await evidence(), id: randomUUID(), projectId, route, viewport, ...viewports[viewport], createdAt: new Date().toISOString(), rendering: 'React Native Web', bytes: png.length, configurationRevision: session.configurationRevision, ...(session.environment ? {environment:session.environment} : {}) };
         this.artifacts.push({meta,png}); this.prune(); return {meta,png};
       }
       browser = await chromium.launch({ headless: true, timeout: 15_000 });
@@ -62,8 +64,9 @@ export class Captures {
         if (url.origin === origin || (url.origin === backendOrigin && url.pathname.startsWith('/realtime/'))) socket.connectToServer(); else socket.close();
       });
       const page = await context.newPage();
-      page.on('pageerror', error => this.previews.diagnostics.add(projectId, 'browser', 'error', error.message));
-      page.on('console', message => { if (message.type() === 'error') this.previews.diagnostics.add(projectId, 'browser', 'error', message.text()); });
+      let runtimeErrors = 0;
+      page.on('pageerror', error => { runtimeErrors++; this.previews.diagnostics.add(projectId, 'browser', 'error', error.message); });
+      page.on('console', message => { if (message.type() === 'error') { runtimeErrors++; this.previews.diagnostics.add(projectId, 'browser', 'error', message.text()); } });
       page.on('popup', popup => { void popup.close(); });
       const response = await page.goto(new URL(route, origin).href, { waitUntil: 'networkidle', timeout: 30_000 });
       if (!response?.ok() || new URL(page.url()).origin !== origin) throw new BuilderError('INVALID_PATH', 'Capture navigation failed or left the managed preview');
@@ -72,7 +75,7 @@ export class Captures {
       const png = await page.screenshot({ type: 'png', animations: 'disabled', fullPage: false, timeout: 5000 });
       controller.signal.throwIfAborted();
       if (png.length > 2_000_000) throw new BuilderError('LIMIT_EXCEEDED', 'Capture exceeds 2 MB');
-      const meta: Artifact = { id: randomUUID(), projectId, route, viewport, ...viewports[viewport], createdAt: new Date().toISOString(), rendering: 'React Native Web', bytes: png.length, configurationRevision: session.configurationRevision, ...(session.environment ? { environment: session.environment } : {}) };
+      const meta: Artifact = { ...await evidence(), runtimeErrors, id: randomUUID(), projectId, route, viewport, ...viewports[viewport], createdAt: new Date().toISOString(), rendering: 'React Native Web', bytes: png.length, configurationRevision: session.configurationRevision, ...(session.environment ? { environment: session.environment } : {}) };
       this.artifacts.push({ meta, png }); this.prune();
       return { meta, png };
     } finally {

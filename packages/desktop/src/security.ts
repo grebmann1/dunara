@@ -45,7 +45,7 @@ export function downloadAllowed(value: string, initiator: string, studioOrigin: 
 
 export function desktopEnvironment(input: NodeJS.ProcessEnv) {
   const env: NodeJS.ProcessEnv = {};
-  for (const name of ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SHELL', 'USER', 'LOGNAME', 'NODE_EXTRA_CA_CERTS']) {
+  for (const name of ['PATH', 'HOME', 'TMPDIR', 'LANG', 'LC_ALL', 'SHELL', 'USER', 'LOGNAME', 'NODE_EXTRA_CA_CERTS', 'ANDROID_HOME', 'ANDROID_SDK_ROOT', 'JAVA_HOME']) {
     if (input[name]) env[name] = input[name];
   }
   return env;

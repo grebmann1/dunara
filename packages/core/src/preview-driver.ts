@@ -9,6 +9,7 @@ export interface PreviewDriver {
   readonly diagnostics: Diagnostics;
   readonly trusted: boolean;
   status(id: string): Preview;
+  expoAccount?(id: string): Promise<import('./expo-account.js').ExpoAccountStatus>;
   setTransport(id: string, input: unknown, signal?: AbortSignal): Promise<Preview>;
   recordPhoneTest(id: string, input: unknown): Promise<Preview>;
   configurationRevision(id: string): Promise<string>;

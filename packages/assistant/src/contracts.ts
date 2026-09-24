@@ -10,13 +10,14 @@ export type ImageReference = z.infer<typeof imageReferenceSchema>;
 export const attachmentsSchema = z.object({ inspector: inspectorAttachmentSchema.optional(), images: z.array(imageReferenceSchema).max(2).refine(images => new Set(images.map(image => `${image.kind}:${image.id}`)).size === images.length).optional() }).strict();
 export type AssistantAttachments = z.infer<typeof attachmentsSchema>;
 
-export const ASSISTANT_LIMITS = Object.freeze({ startupMs: 20_000, turnMs: 600_000, shutdownMs: 5_000, tools: 40, promptBytes: 16 * 1024, inspectorBytes: 16 * 1024, images: 2, responseBytes: 256 * 1024, conversationBytes: 2 * 1024 * 1024, totalBytes: 100 * 1024 * 1024, conversationsPerProject: 20, events: 512, eventBytes: 2 * 1024 * 1024 });
+export const ASSISTANT_LIMITS = Object.freeze({ startupMs: 20_000, turnMs: 600_000, shutdownMs: 5_000, tools: 64, promptBytes: 16 * 1024, inspectorBytes: 16 * 1024, images: 2, responseBytes: 256 * 1024, conversationBytes: 2 * 1024 * 1024, totalBytes: 100 * 1024 * 1024, conversationsPerProject: 20, events: 512, eventBytes: 2 * 1024 * 1024 });
 export type AssistantLimits = { readonly [Key in keyof typeof ASSISTANT_LIMITS]: number };
 export const assistantText = (bytes: number) => z.string().max(bytes).refine(value => Buffer.byteLength(value) <= bytes, 'Text exceeds its byte limit');
 export const turnStateSchema = z.enum(['starting', 'running', 'completed', 'cancelled', 'interrupted', 'failed', 'limited']);
 export type TurnState = z.infer<typeof turnStateSchema>;
 export const assistantModeSchema = z.enum(['plan', 'build']);
 export type AssistantMode = z.infer<typeof assistantModeSchema>;
+export const assistantTaskSchema = z.literal('image-prompt');
 export const assistantTasksSchema = z.array(z.object({
   id: z.string().min(1).max(40).regex(/^[a-zA-Z0-9_-]+$/),
   label: z.string().trim().min(1).max(160),
@@ -36,6 +37,7 @@ export type AssistantSetupRequest = z.infer<typeof storedSetupRequestSchema>;
 export const storedTurnSchema = z.object({
   id: z.uuid(), epoch: z.uuid(), state: turnStateSchema, provider: assistantProviderSchema.optional(), model: z.string().max(100).optional(), mode: assistantModeSchema.optional(),
   reasoningEffort: reasoningEffortSchema.optional(),
+  task: assistantTaskSchema.optional(),
   projectId: z.uuid().nullable().optional(),
   prompt: assistantText(ASSISTANT_LIMITS.promptBytes), response: assistantText(ASSISTANT_LIMITS.responseBytes),
   startedAt: z.iso.datetime(), endedAt: z.iso.datetime().optional(),
@@ -53,13 +55,13 @@ export const conversationSchema = z.object({
   createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), turns: z.array(storedTurnSchema).max(1000),
 }).strict();
 export type Conversation = z.infer<typeof conversationSchema>;
-export const startTurnSchema = z.object({ conversationId: z.uuid(), runId: z.uuid(), mode: assistantModeSchema.default('build'), prompt: assistantText(ASSISTANT_LIMITS.promptBytes).refine(value => value.trim().length > 0, 'Enter a message'), attachments: attachmentsSchema.optional() }).strict();
+export const startTurnSchema = z.object({ conversationId: z.uuid(), runId: z.uuid(), mode: assistantModeSchema.default('build'), task: assistantTaskSchema.optional(), prompt: assistantText(ASSISTANT_LIMITS.promptBytes).refine(value => value.trim().length > 0, 'Enter a message'), attachments: attachmentsSchema.optional() }).strict().refine(value => !value.task || (value.mode === 'plan' && !value.attachments), 'Image suggestions require Plan mode without attachments');
 export type RunBinding = { epoch: string; runId: string; conversationId: string; projectId: string | null };
 export type AssistantEvent = RunBinding & { sequence: number; type: 'state' | 'text' | 'tool' | 'approval'; text?: string; state?: TurnState; tool?: string };
 export type HarnessTool = { name: string; description?: string; _meta?: Record<string, unknown>; inputSchema: { type: 'object'; properties?: Record<string, unknown>; required?: string[]; [key: string]: unknown } };
 export type HarnessResult = { content: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>; details?: unknown; isError?: boolean };
 export const harnessImageSchema = imageReferenceSchema.extend({ data: z.string().max(4 * 1024 * 1024).regex(/^[A-Za-z0-9+/]+={0,2}$/), mimeType: z.literal('image/png'), description: z.string().max(2048) }).strict();
-export type HarnessInput = RunBinding & { prompt: string; context: string; apiKey: string; provider?: AssistantProvider; baseUrl?: string; model?: string; reasoningEffort?: ReasoningEffort; mode?: AssistantMode; tools: HarnessTool[]; inspector?: InspectorAttachment; images?: z.infer<typeof harnessImageSchema>[] };
+export type HarnessInput = RunBinding & { prompt: string; context: string; apiKey: string; provider?: AssistantProvider; baseUrl?: string; model?: string; reasoningEffort?: ReasoningEffort; mode?: AssistantMode; task?: z.infer<typeof assistantTaskSchema>; tools: HarnessTool[]; inspector?: InspectorAttachment; images?: z.infer<typeof harnessImageSchema>[] };
 export type HarnessCallbacks = { text(value: string): void; imageAccepted?(): void; tool(name: string, args: Record<string, unknown>, signal: AbortSignal): Promise<HarnessResult> };
 export interface RunHarness {
   run(input: HarnessInput, callbacks: HarnessCallbacks, signal: AbortSignal): Promise<void>;

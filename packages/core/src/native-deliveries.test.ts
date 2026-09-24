@@ -14,6 +14,7 @@ const device = { id: '00008130-001918DC2E520010', name: 'Fixture iPhone', model:
 const team = { id: 'ABCDE12345', name: 'Apple Development: Fixture' };
 let root: string, engine: Engine, workspaces: NativeBuildWorkspaces, deliveries: NativeDeliveries, id: string, selection: DeliverySelection;
 let installed: boolean, host: IOSHost;
+let backend: { EXPO_PUBLIC_SUPABASE_URL: string; EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: string } | undefined;
 const inputs = (plan: DeliveryPlan) => ({ selection: plan.selection, proposedRevision: plan.proposedRevision, requestId: randomUUID(), confirmed: true });
 const action = (job: DeliveryStatus) => ({ deliveryId: job.id, expectedRevision: job.revision });
 async function terminal() {
@@ -31,12 +32,13 @@ async function fixtureRun(spec: NativeCommand) {
   return { stdout: spec.command === '/usr/bin/plutil' ? JSON.stringify({ CFBundleIdentifier: 'com.fixture.phone' }) : '', stderr: spec.args.includes('-dvv') ? `TeamIdentifier=${team.id}\n` : '' };
 }
 beforeEach(async () => {
+  backend = undefined;
   root = await mkdtemp(path.join(os.tmpdir(), 'native-delivery-')); installed = false;
   engine = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), false);
   const project = await engine.projects.create({ name: 'Phone fixture', slug: 'phone-fixture' }); id = project.id;
   const setup = await engine.nativeBuilds.plan(id, { iosBundleIdentifier: 'com.fixture.phone', androidPackage: 'com.fixture.phone', scheme: 'phone-fixture' });
   await engine.nativeBuilds.apply(id, { configuration: setup.configuration, proposedRevision: setup.proposedRevision, confirmed: true });
-  workspaces = new NativeBuildWorkspaces(engine.projects, true, async () => ({ app: {}, revision: 'none' }), async () => {}, () => {}, async (step, directory) => {
+  workspaces = new NativeBuildWorkspaces(engine.projects, true, async () => ({ app: backend ?? {}, revision: backend ? 'staging' : 'none' }), async () => {}, () => {}, async (step, directory) => {
     if (step.startsWith('export-')) { const target = path.join(directory, '../exports', step.slice(7)); await mkdir(target, { recursive: true }); await writeFile(path.join(target, 'bundle.js'), 'fixture'); }
   });
   const plan = await workspaces.plan(id, { profile: 'preview', platform: 'ios', environment: 'none' });
@@ -157,4 +159,19 @@ it('runs native commands without inherited provider credentials or child-process
     const result = await new LocalIOSHost().run({ command: process.execPath, args: ['-e', 'console.log(JSON.stringify([process.env.OPENAI_API_KEY,process.env.DEVICECTL_CHILD_SECRET,process.env.NODE_OPTIONS]))'], cwd: root }, new AbortController().signal);
     expect(result.stdout.trim()).toBe('[null,null,null]');
   } finally { vi.unstubAllEnvs(); }
+});
+
+
+it('builds the reviewed public backend binding without requiring Metro or private backend credentials', async () => {
+  backend = { EXPO_PUBLIC_SUPABASE_URL: 'https://abcdefghijklmnopqrst.supabase.co', EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: 'sb_publishable_fixture' };
+  const preparation = await workspaces.plan(id, { profile: 'preview', platform: 'ios', environment: 'staging' });
+  const workspace = await workspaces.prepare(id, { selection: preparation.selection, proposedRevision: preparation.proposedRevision, requestId: randomUUID(), confirmed: true });
+  await vi.waitFor(async () => expect((await workspaces.get(id, workspace.id)).state).toBe('ready'), { timeout: 10_000 });
+  selection = { ...selection, workspaceId: workspace.id };
+  const plan = await deliveries.plan(id, selection);
+  expect(plan.consequences.join(' ')).toContain('staging backend');
+  await deliveries.build(id, inputs(plan)); const job = await terminal(); expect(job.state).toBe('ready');
+  const connection = JSON.parse(await readFile(path.join(engine.projects.home, 'native-deliveries', id, job.id, 'app/backend/connection.json'), 'utf8'));
+  expect(connection).toEqual({ environment: 'staging', url: backend.EXPO_PUBLIC_SUPABASE_URL, publishableKey: backend.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY });
+  expect(JSON.stringify(job)).not.toContain('sb_publishable_fixture');
 });

@@ -47,3 +47,18 @@ it('revalidates stored image references and drops transient inspector context af
   const restored = await revalidateDraft({ ...saved, previousRuntime: true, value: { ...value, attachments: { images: [media, capture], inspector } } }, async reference => reference.kind === 'media');
   expect(restored.value?.attachments.images).toEqual([media]); expect(restored.value?.attachments.inspector).toBeUndefined(); expect(restored.notice).toContain('removed');
 });
+it('restores creative drafts across runtimes and fences project, account, preference and revision changes', () => {
+  const { drafts, enable, change } = setup(); enable();
+  const before = drafts.readWorkspace(scope.projectId);
+  const content = { design: { tokens: { accent: '#123456' }, revision: 'base' }, kit: { captureIds: [], iconId: '', name: 'My app', summary: 'Draft summary', description: '', supportUrl: '', privacyUrl: '', attribution: '' } };
+  const update = { context: before.context, preferenceRevision: before.preferenceRevision, expectedRevision: before.revision, value: content };
+  const saved = drafts.saveWorkspace(scope.projectId, update);
+  expect(new AssistantDrafts(home, randomUUID(), () => ({ owner: 'local', revision: 'new-runtime' })).readWorkspace(scope.projectId).value).toEqual(content);
+  expect(drafts.readWorkspace(randomUUID()).value).toBeNull();
+  expect(() => drafts.saveWorkspace(scope.projectId, update)).toThrow('changed');
+  expect(() => drafts.saveWorkspace(scope.projectId, { ...update, expectedRevision: saved.revision, value: { ...content, apiKey: 'must not be stored' } })).toThrow();
+  drafts.configure(scope, { context: saved.context, preferenceRevision: saved.preferenceRevision, enabled: false });
+  enable(); expect(drafts.readWorkspace(scope.projectId).value).toBeNull();
+  expect(() => drafts.saveWorkspace(scope.projectId, { ...update, expectedRevision: saved.revision })).toThrow('changed');
+  change(); expect(drafts.readWorkspace(scope.projectId).value).toBeNull();
+});

@@ -11,7 +11,7 @@ const states = { ready: 'Signed app ready', installed: 'Installation verified', 
 
 export function NativeDeliveryPanel({ projectId, workspaces }: { projectId: string; workspaces: WorkspaceStatus[] }) {
   const { api } = useStudioClient(), base = `/projects/${projectId}/native-deliveries`;
-  const ready = workspaces.filter(value => value.state === 'ready' && value.selection.profile === 'preview' && value.selection.platform !== 'android' && value.backend.environment === 'none');
+  const ready = workspaces.filter(value => value.state === 'ready' && value.selection.profile === 'preview' && value.selection.platform !== 'android');
   const [preflight, setPreflight] = useState<DeliveryPreflight>(), [selection, setSelection] = useState<DeliverySelection>({ workspaceId: '', deviceId: '', teamId: '' });
   const [plan, setPlan] = useState<DeliveryPlan>(), [installation, setInstallation] = useState<InstallPlan>(), [jobs, setJobs] = useState<DeliveryStatus[]>([]);
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -51,12 +51,12 @@ export function NativeDeliveryPanel({ projectId, workspaces }: { projectId: stri
   function select(key: keyof DeliverySelection, value: string) { setSelection(current => ({ ...current, [key]: value })); setPlan(undefined); }
   const running = jobs.some(active);
   return <section className="native-delivery" aria-label="Install on iPhone">
-    <div><h3>Install on iPhone</h3><p>Build on this Mac, then install on your connected iPhone. No Expo account or backend needed.</p></div>
+    <div><h3>Install on iPhone</h3><p>Build on this Mac, then install on your connected iPhone. Uses the public backend selected in your prepared workspace.</p></div>
     <Button variant="outline" disabled={busy || running} onClick={() => void perform('preflight')}>{busy && !preflight ? 'Checking this Mac…' : preflight ? 'Refresh phone and signing' : 'Check phone and signing'}</Button>
     {preflight && <>
       {!!preflight.issues.length && <ul>{preflight.issues.map(issue => <li key={issue}>{issue}</li>)}</ul>}
       {preflight.supported && <fieldset disabled={busy || running}>
-        {!ready.length ? <p>Prepare an iOS Preview workspace with “No backend” above to continue.</p> : <FieldSelect label="Prepared app" value={selection.workspaceId} onValueChange={value => select('workspaceId', value)} options={ready.map(value => ({ value: value.id, label: `${new Date(value.createdAt).toLocaleString()} · ${value.id.slice(0, 8)}` }))} />}
+        {!ready.length ? <p>Prepare an iOS Preview workspace above to continue.</p> : <FieldSelect label="Prepared app" value={selection.workspaceId} onValueChange={value => select('workspaceId', value)} options={ready.map(value => ({ value: value.id, label: `${new Date(value.createdAt).toLocaleString()} · ${value.backend.environment} · ${value.id.slice(0, 8)}` }))} />}
         {!!preflight.devices.length && <FieldSelect label="iPhone" value={selection.deviceId} onValueChange={value => select('deviceId', value)} options={preflight.devices.map(value => ({ value: value.id, label: `${value.name} · ${value.model}` }))} />}
         {!!preflight.teams.length && <FieldSelect label="Apple signing team" value={selection.teamId} onValueChange={value => select('teamId', value)} options={preflight.teams.map(value => ({ value: value.id, label: `${value.name} · ${value.id}` }))} />}
         <Button disabled={!selection.workspaceId || !selection.deviceId || !selection.teamId || !preflight.xcode || !preflight.cocoaPods} onClick={() => void perform('plan')}>Review iPhone build</Button>

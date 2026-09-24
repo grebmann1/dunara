@@ -80,7 +80,7 @@ test('generates an app-directed icon, reviews its image, and applies it without 
   await expect(page.getByRole('form', { name: 'Icon generation' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Approve candidate', exact: true }).click();
   await expect(page.locator('.icon-previews img')).toHaveCount(10);
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await page.getByRole('checkbox', { name: 'I reviewed this exact config change and want to apply it.' }).check();
   await page.getByRole('button', { name: 'Confirm and apply icon' }).click();
   const asset = (await engine.assets.list(projectId)).assets[0]!;

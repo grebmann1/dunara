@@ -10,7 +10,7 @@ import { noSymlinks, readText } from '../../../core/src/storage.js';
 import { revision } from '../../../core/src/files.js';
 import { iosDevice, signingTeam, type DeliveryPreflight, type NativeDevice } from '../../../core/src/native-delivery-contracts.js';
 
-export type NativeCommand = { command: string; args: string[]; cwd: string; timeout?: number };
+export type NativeCommand = { command: string; args: string[]; cwd: string; timeout?: number; androidSdk?: string; javaHome?: string };
 export interface IOSHost {
   inspect(): Promise<DeliveryPreflight>;
   run(command: NativeCommand, signal: AbortSignal): Promise<{ stdout: string; stderr: string }>;
@@ -30,7 +30,7 @@ export function parseIOSDevice(raw: unknown): NativeDevice | undefined {
 export class LocalIOSHost implements IOSHost {
   async run(spec: NativeCommand, signal: AbortSignal) {
     signal.throwIfAborted();
-    const env = { ...runtimeEnvironment(process.env), PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ''}`, CI: '1', EXPO_OFFLINE: '0' };
+    const env = { ...runtimeEnvironment(process.env), PATH: `${path.dirname(process.execPath)}${path.delimiter}${process.env.PATH ?? ''}`, CI: '1', EXPO_OFFLINE: '0', ...(spec.androidSdk ? { ANDROID_HOME: spec.androidSdk, ANDROID_SDK_ROOT: spec.androidSdk } : {}), ...(spec.javaHome ? { JAVA_HOME: spec.javaHome } : {}) };
     const child = spawn(spec.command, spec.args, { cwd: spec.cwd, env, shell: false, detached: true, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = '', stderr = '', exited = false, timedOut = false;
     // Bounded private diagnostic output; never returned by the service's tools or HTTP routes.

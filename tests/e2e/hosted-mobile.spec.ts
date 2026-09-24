@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+import type { Preview } from '../../packages/core/src/contracts.js';
 import { test, expect, type Page } from '@playwright/test';
 import { mkdtemp, copyFile, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -156,4 +158,40 @@ test('chat keeps typing and sending inside the visible viewport', async ({ page 
   await expect(panel).not.toHaveAttribute('data-short-viewport');
   await expect(panel.getByLabel('Model and reasoning', { exact: true })).toBeVisible();
   await expect(input).toHaveValue('');
+});
+
+
+test('cloud phone access explains Dunara sign-in before scanning and never falls back to Expo', async ({ page }, info) => {
+  const project = (await engine.projects.list())[0]!;
+  const publish = (value: Preview) => (engine.previews as unknown as { update(value: Preview): Preview }).update(value);
+  let starts = 0;
+  const sessionId = randomUUID();
+  engine.previews.start = async id => { starts++; return publish({ projectId: id, status: 'ready', transport: 'cloud', runtime: 'web', sessionId }); };
+  await page.goto(studio.launchUrl);
+  await page.getByRole('button', { name: 'Connect a device', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
+  await expect(dialog).toContainText('Open this private preview in your phone browser.');
+  await expect(dialog.getByRole('region', { name: 'Cloud phone access' })).toContainText('same Dunara account');
+  await expect(dialog).toContainText('No Expo account or Expo Go installation is needed.');
+  await expect(dialog.getByRole('button', { name: 'Copy Expo login command' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Start cloud preview', exact: true }).click();
+  await expect(dialog.getByRole('img')).toBeVisible();
+  expect(starts).toBe(1);
+  await expect(dialog.getByRole('link', { name: 'Open preview in a new tab' })).toHaveAttribute('href', `${new URL(studio.launchUrl).origin}/#preview=${sessionId}`);
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    await expect(dialog.getByRole('heading', { name: 'Use your Dunara account' })).toBeInViewport();
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+    await page.screenshot({ path: info.outputPath(`cloud-phone-access-${width}.png`) });
+  }
+  publish({ projectId: project.id, status: 'ready', deviceUrl: 'exp://192.168.1.20:8081' });
+  await expect(dialog.getByRole('img')).toHaveCount(0);
+  await expect(dialog).toContainText('phone link is unavailable');
+  await expect(dialog).not.toContainText('exp://');
+  await expect(dialog).not.toContainText('npx expo login');
+  publish({ projectId: project.id, status: 'stopped', transport: 'cloud' });
+  engine.previews.start = async () => { throw new Error('Preview capacity is full. Try again later.'); };
+  await dialog.getByRole('button', { name: 'Start cloud preview', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Preview capacity is full');
 });

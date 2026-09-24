@@ -130,6 +130,24 @@ test('shows a QR code with the current environment and removes it when the previ
   await button.click();
   const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
   await expect(dialog.getByRole('img', { name: 'Scan to open Still Connected in Expo Go' })).toBeVisible();
+  const setup = dialog.locator('details.device-preview-account');
+  await expect(setup).not.toHaveAttribute('open');
+  await page.route('**/expo-account', route => route.fulfill({ json: { state: 'signed-in', message: 'Expo sign-in verified on this computer. Use the same account in Expo Go.' } }));
+  await dialog.getByRole('button', { name: 'Check Expo sign-in' }).click();
+  await expect(dialog.getByText('Expo sign-in verified on this computer. Use the same account in Expo Go.')).toBeVisible();
+  await setup.locator('summary').click();
+  await expect(setup.getByRole('heading', { name: 'Expo account' })).toBeVisible();
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await setup.getByRole('button', { name: 'Copy Expo login command' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('npx expo login --browser');
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await setup.scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+    await page.screenshot({ path: info.outputPath(`expo-login-${width}.png`) });
+  }
+  await setup.locator('summary').click();
+  await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
   await expect(dialog).toContainText('development');
   await expect(dialog).toContainText(ref);
   expect(await dialog.getByRole('img').evaluate(node => {
@@ -148,6 +166,42 @@ test('shows a QR code with the current environment and removes it when the previ
   await expect(dialog).toContainText('Test on your phone');
   await expect(dialog).not.toContainText('exp://');
   await dialog.press('Escape'); await expect(button).toBeFocused();
+});
+
+test('shows LAN discovery failures honestly and lets the user retry or return to this computer', async ({ page }, info) => {
+  const publish = (state: Preview) => (engine.previews as unknown as { update(state: Preview): Preview }).update(state);
+  const sessionId = randomUUID();
+  publish({ projectId, status: 'ready', transport: 'lan', sessionId, deviceIssue: 'Expo has not reported a private LAN address. Check your network connection and restart the preview.' });
+  const requests: unknown[] = [];
+  engine.previews.setTransport = async (id, input) => {
+    requests.push(input);
+    const transport = (input as { transport: 'lan' | 'localhost' }).transport;
+    publish({ projectId: id, status: 'starting', transport, sessionId: randomUUID() });
+    return publish({ projectId: id, status: 'ready', transport, sessionId: randomUUID(), ...(transport === 'lan' ? { deviceUrl: 'exp://192.168.1.20:8081' } : {}) });
+  };
+  await page.getByRole('button', { name: 'Connect a device', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
+  await expect(dialog.locator('.device-preview-details')).toContainText('Local network · waiting for address');
+  await expect(dialog.getByRole('button', { name: 'Use this computer only', exact: true })).toBeVisible();
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBe(0);
+    await page.screenshot({ path: info.outputPath(`phone-retry-${width}.png`) });
+  }
+  await dialog.getByRole('button', { name: 'Retry phone preview', exact: true }).click();
+  await expect(dialog.getByRole('img')).toBeVisible();
+  expect(requests[0]).toEqual({ transport: 'lan', expectedSessionId: sessionId });
+  await expect(dialog).not.toContainText('waiting for address');
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    await page.screenshot({ path: info.outputPath(`phone-ready-${width}.png`) });
+  }
+  await dialog.getByRole('button', { name: 'Use this computer only', exact: true }).click();
+  await expect(dialog.getByRole('img')).toHaveCount(0);
+  await expect(dialog.locator('.device-preview-details')).toContainText('This computer');
+  await expect(dialog.getByRole('button', { name: 'Start phone preview', exact: true })).toBeVisible();
 });
 
 test('starts phone sharing from Studio and records session-scoped iPhone and Android observations', async ({ page }, info) => {
@@ -230,6 +284,7 @@ test('reviews a legacy app upgrade, refuses stale edits, and applies the exact f
   const manifestPath = path.join(project.root, 'package.json'), original = await readFile(manifestPath, 'utf8');
   const navigation = await readFile(path.join(project.root, 'src/ui/index.tsx'), 'utf8');
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByText('Advanced app setup', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'App backend support' });
   await panel.getByRole('button', { name: 'Review upgrade', exact: true }).click();
   await expect(panel).toContainText('supabase-notes-v1'); await expect(panel).toContainText('12 file changes');

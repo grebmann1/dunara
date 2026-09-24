@@ -6,7 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { Engine } from './engine.js';
 import { Projects } from './projects.js';
 import { ProviderSettings } from './provider-settings.js';
-import { ASTRA_MODEL, IMAGE_MODEL, jobRequestSchema } from './media-job-contracts.js';
+import { ASTRA_MODEL, CHATGPT_IMAGE_MODEL, IMAGE_MODEL, jobRequestSchema } from './media-job-contracts.js';
 
 let dir: string, engine: Engine;
 const run = vi.fn();
@@ -24,6 +24,26 @@ const stage = async () => {
   const job = await engine.mediaJobs.request(project.id, { requestId: randomUUID(), expectedRevision: null, prompt: 'Test illustration', label: 'Test', operation: 'generate' });
   return { id: project.id, job };
 };
+it('uses ChatGPT without an API key, invalidates stale consent and retains explicit funding choices', async () => {
+  let revision = 'account-one';
+  const chatgptRun = vi.fn().mockRejectedValue(new Error('Usage limit reached'));
+  const connection = { status: () => ({ connected: true, available: true, revision }), run: chatgptRun };
+  const settings = new ProviderSettings(undefined, { home: path.join(dir, 'chatgpt-home'), createProvider: factory });
+  settings.useChatGPT(connection);
+  expect(settings.status(false)).toMatchObject({ configured: true, source: 'chatgpt', personalConfigured: false });
+  expect(settings.models()).toEqual([{ id: CHATGPT_IMAGE_MODEL, label: 'ChatGPT', maxCandidates: 1 }]);
+  const consent = settings.status(false).revision; revision = 'account-two';
+  expect(() => settings.assertRevision(consent)).toThrow('configuration changed');
+  settings.update({ action: 'replace', key: sentinel, expectedRevision: settings.status(false).revision }, false);
+  expect(settings.status(false).source).toBe('chatgpt');
+  await expect(settings.run(jobRequestSchema.parse({ model: CHATGPT_IMAGE_MODEL, requestId: randomUUID(), expectedRevision: null, prompt: 'Bonsai', label: 'Bonsai', operation: 'generate' }), [], new AbortController().signal)).rejects.toThrow('Usage limit');
+  expect(chatgptRun).toHaveBeenCalledTimes(1); expect(run).not.toHaveBeenCalled();
+  expect(settings.status(false).source).toBe('chatgpt');
+  settings.update({ action: 'personal', expectedRevision: settings.status(false).revision }, false);
+  const restored = new ProviderSettings(undefined, { home: path.join(dir, 'chatgpt-home') }); restored.useChatGPT(connection);
+  expect(restored.status(false)).toMatchObject({ configured: false, source: 'none' });
+  expect(() => settings.assertModel(CHATGPT_IMAGE_MODEL)).toThrow('unavailable');
+});
 it('supports no-key, environment, session override, disconnect, explicit restoration and restart without spending', async () => {
   const empty = new ProviderSettings(); expect(empty.status(false)).toMatchObject({ configured: false, source: 'none', environmentAvailable: false });
   expect(() => empty.update({ action: 'environment', expectedRevision: empty.status(false).revision }, false)).toThrow('No startup');

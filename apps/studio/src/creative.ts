@@ -22,10 +22,29 @@ export const creativeStyles = {
 export type CreativeStyle = keyof typeof creativeStyles;
 export type CreativeDraft = Pick<JobRequest, 'model' | 'operation' | 'referenceIds' | 'quality' | 'size' | 'count' | 'label'> & { prompt: string; purpose: CreativePurpose; style: CreativeStyle; useAppDirection: boolean };
 export type CreativeSeed = { key: number; referenceId: string; label: string; role: string };
-export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: StudioState): string {
+export function creativeSuggestionContext(draft: CreativeDraft, brief: Brief, state?: StudioState): string {
+  const design = state?.design && 'tokens' in state.design ? state.design : undefined;
+  return JSON.stringify({
+    app: state?.project.name,
+    purpose: brief.purpose.slice(0, 600), audience: brief.audience.slice(0, 400),
+    screens: state?.screens?.slice(0, 12).map(screen => ({ name: screen.name, route: screen.route })),
+    assetType: creativePurposes[draft.purpose].label,
+    composition: creativePurposes[draft.purpose].guidance,
+    visualStyle: creativeStyles[draft.style].detail,
+    operation: draft.operation, size: draft.size, currentIdea: draft.prompt.slice(0, 1600),
+    matchAppDirection: draft.useAppDirection,
+    artDirection: draft.useAppDirection ? {
+      mood: brief.mood.slice(0, 400), palette: brief.palette.slice(0, 400),
+      imageStyle: brief.imageStyle.slice(0, 400), avoid: brief.avoid.slice(0, 400),
+      colors: design ? { accent: design.tokens.accent, background: design.tokens.background, surface: design.tokens.surface, text: design.tokens.text } : undefined,
+    } : 'Propose a fresh visual direction; keep the app subject and selected visual style.',
+  });
+}
+export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: StudioState, appIdea = ''): string {
   const purpose = creativePurposes[draft.purpose];
   const direction: string[] = [];
   if (draft.useAppDirection) {
+    if (appIdea.trim()) direction.push(`Original app idea: ${appIdea.trim().slice(0, 2000)}`);
     if (state?.project.name) direction.push(`App: ${state.project.name}`);
     for (const [key, label] of [['purpose', 'Purpose'], ['audience', 'Audience'], ['mood', 'Mood'], ['palette', 'Palette'], ['imageStyle', 'Image style'], ['avoid', 'Avoid']] as const) if (brief[key].trim()) direction.push(`${label}: ${brief[key].trim()}`);
     if (state?.design && 'tokens' in state.design) { const tokens = state.design.tokens; direction.push(`Interface colors: accent ${tokens.accent}, background ${tokens.background}, surface ${tokens.surface}, text ${tokens.text}.`); }
@@ -36,6 +55,7 @@ export function creativePrompt(draft: CreativeDraft, brief: Brief, state?: Studi
     `Visual treatment:\n${creativeStyles[draft.style].detail}`,
     `Composition and delivery:\n${purpose.guidance}`,
     direction.length ? `App art direction:\n${direction.join('\n')}` : '',
+    draft.referenceIds.length ? 'Treat supplied references as the visual style source. Preserve their illustration technique, character design and level of realism. If a reference contains app UI, use only its art direction; do not copy its text, controls or phone frame into the artwork.' : '',
     'Resolve the composition, palette, materials and lighting as one coherent image. Avoid watermarks and accidental text. Return a finished image, not a written plan.',
   ].filter(Boolean).join('\n\n');
 }

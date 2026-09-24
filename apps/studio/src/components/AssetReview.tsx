@@ -1,3 +1,5 @@
+import { AssetPlacementPreview, type AssetPlacement, type AssetPlacementDraft } from './AssetPlacement';
+import type { StudioState } from '../api';
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { Asset } from '../../../../packages/core/src/media-contracts';
 import { AssetImage } from './AssetImage';
@@ -6,7 +8,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { FieldSelect } from './ui/field-select';
 
-export function AssetReview({ projectId, asset, assets, comparison, onCompare, busy, onApprove, onIcons, onRemix, onIntegrate, headingRef, children }: { projectId: string; asset: Asset; assets: Asset[]; comparison?: Asset; onCompare: (id: string) => void; busy: boolean; onApprove: () => void; onIcons: () => void; onRemix?: () => void; onIntegrate?: () => void; headingRef: RefObject<HTMLHeadingElement | null>; children: ReactNode }) {
+export function AssetReview({ projectId, asset, assets, state, comparison, onCompare, placement, onPlacementChange, busy, onApprove, onIcons, onRemix, onIntegrate, headingRef, children }: { projectId: string; asset: Asset; assets: Asset[]; state?: StudioState; comparison?: Asset; onCompare: (id: string) => void; placement: AssetPlacementDraft; onPlacementChange(value: AssetPlacementDraft): void; busy: boolean; onApprove: () => void; onIcons: () => void; onRemix?: () => void; onIntegrate?: (placement?: AssetPlacement) => void; headingRef: RefObject<HTMLHeadingElement | null>; children: ReactNode }) {
   const [copyState, setCopyState] = useState<{ id: string; message: string }>();
   const contextRef = useRef<HTMLTextAreaElement>(null);
   const contextDetails = useRef<HTMLDetailsElement>(null);
@@ -22,12 +24,13 @@ export function AssetReview({ projectId, asset, assets, comparison, onCompare, b
       <AssetImage projectId={projectId} asset={item} />
       <figcaption><strong>{item.label}</strong><span className="asset-status" data-state={item.status}>{item.status}</span><p>{item.width} × {item.height} · {Math.round(item.bytes / 1024)} KiB · {item.transparent ? 'Transparency' : 'Opaque'} · {item.role}</p><details><summary>Provenance & file details</summary><p>{item.provenance}{item.model ? ` / ${item.model}` : ''} · {item.rightsNote || 'No rights note supplied'}</p><code>{item.path}</code></details></figcaption>
     </figure>)}</div>
+    <AssetPlacementPreview projectId={projectId} asset={asset} state={state} value={placement} onChange={onPlacementChange} />
     {asset.parentId && <p>Derived from <strong>{assets.find(parent => parent.id === asset.parentId)?.label ?? asset.parentId}</strong>. Original unchanged; this version is {asset.status}.</p>}
     <Button variant="outline" onClick={onIcons}>Use selected image in App Icons</Button>
     {asset.status === 'approved' && <div className="integration-context"><Button variant="ghost" onClick={() => void copy()}>Copy integration context</Button><p role="status">{copyState?.id === asset.id ? copyState.message : ''}</p><details ref={contextDetails}><summary>Integration context</summary><Label htmlFor="asset-integration-context">Integration context (selectable fallback)</Label><Textarea id="asset-integration-context" ref={contextRef} readOnly rows={4} value={context} onFocus={event => event.currentTarget.select()} /></details></div>}
     {children}
     </div><footer className="asset-review-actions"><Button disabled={busy || asset.status === 'approved'} onClick={onApprove}>{asset.status === 'approved' ? 'Approved for integration' : 'Approve candidate'}</Button>
-    {asset.status === 'approved' && <><p>{onIntegrate ? 'Place this artwork with Assistant.' : 'Copy the asset context to your agent.'}</p>{onIntegrate && <Button disabled={busy} onClick={onIntegrate}>Use in my app</Button>}{onRemix && <Button disabled={busy} variant="outline" onClick={onRemix}>Create a variation</Button>}</>}
+    {asset.status === 'approved' && <><p>{onIntegrate ? 'Place this artwork with Assistant.' : 'Copy the asset context to your agent.'}</p>{onIntegrate && <Button disabled={busy} onClick={() => onIntegrate(placement.expanded || placement.requested ? placement : undefined)}>Use in my app</Button>}{onRemix && <Button disabled={busy} variant="outline" onClick={onRemix}>Create a variation</Button>}</>}
     </footer>
   </section>;
 }

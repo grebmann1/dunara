@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { Projects } from '../../core/src/projects.js';
 import { Engine } from '../../core/src/engine.js';
 import { credentialKeySchema } from '../../core/src/credentials.js';
+import { localPort } from '../../core/src/local-ports.js';
 import { serviceConfigSchema, secretProtection } from '../../core/src/service-config.js';
 import { startStudio } from '../../cli/src/studio-server.js';
 import { startDesktopMcp } from '../../mcp/src/socket.js';
@@ -46,7 +47,7 @@ process.on('message', (message: unknown) => {
         createHarness: fixtureUrl ? () => new PiHarness({ fixture: { baseUrl: fixtureUrl, model: 'fixture' } }) : undefined,
         createGateway: (binding, signal, context) => McpGateway.open(socketPath, binding, signal, context),
       });
-      studio = await startStudio(engine, fileURLToPath(new URL('../../../studio/', import.meta.url)), assistant);
+      studio = await startStudio(engine, fileURLToPath(new URL('../../../studio/', import.meta.url)), assistant, { port: await localPort(config.home, 'studio') });
       engine.diagnostics.on('change', () => { void origins().catch(() => {}); });
       send({ type: 'ready', origin: studio.origin, launchUrl: studio.launchUrl, socketPath: mcp.socketPath });
     })();

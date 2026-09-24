@@ -135,7 +135,7 @@ test('shared creative loop integrates a local image in real Expo and persists ic
 test('offline brief, import, rendered comparison, transforms and approval persist', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
   await page.goto(studio.launchUrl); await closeMediaDrawer(page); await page.getByRole('button', { name: 'Assets', exact: true }).click();
-  await expect(page.getByText('Offline assets ready · AI unavailable')).toBeVisible();
+  await expect(page.getByText('Asset library ready · Image generation needs setup')).toBeVisible();
   await closeMediaDrawer(page); await page.getByRole('button', { name: 'Generate', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Stage request for review' })).toBeDisabled();
   await closeMediaDrawer(page); await page.getByRole('button', { name: 'Art direction', exact: true }).click();
@@ -393,16 +393,16 @@ test('icon candidates render at small sizes and config application requires revi
   await openIconSettings(page); await page.getByRole('combobox', { name: 'Icon source', exact: true }).click();
   await page.getByRole('option', { name: `${(await engine.assets.list(projectId)).assets[1]!.label} · candidate`, exact: true }).click();
   await page.getByRole('button', { name: 'Approve candidate', exact: true }).click();
-  await expect(page.getByRole('button', { name: 'Review app.json changes' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Review icon changes' })).toBeEnabled();
   await expect(page.locator('.icon-previews img')).toHaveCount(10);
   for (const image of await page.locator('.icon-previews img').all()) await expect(image).toHaveJSProperty('naturalWidth', 1024);
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await expect(page.getByRole('heading', { name: 'Proposed app.json change' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Confirm and apply icon' })).toBeDisabled();
   expect((await engine.files.read(projectId, 'app.json')).content).toBe(originalConfig.content);
   await page.getByRole('button', { name: 'Cancel config proposal' }).click();
   await expect(page.getByRole('heading', { name: 'Proposed app.json change' })).toHaveCount(0);
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await expect(page.getByRole('heading', { name: 'Proposed app.json change' })).toBeVisible();
   await engine.files.write(projectId, [{ path: 'app.json', expectedRevision: originalConfig.revision, content: originalConfig.content + '\n' }]);
   await page.getByRole('checkbox', { name: 'I reviewed this exact config change and want to apply it.' }).check();
@@ -414,8 +414,8 @@ test('icon candidates render at small sizes and config application requires revi
   await expect(failedProposal.getByRole('button', { name: 'Confirm and apply icon' })).toBeDisabled();
   expect((await engine.files.read(projectId, 'app.json')).content).toBe(originalConfig.content + '\n');
   await failedProposal.getByRole('button', { name: 'Cancel config proposal' }).click();
-  await expect(page.getByRole('button', { name: 'Review app.json changes' })).toBeFocused();
-  await openIconSettings(page); await page.getByRole('button', { name: 'Review app.json changes' }).click();
+  await expect(page.getByRole('button', { name: 'Review icon changes' })).toBeFocused();
+  await openIconSettings(page); await page.getByRole('button', { name: 'Review icon changes' }).click();
   await expect(page.getByRole('checkbox', { name: 'I reviewed this exact config change and want to apply it.' })).not.toBeChecked();
   await page.getByRole('checkbox', { name: 'I reviewed this exact config change and want to apply it.' }).check();
   await page.getByRole('button', { name: 'Confirm and apply icon' }).click();

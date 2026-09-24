@@ -50,6 +50,7 @@ export async function assistantFixture() {
     async configure(page) {
       await page.getByRole('button', { name: 'Settings', exact: true }).click();
       const settings = page.getByRole('region', { name: 'OpenAI configuration' });
+      await settings.getByText('Use another image connection', { exact: true }).click();
       await settings.getByLabel('OpenAI API key', { exact: true }).fill(fixtureKey);
       await settings.getByRole('button', { name: 'Save for this Dunara session' }).click();
       await expect(settings.getByText('Configuration saved. Not verified; no provider request was made.')).toBeVisible();

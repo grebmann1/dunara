@@ -28,7 +28,7 @@
 
 .assistant-setup > summary:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 9px; }
 .assistant-conversation:has(.assistant-setup:focus-within) .assistant-jump { visibility: hidden; }
-.assistant-panel:has(.assistant-setup[open]) .assistant-composer textarea { min-height: 42px; max-height: 80px; }
+
 @media (max-width: 800px) {
   .assistant-setup-body button { min-height: 44px; }
 }

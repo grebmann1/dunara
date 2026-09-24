@@ -5,6 +5,10 @@
 .device-preview-app > div { display: grid; gap: 4px; min-width: 0; }
 .device-preview-app strong { overflow-wrap: anywhere; font-size: 17px; }
 .device-preview-app span, .device-preview-note { color: var(--muted-foreground); font-size: 13px; }
+.device-preview-account { display: grid; gap: 10px; padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--ui-muted); font-size: 14px; }
+.device-preview-account h3 { margin: 0; font-size: 15px; }
+.device-login-command { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.device-login-command code { flex: 1; min-width: 0; font-size: 12px; }
 .device-preview-qr { display: grid; place-items: center; justify-self: center; width: min(256px, 100%); aspect-ratio: 1; background: white; border-radius: 16px; border: 1px solid #e2e8f0; overflow: hidden; }
 .device-preview-qr canvas:not([hidden]) { display: block; width: 100%; height: auto; }
 .device-preview-details { margin: 0; display: grid; gap: 10px; padding: 16px; background: var(--ui-muted); border-radius: 12px; }

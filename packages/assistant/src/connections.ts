@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { AuthInteraction, OAuthAuth, OAuthCredential } from '@earendil-works/pi-ai';
 import type { ModelRuntime } from '@earendil-works/pi-coding-agent';
 import { BuilderError } from '../../core/src/contracts.js';
-import { EncryptedSettingsStore, credentialKeySchema, type SecretProtection } from '../../core/src/credentials.js';
+import { EncryptedSettingsStore, PrivateSettingsStore, credentialKeySchema, type SecretProtection } from '../../core/src/credentials.js';
 import { managedAiEndpoint, type ManagedAiConnection } from '../../core/src/managed-ai.js';
 
 import { assistantProviderSchema, assistantProviders, providerDefinition, type AssistantProvider } from './provider-contracts.js';
@@ -31,7 +31,11 @@ export class AssistantConnections {
   private flow?: Flow;
   private closed = false;
   private revision = randomUUID();
+  private preferences: PrivateSettingsStore<{ rememberNewConnections: boolean }>;
+  private rememberNewConnections = false;
   constructor(home: string, private protection: SecretProtection | undefined, private changed: () => void, private idle: () => void, private oauthOverride?: (provider: AssistantProvider) => OAuthAuth, private host: { managed?: ManagedAiConnection; chatgptLogin?: 'browser' | 'device_code' } = {}) {
+    this.preferences = new PrivateSettingsStore(home, 'assistant-connection-preferences', z.object({ rememberNewConnections: z.boolean() }).strict());
+    this.rememberNewConnections = this.preferences.load()?.rememberNewConnections ?? false;
     if (host.managed) managedAiEndpoint(host.managed.baseUrl);
     for (const { id } of assistantProviders) {
       if (id === 'managed') continue;
@@ -51,7 +55,7 @@ export class AssistantConnections {
     return this.modelChoices.get(id) ?? (id === 'openai' ? [{ id: 'gpt-6-astra', label: 'GPT-6 Astra' }] : []);
   }
   status(legacy: { key: string; source: string }) {
-    return { connectionRevision: this.revision, rememberAvailable: !!this.protection, signIn: this.flow?.view ?? null, connections: assistantProviders.filter(item => item.id !== 'managed' || this.host.managed).map(item => {
+    return { connectionRevision: this.revision, rememberAvailable: !!this.protection, rememberNewConnections: this.rememberNewConnections, signIn: this.flow?.view ?? null, connections: assistantProviders.filter(item => item.id !== 'managed' || this.host.managed).map(item => {
       if (item.id === 'managed') return { id: item.id, name: this.host.managed!.label, kind: item.kind, inherited: false, configured: true, source: 'managed', locked: false, baseUrl: '', models: this.models(item.id) };
       const record = this.records.get(item.id), useLegacy = item.id === 'openai' && !record && !this.locked.has(item.id);
       return { id: item.id, name: item.name, kind: item.kind, inherited: useLegacy && !!legacy.key, configured: !!record || useLegacy && !!legacy.key, source: record ? this.sources.get(item.id)! : useLegacy ? legacy.source : 'none', locked: this.locked.has(item.id), baseUrl: record?.baseUrl ?? item.baseUrl, models: this.models(item.id) };
@@ -76,11 +80,23 @@ export class AssistantConnections {
     const value = z.discriminatedUnion('action', [
       z.object({ action: z.literal('connect'), provider: assistantProviderSchema, expectedRevision: z.uuid(), key: credentialKeySchema, remember: z.boolean(), baseUrl: endpointSchema.optional() }).strict(),
       z.object({ action: z.literal('disconnect'), provider: assistantProviderSchema, expectedRevision: z.uuid() }).strict(),
+      z.object({ action: z.literal('remember'), provider: assistantProviderSchema, expectedRevision: z.uuid(), remember: z.boolean() }).strict(),
+      z.object({ action: z.literal('preference'), expectedRevision: z.uuid(), rememberNewConnections: z.boolean() }).strict(),
     ]).parse(input);
     this.checkRevision(value.expectedRevision);
-    if (value.provider === 'managed') throw failure('Included credits are managed by this host. Select a personal connection to change funding.');
     if (this.pending()) throw failure('Finish or cancel sign-in before changing connections.');
+    if (value.action === 'preference') {
+      if (value.rememberNewConnections && !this.protection) throw failure('Protected storage is unavailable. Connect for this session only.');
+      this.preferences.save({ rememberNewConnections: value.rememberNewConnections });
+      this.rememberNewConnections = value.rememberNewConnections; this.publish(); return;
+    }
+    if (value.provider === 'managed') throw failure('Included credits are managed by this host. Select a personal connection to change funding.');
     if (value.action === 'disconnect') { this.stores.get(value.provider)!.remove(); this.records.delete(value.provider); this.sources.delete(value.provider); this.locked.delete(value.provider); this.publish(); }
+    else if (value.action === 'remember') {
+      const record = this.records.get(value.provider);
+      if (!record) throw failure('Connect this provider before changing how it is remembered.');
+      this.save(value.provider, record, value.remember);
+    }
     else {
       if (providerDefinition(value.provider).kind !== 'api_key') throw failure('Use subscription sign-in for this provider.');
       this.save(value.provider, { credential: { type: 'api_key', key: value.key }, baseUrl: value.baseUrl }, value.remember);

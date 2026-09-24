@@ -9,6 +9,7 @@ import { Projects } from '../../packages/core/src/projects.js';
 import { runtimeEnvironment } from '../../packages/core/src/runtime-environment.js';
 import { startStudio } from '../../packages/cli/src/studio-server.js';
 import type { Project } from '../../packages/core/src/contracts.js';
+import { ProjectExports } from '../../packages/core/src/project-export.js';
 
 const run = promisify(execFile);
 let root: string, engine: Engine, studio: Awaited<ReturnType<typeof startStudio>>, project: Project;
@@ -25,6 +26,30 @@ test.beforeEach(async ({ page }) => {
   await page.goto(studio.launchUrl);
 });
 test.afterEach(async ({ page }) => { if (process.env.VISUAL) return; await page.close(); await studio.close(); await engine.close(); await rm(root, { recursive: true, force: true }); });
+
+test('reviews a downloaded project and imports a separate editable copy at every viewport', async ({ page }, info) => {
+  const archive = await new ProjectExports(engine.projects).download(project.id);
+  await page.getByRole('button', { name: '+ New app', exact: true }).click();
+  await page.getByRole('button', { name: 'Import an existing app', exact: true }).click();
+  const modal = page.getByRole('dialog', { name: 'Bring your app back', exact: true });
+  await modal.getByLabel('Project ZIP', { exact: true }).setInputFiles({ name: 'garden.zip', mimeType: 'application/zip', buffer: archive.bytes });
+  await expect(modal.getByRole('button', { name: 'Import reviewed project' })).toBeVisible();
+  await modal.getByLabel('App name', { exact: true }).fill('Restored garden');
+  await modal.getByLabel('New project folder', { exact: true }).fill('restored-garden');
+  for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
+    await page.setViewportSize({ width, height });
+    await modal.getByRole('button', { name: 'Import reviewed project' }).scrollIntoViewIfNeeded();
+    expect(await modal.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`import-review-${width}.png`) });
+  }
+  await modal.getByRole('button', { name: 'Import reviewed project' }).click();
+  await expect(modal).toHaveCount(0);
+  const projects = await engine.projects.list(), restored = projects.find(item => item.slug === 'restored-garden')!;
+  expect(projects).toHaveLength(2); expect(restored.id).not.toBe(project.id);
+  expect(await readFile(path.join(restored.root, 'app/index.tsx'))).toEqual(await readFile(path.join(project.root, 'app/index.tsx')));
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toHaveText(restored.name);
+  expect(engine.previews.status(restored.id).status).not.toBe('ready');
+});
 
 test('downloads the complete source ZIP from Studio at phone and desktop sizes and runs the extracted app independently', async ({ page }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));

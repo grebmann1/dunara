@@ -18,7 +18,7 @@ type Exclusion = { path: string; reason: string };
 type Stamp = { path: string; identity: string };
 const identity = (info: Awaited<ReturnType<typeof lstat>>) => `${info.dev}:${info.ino}:${info.mode}:${info.size}:${info.mtimeMs}:${info.ctimeMs}:${info.nlink}`;
 
-function exclusion(relative: string, directory: boolean, symlink: boolean) {
+export function projectFileExclusion(relative: string, directory: boolean, symlink: boolean) {
   const name = path.posix.basename(relative);
   if ((directory || symlink) && (generated.has(name) || /^(?:dist|build)[-_]/i.test(name)) || /\.(?:log|tsbuildinfo|apk|aab|ipa)$/i.test(name)) return 'Dependencies or generated output';
   if (/^\.env(?:\.|$)|^\.npmrc$|^\.yarnrc(?:\.yml)?$|^\.netrc$|^\.credential-/i.test(name) || /(?:^|[-_.])(?:credentials?|secrets?|private[-_.]?key)(?:[-_.]|$)/i.test(name) || /\.(?:pem|key|p8|p12|pfx|keystore|jks|mobileprovision)$/i.test(name) || /^(?:id_rsa|id_ed25519|local\.properties)$/i.test(name)) return 'Private or machine-specific configuration';
@@ -40,7 +40,7 @@ async function capture(root: string, maximum: typeof limits, signal?: AbortSigna
     const filename = path.join(root, relative);
     const info = await lstat(filename);
     if (relative) {
-      const reason = exclusion(relative, info.isDirectory(), info.isSymbolicLink());
+      const reason = projectFileExclusion(relative, info.isDirectory(), info.isSymbolicLink());
       if (reason) { excluded.push({ path: relative + (info.isDirectory() ? '/' : ''), reason }); return; }
       if (!safeName(relative)) throw new BuilderError('INVALID_PATH', `Rename this file to a portable project path before downloading: ${relative}`);
       const portableName = relative.normalize('NFC').toLowerCase();

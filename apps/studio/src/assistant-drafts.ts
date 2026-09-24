@@ -8,9 +8,9 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
   const { api, capabilities } = useStudioClient();
   const storageLocation = capabilities.credentialLocation === 'workspace' ? 'in this workspace' : 'on this computer';
   const key = keyFor(scope), encoded = JSON.stringify(value);
-  const entries = useRef(new Map<string, Entry>()), latest = useRef({ key, value, restore }), mounted = useRef(true);
+  const entries = useRef(new Map<string, Entry>()), latest = useRef({ key, value, restore, ready }), mounted = useRef(true);
   const [version, render] = useState(0), [notice, setNotice] = useState(''), [loading, setLoading] = useState(false), [preference, setPreference] = useState<boolean>();
-  latest.current = { key, value, restore };
+  latest.current = { key, value, restore, ready };
   const entry = entries.current.get(key);
   function notify(message: string, target = key) { if (mounted.current && latest.current.key === target) { setNotice(message); render(version => version + 1); } }
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -28,7 +28,8 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
       const changed = initial !== JSON.stringify(current);
       const localContent = !!current.text || !!current.attachments.inspector || !!current.attachments.images?.length;
       const conflict = !!snapshot.value && (changed || localContent) && JSON.stringify(snapshot.value) !== JSON.stringify(current);
-      entries.current.set(key, { snapshot, scope, tail: Promise.resolve(), saved: JSON.stringify(snapshot.value ?? current), failed: conflict, desired: JSON.stringify(snapshot.value ?? current) });
+      // A staged brief is not yet saved just because it preceded the first read.
+      entries.current.set(key, { snapshot, scope, tail: Promise.resolve(), saved: JSON.stringify(snapshot.value ?? (localContent ? null : current)), failed: conflict, desired: JSON.stringify(snapshot.value ?? current) });
       if (snapshot.value && !conflict) { latest.current.restore(snapshot.value); setNotice(snapshot.notice ?? 'Draft restored. Review before sending.'); }
       else setNotice(conflict ? 'A saved draft differs from your current text. Current text was kept. Turn remembering off to forget saved drafts before saving this text.' : snapshot.enabled ? 'Draft saving is on. Nothing is sent automatically.' : 'Drafts last for this session.');
       render(value => value + 1);
@@ -54,8 +55,8 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
     let flushed = false;
     const flush = () => { if (!flushed) { flushed = true; void save(target, JSON.parse(encoded) as DraftValue); } };
     const timer = setTimeout(flush, 250);
-    // Navigation flushes this scope; writes serialize behind its last acknowledged revision.
-    return () => { clearTimeout(timer); if (!mounted.current || latest.current.key !== key) flush(); };
+    // Closing or navigating flushes this scope; writes serialize behind its last acknowledged revision.
+    return () => { clearTimeout(timer); if (!mounted.current || latest.current.key !== key || !latest.current.ready) flush(); };
   }, [key, encoded, ready, version]);
   async function configure(enabled: boolean) {
     const target = entries.current.get(key); if (!target || preference !== undefined) return;
@@ -64,6 +65,7 @@ export function useAssistantDraftPersistence(scope: DraftScope, value: DraftValu
       await target.tail;
       if (entries.current.get(key) !== target) return;
       const snapshot = await api<DraftSnapshot>('/assistant/drafts/configure', { scope, update: { context: target.snapshot.context, preferenceRevision: target.snapshot.preferenceRevision, enabled } });
+      window.dispatchEvent(new Event('builder-draft-preference-changed'));
       if (entries.current.get(key) !== target) return;
       for (const item of entries.current.values()) {
         item.snapshot = { ...item.snapshot, enabled, preferenceRevision: snapshot.preferenceRevision, ...(!enabled ? { revision: null, value: null } : {}) }; item.failed = false;

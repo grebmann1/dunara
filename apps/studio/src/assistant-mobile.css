@@ -2,8 +2,14 @@
 .assistant-preferences-toggle[aria-expanded=true] svg { transform: rotate(90deg); }
 .assistant-panel[data-short-viewport] .assistant-header { padding-block: 6px; }
 .assistant-panel[data-short-viewport] .assistant-composer { padding-top: 4px; }
-.assistant-panel[data-short-viewport] .assistant-composer textarea { min-height: 48px; max-height: 64px; }
+.assistant-panel[data-short-viewport] .assistant-composer textarea { min-height: 72px; max-height: min(180px, 36dvh); }
 .assistant-panel[data-short-viewport] .assistant-setup-menu > summary { min-height: 32px; padding-block: 6px; }
 .assistant-panel[data-short-viewport] .assistant-history { min-height: 0; flex-shrink: 1; overflow-y: auto; }
 .assistant-panel[data-short-viewport] .assistant-preferences { max-height: 110px; overflow-y: auto; overscroll-behavior: contain; }
 .assistant-panel[data-short-viewport] .assistant-empty { padding: 8px 0; }
+
+.assistant-result { margin-top: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); }
+.assistant-result > strong { font-size: 13px; font-weight: 600; }
+.assistant-result p, .assistant-result > small { font-size: 12px; line-height: 1.6; color: var(--muted-foreground); margin: 6px 0 10px; }
+.assistant-result-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.assistant-result-actions button { font-size: 12px; }

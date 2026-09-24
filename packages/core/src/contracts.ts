@@ -33,6 +33,14 @@ export const routeSchema = z.string().max(200).refine(value => {
   if (!/^\/(?!\/)/.test(value) || /[\\%?#\s]/.test(value) || [...value].some(char => char.charCodeAt(0) < 32)) return false;
   return !value.split('/').some(part => part === '.' || part === '..');
 }, 'Use an absolute app path such as /progress, without query, fragment, traversal or encoding');
+export const captureRouteSchema = z.string().max(512).refine(value => {
+  const [pathname, query, extra] = value.split('?');
+  if (!routeSchema.safeParse(pathname).success || extra !== undefined) return false;
+  if (query === undefined) return true;
+  const fields = query.split('&');
+  return fields.length <= 6 && fields.every(field => /^[A-Za-z0-9_-]{1,60}=[A-Za-z0-9_.~-]{1,100}$/.test(field))
+    && new Set(fields.map(field => field.split('=')[0])).size === fields.length;
+}, 'Use an absolute app path, optionally with simple screen parameters such as /lessons?lesson=0. URLs, encoding and fragments are not supported.');
 export const viewportSchema = z.enum(['compact', 'large']);
 export const phoneCheck = z.enum(['opened', 'live_refresh', 'sign_in', 'saved_data', 'reopened', 'sign_out']);
 export const previewTransportInput = z.object({ transport: z.enum(['localhost', 'lan']), expectedSessionId: z.uuid().nullable() }).strict();

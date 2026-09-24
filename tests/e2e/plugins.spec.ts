@@ -68,7 +68,7 @@ for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
       if (width < 1100) await page.getByRole('button', { name: 'All plugins', exact: true }).click();
     }
     await page.getByRole('button', { name: 'Settings', exact: true }).click();
-    await expect(page.getByRole('heading', { name: 'Project details', exact: true })).toBeVisible();
+    await expect(page.getByText('Project details', { exact: true })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Dunara account', exact: true })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Supabase connection', exact: true })).toHaveCount(0);
     await expect(page.getByRole('heading', { name: 'Image generation', exact: true })).toBeVisible();

@@ -55,10 +55,10 @@ export class NativeBuildWorkspaces {
     });
   }
   /** Consume the reviewed immutable inputs, never the mutable npm/tooling directory. */
-  async deliverySource(projectId: string, id: string) {
+  async deliverySource(projectId: string, id: string, platform: 'ios' | 'android' = 'ios') {
     return this.writes.run(async () => {
       const record = await this.read(projectId, id);
-      if (record.state !== 'ready' || record.selection.profile !== 'preview' || record.selection.platform === 'android') throw new BuilderError('INVALID_INPUT', 'Prepare a successful iOS Preview workspace first.');
+      if (record.state !== 'ready' || record.selection.profile !== 'preview' || record.selection.platform !== 'all' && record.selection.platform !== platform) throw new BuilderError('INVALID_INPUT', `Prepare a successful ${platform === 'ios' ? 'iOS' : 'Android'} Preview workspace first.`);
       const root = path.join(await this.directory(projectId, id), 'input');
       const snapshot = await sourceSnapshot(root);
       if (!isDeepStrictEqual(snapshot.files, record.files)) throw new BuilderError('REVISION_CONFLICT', 'Prepared inputs changed. Review a new preparation.');

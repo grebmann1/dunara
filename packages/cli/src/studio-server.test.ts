@@ -53,6 +53,15 @@ it('reissues one-use desktop tickets without replacing the Engine or existing au
   expect((await redeem(second)).status).toBe(401);
   expect((await fetch(`${studio.origin}/api/projects`, { headers: { Authorization: `Bearer ${data.token}` } })).status).toBe(200);
 });
+it('reopens a requested origin while replacing runtime authentication', async () => {
+  const origin = studio.origin, { data } = await bootstrap();
+  await studio.close();
+  studio = await startStudio(engine, path.resolve('dist/studio'), undefined, { port: Number(new URL(origin).port) });
+  expect(studio.origin).toBe(origin);
+  expect((await fetch(`${origin}/api/projects`, { headers: { Authorization: `Bearer ${data.token}` } })).status).toBe(401);
+  const next = await bootstrap();
+  expect(next.response.ok).toBe(true); expect(next.data.token).not.toBe(data.token);
+});
 it('rejects invalid writes, unknown projects and untrusted preview execution over HTTP', async () => {
   const { data } = await bootstrap();
   const headers = { Origin: studio.origin, Authorization: `Bearer ${data.token}`, 'Content-Type': 'application/json' };
@@ -86,8 +95,6 @@ it('renders the built studio, creates a project, edits a preset, and never enabl
     expect(response.headers.get('content-type')).toBe('image/svg+xml');
     await page.getByRole('button', { name: /Create your first app/ }).click();
     await page.getByLabel('App name', { exact: true }).fill('Studio test');
-    await page.getByRole('button', { name: 'Continue', exact: true }).click();
-    await page.getByRole('radio', { name: /No backend for now/ }).check();
     await page.getByRole('button', { name: 'Create app', exact: true }).click();
     await page.getByRole('button', { name: 'Design', exact: true }).click();
     await page.getByRole('button', { name: 'clay', exact: true }).click();

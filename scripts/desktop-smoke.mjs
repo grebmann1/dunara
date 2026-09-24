@@ -17,12 +17,16 @@ import { assistantFixture, fixtureKey } from './assistant-desktop-fixture.mjs';
 
 if (process.platform !== 'darwin') throw new Error('Desktop smoke is macOS-only');
 const root = await mkdtemp(path.join(os.tmpdir(), 'builder-desktop-smoke-'));
+const packagedExecutable = process.env.DUNARA_DESKTOP_EXECUTABLE;
+const resources = packagedExecutable ? path.resolve(path.dirname(packagedExecutable), '../Resources') : undefined;
+const backendNode = resources ? path.join(resources, 'runtime/bin/node') : process.execPath;
+const cli = resources ? path.join(resources, 'app/dist/packages/cli/src/index.js') : path.resolve('dist/packages/cli/src/index.js');
 const evidence = path.resolve('.builder/desktop-review'); await mkdir(evidence, { recursive: true });
 const assistant = await assistantFixture();
 let app, client, transport, origin, previewUrl, socket;
 async function control(action) { return tool('studio_control', { expectedRevision: (await tool('studio_inspect', {})).revision, action }); }
 async function command(name, args = {}) {
-  const { stdout } = await promisify(execFile)(process.execPath, [path.resolve('dist/packages/cli/src/index.js'), '--desktop-connect', socket, 'call', name, '--input', JSON.stringify(args)], { env: desktopEnvironment(process.env), timeout: 20_000 });
+  const { stdout } = await promisify(execFile)(backendNode, [cli, '--desktop-connect', socket, 'call', name, '--input', JSON.stringify(args)], { env: desktopEnvironment(process.env), timeout: 20_000 });
   const result = JSON.parse(stdout); assert.ok(!result.isError); return result.structuredContent;
 }
 const errors = [];
@@ -40,12 +44,18 @@ async function connect() {
   await menu('Copy MCP socket path');
   socket = await app.evaluate(({ clipboard }) => { const value = clipboard.readText(); clipboard.clear(); return value; });
   client = new Client({ name: 'desktop-offline-smoke', version: '1' });
-  transport = new StdioClientTransport({ command: process.execPath, args: [path.resolve('dist/packages/cli/src/index.js'), '--desktop-connect', socket], env: desktopEnvironment(process.env), stderr: 'pipe' });
+  transport = new StdioClientTransport({ command: backendNode, args: [cli, '--desktop-connect', socket], env: desktopEnvironment(process.env), stderr: 'pipe' });
   transport.stderr?.on('data', () => {});
   await client.connect(transport); assert.deepEqual((await client.listTools()).tools.map(tool => tool.name).sort(), Object.keys(TOOL_POLICY).sort());
 }
 try {
-  app = await electron.launch({ executablePath: electronPath, args: [path.resolve('dist/packages/desktop/src/main.js'), '--node', process.execPath, '--workspace', path.join(root, 'apps'), '--home', path.join(root, 'home'), '--user-data', path.join(root, 'chromium'), '--trust-execution', '--assistant-offline-fixture', assistant.baseUrl], env: desktopEnvironment(process.env), chromiumSandbox: true, timeout: 30_000 });
+  if (resources) {
+    const env = { ...desktopEnvironment(process.env), PATH: `${path.join(resources, 'runtime/bin')}:/usr/bin:/bin:/usr/sbin:/sbin` };
+    assert.match((await promisify(execFile)(backendNode, ['--version'], { env })).stdout, /^v24\./);
+    assert.match((await promisify(execFile)(path.join(resources, 'runtime/bin/npm'), ['--version'], { env })).stdout, /^\d+\./);
+    assert.match((await promisify(execFile)(path.join(resources, 'runtime/bin/codex'), ['--version'], { env })).stdout, /0\.153\.4/);
+  }
+  app = await electron.launch({ executablePath: packagedExecutable ?? electronPath, args: [...(resources ? [path.join(resources, 'app/dist/packages/desktop/src/main.js')] : [path.resolve('dist/packages/desktop/src/main.js'), '--node', process.execPath]), '--workspace', path.join(root, 'apps'), '--home', path.join(root, 'home'), '--user-data', path.join(root, 'chromium'), '--trust-execution', '--assistant-offline-fixture', assistant.baseUrl], env: { ...desktopEnvironment(process.env), ...(packagedExecutable ? { PATH: '/usr/bin:/bin:/usr/sbin:/sbin' } : {}) }, chromiumSandbox: true, timeout: 30_000 });
   let page = await app.firstWindow(); page.on('pageerror', () => errors.push('pageerror'));
   await page.getByRole('heading', { name: 'Create your first app', exact: true }).waitFor();
   origin = new URL(page.url()).origin;
@@ -140,7 +150,7 @@ try {
   await page.getByRole('button', { name: 'Assets', exact: true }).click();
   await page.getByRole('button', { name: 'Launch Kit', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Desktop local draft', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Download manifest.json', exact: true }).click();
+  await page.getByRole('button', { name: 'Download Kit manifest', exact: true }).click();
   await expect.poll(async () => readFile(path.join(root, 'manifest.json')).then(bytes => createHash('sha256').update(bytes).digest('hex'), () => ''), { timeout: 20_000 }).toBe(createHash('sha256').update(expected).digest('hex'));
   // Exercise local canonical operations through explicit panel turns and real Pi dispatch.
   // Provider mutations are separately qualified by controlled backend integration fixtures.
@@ -241,8 +251,11 @@ try {
   assert.equal((await fetch(previewUrl)).status, 200); await menu('Show Studio');
   await page.evaluate(() => { globalThis.open('https://example.com'); const a = globalThis.document.createElement('a'); a.href = 'file:///etc/passwd'; globalThis.document.body.append(a); a.click(); a.remove(); });
   await expect.poll(() => app.windows().length).toBe(1); assert.equal(new URL(page.url()).origin, origin);
+  await page.evaluate(() => { globalThis.document.documentElement.dataset.restartCheck = 'old-document'; });
   await menu('Restart backend…');
-  await expect.poll(() => new URL(page.url()).origin, { timeout: 30_000 }).not.toBe(origin);
+  await expect(page.locator('html')).not.toHaveAttribute('data-restart-check', 'old-document', { timeout: 30_000 });
+  await expect(page.getByRole('combobox', { name: 'Project', exact: true })).toBeVisible();
+  assert.equal(new URL(page.url()).origin, origin);
   await client.close(); await transport.close(); await connect();
   origin = new URL(page.url()).origin;
   const restarted = await tool('project_inspect', { projectId }); assert.equal(restarted.preview.status, 'stopped'); assert.equal(restarted.captures.length, 0);

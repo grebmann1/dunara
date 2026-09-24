@@ -1,3 +1,4 @@
+import { ProjectImports } from '../../core/src/project-import.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -5,7 +6,7 @@ import path from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import { z } from 'zod';
 import { Engine } from '../../core/src/engine.js';
-import { BuilderError, createSchema, errorResult, routeSchema, viewportSchema } from '../../core/src/contracts.js';
+import { BuilderError, captureRouteSchema, createSchema, errorResult, routeSchema, viewportSchema } from '../../core/src/contracts.js';
 import { designUpdateSchema } from '../../core/src/design.js';
 import { presets, recipes } from '../../templates/src/catalog.js';
 import { approveAssetSchema, briefUpdateSchema, importSchema, jobIdSchema, MEDIA_BYTES, transformSchema } from '../../core/src/media-contracts.js';
@@ -35,7 +36,8 @@ async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
   catch { throw new BuilderError('INVALID_INPUT', 'Malformed JSON request. Check the form and submit again.'); }
 }
 function sendJson(res: ServerResponse, value: unknown, status = 200) { res.writeHead(status, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(value)); }
-export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService) {
+export async function startStudio(engine: Engine, assets: string, assistant?: AssistantService, options: { port?: number } = {}) {
+  const port = z.number().int().min(0).max(65535).parse(options.port ?? 0);
   // Async stores commit at the write. Legacy synchronous settings stage immutable records;
   // their acknowledgment barrier must finish before a successful transport response.
   async function json(res: ServerResponse, value: unknown, status = 200) {
@@ -47,6 +49,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
   });
   const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
   const projectExports = new ProjectExports(engine.projects);
+  const projectImports = new ProjectImports(engine.projects, () => engine.account.context().revision);
   await engine.plugins.ready;
   if (engine.plugins.isEnabled('builder.account')) await engine.account.restore();
   const drafts = new AssistantDrafts(engine.projects.home, assistant?.epoch ?? randomUUID(), () => engine.account.context());
@@ -144,6 +147,23 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (req.method === 'POST') return json(res, await engine.serviceRecipe.apply(id, await body(req, 8192)));
         return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
+      const androidRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/android-deliveries(?:\/(preflight|plan|build|install-plan|install|cancel|remove|apk)(?:\/([a-f0-9-]+))?)?$/);
+      if (androidRoute) {
+        engine.plugins.assertEnabled('builder.expo');
+        const id = z.uuid().parse(androidRoute[1]), action = androidRoute[2];
+        if (req.method === 'GET' && !action) return json(res, { deliveries: await engine.androidDeliveries.list(id) });
+        if (req.method === 'GET' && action === 'apk') { const value = await engine.androidDeliveries.artifact(id, z.uuid().parse(androidRoute[3])); res.writeHead(200, { 'Content-Type': 'application/vnd.android.package-archive', 'Content-Disposition': 'attachment; filename="preview.apk"' }); return res.end(value.bytes); }
+        if (req.method !== 'POST' || androidRoute[3]) return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const input = await body(req, 8192);
+        if (action === 'preflight') { await engine.projects.get(id); z.object({}).strict().parse(input); return json(res, await engine.androidDeliveries.preflight()); }
+        if (action === 'plan') return json(res, await engine.androidDeliveries.plan(id, input));
+        if (action === 'build') return json(res, await engine.androidDeliveries.build(id, input));
+        if (action === 'install-plan') return json(res, await engine.androidDeliveries.installPlan(id, input));
+        if (action === 'install') return json(res, await engine.androidDeliveries.install(id, input));
+        if (action === 'cancel') return json(res, await engine.androidDeliveries.cancel(id, input));
+        if (action === 'remove') return json(res, await engine.androidDeliveries.remove(id, input));
+        return json(res, { error: { message: 'Unknown Android action' } }, 404);
+      }
       const deliveryRoute = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/native-deliveries(?:\/(preflight|plan|build|install-plan|install|launch|cancel|remove))?$/);
       if (deliveryRoute) {
         const id = z.uuid().parse(deliveryRoute[1]), action = deliveryRoute[2];
@@ -233,6 +253,14 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           return json(res, action === 'types' ? await engine.backends.generateTypes(id, value.environment, value.expectedRevision) : await engine.backends.exportConfiguration(id, value.environment, value.expectedRevision));
         } catch (error) { return json(res, error instanceof BuilderError ? errorResult(error) : { error: publicError(error) }, error instanceof PlatformError ? error.status : error instanceof BuilderError && error.code === 'REVISION_CONFLICT' ? 409 : 400); }
       }
+      if (url.pathname === '/api/workspace-drafts/read' || url.pathname === '/api/workspace-drafts/save') {
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        const { projectId, update } = z.object({ projectId: z.uuid(), update: z.unknown().optional() }).strict().parse(await body(req, 256 * 1024));
+        const context = engine.account.context().revision;
+        await engine.projects.get(projectId);
+        if (accountChanging || context !== engine.account.context().revision) throw new BuilderError('REVISION_CONFLICT', 'Account changed while loading drafts.');
+        return json(res, url.pathname.endsWith('/save') ? drafts.saveWorkspace(projectId, update) : drafts.readWorkspace(projectId));
+      }
       if (url.pathname === '/api/assistant/status') {
         if (req.method !== 'GET') return json(res, { error: { message: 'Method not allowed' } }, 405);
         return json(res, assistant?.status() ?? { available: false, configured: false, busy: false, active: null });
@@ -311,13 +339,22 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         const initial = assistant.events(cursor.after, cursor.epoch);
         assistantStreams.add(res); res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'X-Accel-Buffering': 'no' });
         let after = initial.sequence; const epoch = initial.epoch;
-        const unsubscribe = assistant.subscribe(() => {
-          try { const packet = assistant.events(after, epoch); after = packet.sequence; if (!res.write(JSON.stringify(packet) + '\n')) res.end(); }
-          catch { res.end(); }
+        let ended = false, unsubscribe = () => {};
+        const cleanup = () => { if (ended) return; ended = true; clearTimeout(deadline); unsubscribe(); assistantStreams.delete(res); };
+        const end = () => { cleanup(); if (!res.writableEnded && !res.destroyed) res.end(); };
+        const write = (packet: ReturnType<AssistantService['events']>) => {
+          if (ended || res.writableEnded || res.destroyed) { cleanup(); return; }
+          try { if (!res.write(JSON.stringify(packet) + '\n')) end(); }
+          catch { end(); }
+        };
+        unsubscribe = assistant.subscribe(() => {
+          try { const packet = assistant.events(after, epoch); after = packet.sequence; write(packet); }
+          catch { end(); }
         });
-        const deadline = setTimeout(() => res.end(), 25_000);
-        res.once('close', () => { clearTimeout(deadline); unsubscribe(); assistantStreams.delete(res); });
-        if (!res.write(JSON.stringify(initial) + '\n')) res.end();
+        res.once('error', () => { cleanup(); res.destroy(); });
+        res.once('close', cleanup);
+        const deadline = setTimeout(end, 25_000);
+        write(initial);
         return;
       }
       if (url.pathname === '/api/studio') {
@@ -330,6 +367,16 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
         const result = await engine.mediaJobs.configureProvider(await body(req, 8192));
         engine.diagnostics.emit('change'); return json(res, result);
+      }
+      if (url.pathname === '/api/project-imports/review' || url.pathname === '/api/project-imports/apply') {
+        engine.plugins.assertEnabled('builder.expo');
+        if (req.method !== 'POST') return json(res, { error: { message: 'Method not allowed' } }, 405);
+        if (accountChanging) throw new BuilderError('REVISION_CONFLICT', 'Account change is in progress.');
+        if (url.pathname.endsWith('/review')) {
+          const value = z.object({ zip: z.string().max(44_739_244).regex(/^[A-Za-z0-9+/]+={0,2}$/) }).strict().parse(await body(req, 45_000_000));
+          return json(res, await projectImports.review(Buffer.from(value.zip, 'base64')));
+        }
+        const project = await projectImports.apply(await body(req, 8192)); engine.diagnostics.emit('change'); return json(res, project);
       }
       if (url.pathname === '/api/projects' && req.method === 'GET') return json(res, { ...await engine.projects.catalog(), recipes, presets, trusted: engine.previews.trusted });
       if (url.pathname === '/api/projects' && req.method === 'POST') { const result = await engine.actions.value('project_create', createSchema.parse(await body(req))); engine.diagnostics.emit('change'); return json(res, result?.project); }
@@ -374,7 +421,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         }
         return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
-      const media = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/media(?:\/(import|brief|approve|transform|job-request|job-approve|job-cancel|images|icon-check|icon-prepare|icon-preview|icon-apply)(?:\/([a-f0-9-]+))?)?$/);
+      const media = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/media(?:\/(import|screen-reference|brief|approve|transform|job-request|job-approve|job-cancel|images|icon-check|icon-prepare|icon-preview|icon-apply)(?:\/([a-f0-9-]+))?)?$/);
       if (media) {
         const id = z.uuid().parse(media[1]); await engine.projects.get(id);
         const action = media[2];
@@ -399,7 +446,18 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           const result = await engine.assets.import(id, input, Buffer.concat(chunks)); engine.diagnostics.emit('change', id); return json(res, result);
         }
         const input = await body(req); let result: unknown;
-        if (action === 'brief') { const value = briefUpdateSchema.parse(input); result = await engine.actions.value('media_brief', { projectId: id, input: value }); }
+        if (action === 'screen-reference') {
+          const value = z.object({ captureId: z.uuid(), expectedRevision: z.string().regex(/^[a-f0-9]{64}$/).nullable() }).strict().parse(input);
+          const capture = (await engine.boardCaptures.list(id)).find(item => item.id === value.captureId && !item.stale);
+          if (!capture) throw new BuilderError('REVISION_CONFLICT', 'Capture this screen again before using it as a visual reference.');
+          const previous = await engine.assets.list(id);
+          const imported = await engine.assets.import(id, { expectedRevision: value.expectedRevision, label: `Screen reference ${capture.route}`.slice(0, 100), role: 'other', mediaType: 'image/png' }, await engine.boardCaptures.get(id, capture.id));
+          const asset = imported.assets.find(item => !previous.assets.some(before => before.id === item.id));
+          if (!asset) throw new BuilderError('INVALID_INPUT', 'Screen reference was not imported.');
+          await engine.assets.approve(id, asset.id, imported.revision);
+          result = { assetId: asset.id };
+        }
+        else if (action === 'brief') { const value = briefUpdateSchema.parse(input); result = await engine.actions.value('media_brief', { projectId: id, input: value }); }
         else if (action === 'approve') { const value = approveAssetSchema.parse(input); result = await engine.actions.value('media_approve', { projectId: id, input: value }); }
         else if (action === 'transform') result = await engine.actions.value('media_transform', { projectId: id, input: transformSchema.parse(input) });
         else if (action === 'icon-check') result = await engine.actions.value('icon_check', { projectId: id, input: iconCheckSchema.parse(input) });
@@ -412,7 +470,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         else return json(res, { error: { message: 'Not found' } }, 404);
         engine.diagnostics.emit('change', id); return json(res, result);
       }
-      const match = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)(?:\/(design|start|stop|transport|phone-test|capture|artifacts|board-captures)(?:\/([a-f0-9-]+))?)?$/);
+      const match = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)(?:\/(design|start|stop|transport|expo-account|phone-test|capture|artifacts|board-captures)(?:\/([a-f0-9-]+))?)?$/);
       if (!match) return json(res, { error: { message: 'Not found' } }, 404);
       const id = z.uuid().parse(match[1]); await engine.projects.get(id);
       const action = match[2];
@@ -426,11 +484,12 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
       const input = await body(req);
       const controller = new AbortController(); res.on('close', () => { if (!res.writableEnded) controller.abort(); });
       if (action === 'design') { const design = await engine.designs.apply(id, designUpdateSchema.parse(input)); engine.diagnostics.emit('change', id); return json(res, design); }
+      if (action === 'expo-account') { z.object({}).strict().parse(input); return json(res, await engine.previews.expoAccount?.(id) ?? { state: 'unknown', message: 'Expo sign-in is checked in Dunara Desktop.' }); }
       if (action === 'transport') return json(res, await engine.setPreviewTransport(id, input, controller.signal));
       if (action === 'phone-test') return json(res, await engine.projects.mutations.run(() => engine.previews.recordPhoneTest(id, input)));
       if (action === 'start') { z.object({}).strict().parse(input); return json(res, await engine.previews.start(id, controller.signal)); }
       if (action === 'stop') { z.object({}).strict().parse(input); await engine.previews.stop(id); return json(res, engine.previews.status(id)); }
-      if (action === 'capture') { const value = z.object({ route: routeSchema, viewport: viewportSchema }).strict().parse(input); const result = await engine.captures.capture(id, value.route, value.viewport, controller.signal); engine.diagnostics.emit('change', id); return json(res, result.meta); }
+      if (action === 'capture') { const value = z.object({ route: captureRouteSchema, viewport: viewportSchema }).strict().parse(input); const result = await engine.captures.capture(id, value.route, value.viewport, controller.signal); engine.diagnostics.emit('change', id); return json(res, result.meta); }
       if (action === 'board-captures') { const value = z.object({ route: routeSchema }).strict().parse(input); const result = await engine.boardCaptures.capture(id, value.route, controller.signal); engine.diagnostics.emit('change', id); return json(res, result); }
       return json(res, { error: { message: 'Not found' } }, 404);
     }
@@ -453,7 +512,11 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
     if (!dirty) return; dirty = false;
     for (const socket of wss.clients) { if (socket.bufferedAmount > 64_000) socket.terminate(); else if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'reconcile' })); }
   }, 250);
-  await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+  try {
+    await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(port, '127.0.0.1', resolve); });
+  } catch (error) {
+    clearInterval(interval); engine.diagnostics.off('change', changed); wss.close(); throw error;
+  }
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Studio did not bind');
   host = `127.0.0.1:${address.port}`; origin = `http://${host}`;
   return { origin, launchUrl: issueLaunchUrl(), issueLaunchUrl, async close() {

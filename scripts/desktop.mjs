@@ -7,9 +7,9 @@ import { parseArgs } from 'node:util';
 const root = fileURLToPath(new URL('../', import.meta.url));
 const { values } = parseArgs({ options: { workspace: { type: 'string' }, home: { type: 'string' }, 'builder-env-file': { type: 'string' }, 'user-data': { type: 'string' }, 'trust-execution': { type: 'boolean', default: false }, help: { type: 'boolean', default: false } } });
 if (values.help) {
-  console.log('pnpm desktop [--workspace <apps>] [--home <state>] [--user-data <chromium-state>] [--builder-env-file <file>] [--trust-execution]\nmacOS local prototype; run pnpm build first. Defaults are isolated under .builder/desktop. Execution is disabled unless explicitly trusted. No signing, installation or auto-updates.');
+  console.log('pnpm desktop [--workspace <apps>] [--home <state>] [--user-data <chromium-state>] [--builder-env-file <file>] [--trust-execution]\nmacOS source launch; run pnpm build first. Defaults are isolated under .builder/desktop. Execution is disabled unless explicitly trusted. Use pnpm desktop:package for an installable candidate; signed release qualification is separate.');
 } else {
-  if (process.platform !== 'darwin') throw new Error('The desktop prototype is currently macOS-only');
+  if (process.platform !== 'darwin') throw new Error('Desktop is currently macOS-only');
   if (Number(process.versions.node.split('.')[0]) < 24) throw new Error('Node 24 or newer is required');
   await access(path.join(root, 'dist/packages/desktop/src/main.js'));
   await access(path.join(root, 'dist/studio/index.html'));

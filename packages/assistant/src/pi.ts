@@ -6,9 +6,11 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { ASSISTANT_LIMITS, type HarnessCallbacks, type HarnessInput, type RunHarness } from './contracts.js';
 import { ManagedAiUnavailable } from '../../core/src/managed-ai.js';
+import { AssistantModelUnavailable } from './provider-failure.js';
+import { AssistantProviderFailure, recoveryKinds } from './recovery.js';
 
 const messageSchema = z.discriminatedUnion('type', [
-  z.object({ type: z.literal('ready') }).strict(), z.object({ type: z.literal('done') }).strict(), z.object({ type: z.literal('failed'), notice: z.string().max(300).optional() }).strict(),
+  z.object({ type: z.literal('ready') }).strict(), z.object({ type: z.literal('done') }).strict(), z.object({ type: z.literal('failed'), notice: z.string().max(300).optional(), modelUnavailable: z.literal(true).optional(), recovery: z.enum(recoveryKinds).optional() }).strict(),
   z.object({ type: z.literal('text'), text: z.string().max(8192) }).strict(),
   z.object({ type: z.literal('image-accepted') }).strict(),
   z.object({ type: z.literal('tool'), id: z.uuid(), name: z.string().max(160), args: z.record(z.string(), z.unknown()) }).strict(),
@@ -61,7 +63,11 @@ export class PiHarness implements RunHarness {
           } else if (message.type === 'text') {
             try { callbacks.text(message.text); } catch { failed(); void this.close(); }
           } else if (message.type === 'done') { clearTimeout(timer); resolve(); }
-          else if (message.type === 'failed') { if (input.provider === 'managed' && message.notice) { clearTimeout(timer); reject(new ManagedAiUnavailable(message.notice)); } else failed(); }
+          else if (message.type === 'failed') {
+            if (input.provider === 'managed' && message.notice) { clearTimeout(timer); reject(new ManagedAiUnavailable(message.notice)); }
+            else if (message.modelUnavailable) { clearTimeout(timer); reject(new AssistantModelUnavailable()); }
+            else { clearTimeout(timer); reject(new AssistantProviderFailure(message.recovery ?? 'unknown')); }
+          }
           else if (message.type === 'tool') {
             void (async () => {
               try {

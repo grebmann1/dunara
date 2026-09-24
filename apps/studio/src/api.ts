@@ -2,7 +2,7 @@ import type { Engine } from '../../../packages/core/src/engine';
 import type { Diagnostics } from '../../../packages/core/src/diagnostics';
 import type { AssistantService } from '../../../packages/assistant/src/service';
 export type AssistantPacket = ReturnType<AssistantService['events']>;
-export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'credits' | 'epoch' | 'sourceChanges' | 'accountContext' | 'provider' | 'providerId' | 'connections' | 'connectionRevision' | 'rememberAvailable' | 'signIn' | 'model' | 'models' | 'reasoningEffort' | 'limits' | 'source' | 'environmentAvailable'>>;
+export type AssistantStatus = Pick<AssistantPacket['status'], 'available' | 'configured' | 'busy' | 'active'> & Partial<Pick<AssistantPacket['status'], 'imageSuggestions' | 'credits' | 'epoch' | 'sourceChanges' | 'accountContext' | 'provider' | 'providerId' | 'connections' | 'connectionRevision' | 'rememberAvailable' | 'rememberNewConnections' | 'signIn' | 'model' | 'models' | 'reasoningEffort' | 'limits' | 'source' | 'environmentAvailable'>>;
 export type AssistantConversation = Awaited<ReturnType<AssistantService['conversation']>>;
 export type AssistantConversationList = Awaited<ReturnType<AssistantService['conversations']>>;
 export type StudioSession = Awaited<ReturnType<Engine['studio']['snapshot']>>;
@@ -132,6 +132,11 @@ async function mediaImage(projectId: string, id: string) {
   if (!response.ok) throw new Error('Asset image unavailable. Refresh the library or repair the local file.');
   return URL.createObjectURL(await response.blob());
 }
+async function androidApk(projectId: string, id: string) {
+  const response = await request(`/api/projects/${projectId}/android-deliveries/apk/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+  if (!response.ok) throw new Error('APK download failed. Refresh the build status and try again.');
+  return response.blob();
+}
 async function uploadMedia(projectId: string, metadata: import('../../../packages/core/src/media-contracts').ImportInput, file: File): Promise<import('../../../packages/core/src/media-contracts').MediaLibrary> {
   return result(await request(`/api/projects/${projectId}/media/import`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': metadata.mediaType, 'X-Builder-Media': encodeURIComponent(JSON.stringify(metadata)) }, body: file }));
 }
@@ -148,7 +153,7 @@ function subscribe(onChange: () => void, onStatus: (connected: boolean) => void)
   if (!controller.signal.aborted) connect(); return stop;
 }
 
-  return { [studioClientBrand]: true as const, capabilities, origin, authenticate, api, boardImage, streamAssistant, image, kitDownload, projectDownload, mediaImage, uploadMedia, subscribe,
+  return { [studioClientBrand]: true as const, capabilities, origin, authenticate, api, boardImage, streamAssistant, image, kitDownload, projectDownload, mediaImage, uploadMedia, androidApk, subscribe,
     dispose() { compatible = false; token = ''; controller.abort(); },
   };
 }
