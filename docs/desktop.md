@@ -14,6 +14,8 @@ pnpm desktop
 
 The pinned Electron dependency downloads its binary during installation. If install scripts were previously disabled, run `pnpm rebuild electron`. Desktop currently runs only on macOS. `pnpm desktop:package` creates a local DMG/ZIP candidate with its own Node, npm, capture browser and image runtime. Installed builds expose a manual update check; creating artifacts does not publish or qualify a signed release.
 
+For a nondefault Android SDK or JDK, launch Dunara with `ANDROID_HOME` (or `ANDROID_SDK_ROOT`) and `JAVA_HOME` set to their absolute installation paths. The source launcher and desktop backend preserve these three settings; arbitrary Java/Gradle injection options and provider credentials are not inherited. A Finder launch uses the standard SDK location and system Java unless those variables are supplied by the launch environment.
+
 Default generated-app workspace, Dunara registry and Chromium profile locations are separate directories under `.builder/desktop/`. Explicit `--workspace`, `--home` and `--user-data` overrides are supported. Do not point it at directories already owned by a running CLI/Studio. Existing MCP configuration is not changed automatically.
 
 Execution is off by default. After reviewing the generated code and dependencies:
