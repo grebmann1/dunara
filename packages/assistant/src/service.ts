@@ -207,7 +207,9 @@ export class AssistantService {
     return (await (await this.store()).list(projectId))
       .map(record => this.active?.binding.conversationId === record.id ? this.active.conversation : record)
       .filter(record => !search || [record.title, ...record.turns.flatMap(turn => [turn.prompt, turn.response, ...(turn.tasks?.map(task => task.label) ?? [])])].some(text => text.toLocaleLowerCase().includes(search)))
-      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null, task: turns[0]?.task ?? null }));
+      // Older Studio versions allowed ordinary chat after an image suggestion.
+      // Only suggestion-only conversations belong outside the main chat list.
+      .map(({ id, title, projectId: scope, createdAt, updatedAt, turns }) => ({ id, title, projectId: scope, createdAt, updatedAt, turns: turns.length, state: turns.at(-1)?.state ?? null, task: turns.length && turns.every(turn => turn.task === 'image-prompt') ? 'image-prompt' as const : null }));
   }
   async conversation(id: string) {
     z.uuid().parse(id);

@@ -150,7 +150,7 @@ try {
   await page.getByRole('button', { name: 'Assets', exact: true }).click();
   await page.getByRole('button', { name: 'Launch Kit', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Desktop local draft', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Download manifest.json', exact: true }).click();
+  await page.getByRole('button', { name: 'Download Kit manifest', exact: true }).click();
   await expect.poll(async () => readFile(path.join(root, 'manifest.json')).then(bytes => createHash('sha256').update(bytes).digest('hex'), () => ''), { timeout: 20_000 }).toBe(createHash('sha256').update(expected).digest('hex'));
   // Exercise local canonical operations through explicit panel turns and real Pi dispatch.
   // Provider mutations are separately qualified by controlled backend integration fixtures.

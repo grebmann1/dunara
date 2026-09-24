@@ -56,6 +56,9 @@ await build({ targets: Platform.MAC.createTarget(['dmg', 'zip']), publish: 'neve
   // are required at runtime, so copy the verified distribution before signing.
   afterPack: async context => {
     const resources = path.join(context.appOutDir, 'Dunara.app/Contents/Resources');
+    // Template lockfiles and dotfiles are application data, but the packager's
+    // default app filters omit them. Restore the curated compiled tree intact.
+    await cp(path.join(app, 'dist'), path.join(resources, 'app/dist'), { recursive: true });
     const destination = path.join(resources, 'runtime/lib/node_modules/npm');
     await mkdir(path.dirname(destination), { recursive: true });
     await cp(path.join(stage, nodeName, 'lib/node_modules/npm'), destination, { recursive: true });

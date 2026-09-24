@@ -113,7 +113,8 @@ test('assistant stays at the page edge across navigation, other panels and compa
   await page.evaluate(() => getSelection()?.removeAllRanges());
   await expect(page.locator('.dock-drop-overlay')).toHaveCount(0);
   expect((await panel.boundingBox())!.x).toBeCloseTo(edge.x, 0);
-  expect((await panel.locator('.assistant-input-box').boundingBox())!.height).toBeLessThanOrEqual(130);
+  expect((await input.boundingBox())!.height).toBeGreaterThanOrEqual(88);
+  expect((await panel.locator('.assistant-input-box').boundingBox())!.height).toBeLessThanOrEqual(shell.height * .36);
   await page.screenshot({ path: info.outputPath('assistant-desktop.png') });
   for (const destination of ['Assets', 'App Icons', 'Activity']) {
     await page.getByRole('button', { name: destination, exact: true }).click();

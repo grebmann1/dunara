@@ -1,4 +1,4 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
@@ -30,9 +30,10 @@ test.afterEach(async ({ page }) => {
   await page.close(); await studio?.close(); await engine?.close(); preview?.closeAllConnections();
   await new Promise<void>(resolve => preview?.close(() => resolve())); await rm(root, { recursive: true, force: true });
 });
-async function captureLayouts(page: Page, label: string) {
+async function captureLayouts(page: Page, label: string, target: Locator) {
   for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     await page.setViewportSize({ width, height });
+    await target.scrollIntoViewIfNeeded();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`${label}-${width}.png`) });
   }
@@ -45,7 +46,7 @@ test('checks both screen sizes, invalidates changed source, and exposes Android 
   await evidence.getByRole('button', { name: 'Check web screens' }).click();
   await expect(evidence).toContainText('Web rendering checked', { timeout: 30_000 });
   await expect(evidence).toContainText('2/2 current screen captures');
-  await evidence.scrollIntoViewIfNeeded(); await captureLayouts(page, 'verification');
+  await captureLayouts(page, 'verification', evidence);
   const source = await engine.files.read(projectId, 'app/index.tsx');
   await engine.files.write(projectId, [{ path: source.path, expectedRevision: source.revision, content: source.content + '\n// new revision\n' }]);
   await expect(evidence).toContainText('Web checks incomplete');
@@ -56,7 +57,7 @@ test('checks both screen sizes, invalidates changed source, and exposes Android 
   await page.route('**/android-deliveries/preflight', route => route.fulfill({ json: { available: false, devices: [], issues: ['Install Android Studio and configure an Android SDK before building.'] } }));
   await android.getByRole('button', { name: 'Check Android setup' }).click();
   await expect(android).toContainText('Install Android Studio');
-  await android.scrollIntoViewIfNeeded(); await captureLayouts(page, 'android-setup');
+  await captureLayouts(page, 'android-setup', android);
   await expect(android.getByRole('button', { name: 'Build reviewed APK' })).toHaveCount(0);
 });
 test('imports an approved screen reference and previews placement without editing app source', async ({ page }) => {
@@ -69,7 +70,7 @@ test('imports an approved screen reference and previews placement without editin
   await expect(form.getByRole('region', { name: 'Visual references' })).toContainText('1 selected');
   const library = await engine.assets.list(projectId), reference = library.assets[0]!;
   expect(reference.status).toBe('approved'); expect(reference.label).toContain('Screen reference');
-  await form.getByRole('region', { name: 'Visual references' }).scrollIntoViewIfNeeded(); await captureLayouts(page, 'screen-reference');
+  await captureLayouts(page, 'screen-reference', form.getByRole('region', { name: 'Visual references' }));
   await closeMediaDrawer(page);
   await page.getByRole('button', { name: reference.label, exact: true }).click();
   const placement = page.locator('.asset-placement').filter({ visible: true });
@@ -87,7 +88,10 @@ test('imports an approved screen reference and previews placement without editin
     await expect(placement.locator('.asset-placement-screen')).toBeVisible();
     await expect(placement.locator('.asset-placement-art img')).toBeVisible();
     await expect.poll(() => placement.locator('img').evaluateAll(images => images.every(image => (image as HTMLImageElement).complete && (image as HTMLImageElement).naturalWidth > 0))).toBe(true);
+    await expect(page.locator('.asset-review:visible').getByText('Loading image…', { exact: true })).toHaveCount(0);
     await placement.locator('.asset-placement-phone').scrollIntoViewIfNeeded();
+    await expect(placement.locator('.asset-placement-phone')).toBeInViewport({ ratio: width < 1000 ? .95 : .5 });
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     await page.screenshot({ path: test.info().outputPath(`placement-${width}.png`) });
   }
   expect((await engine.files.read(projectId, source.path)).revision).toBe(source.revision);

@@ -52,6 +52,21 @@ it('rejects image suggestions without an app, with Build mode or with attachment
   expect(harness.run).not.toHaveBeenCalled();
 });
 
+it('keeps older mixed suggestion and build conversations in normal chat history after restart', async () => {
+  const { service, home } = await setup();
+  const projectId = randomUUID(), conversation = await service.createConversation(projectId);
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), mode: 'plan', task: 'image-prompt', prompt: 'Suggest a garden illustration.' });
+  await finished(service);
+  expect(await service.conversations(projectId)).toMatchObject([{ id: conversation.id, task: 'image-prompt', turns: 1 }]);
+  await service.start({ conversationId: conversation.id, runId: randomUUID(), mode: 'build', prompt: 'Use the approved artwork in my app.' });
+  await finished(service);
+  expect(await service.conversations(projectId)).toMatchObject([{ id: conversation.id, task: null, turns: 2 }]);
+  await service.close();
+  const restored = new AssistantService({ home }); services.push(restored);
+  expect(await restored.conversations(projectId)).toMatchObject([{ id: conversation.id, task: null, turns: 2 }]);
+  expect((await restored.conversation(conversation.id)).turns[1]?.prompt).toBe('Use the approved artwork in my app.');
+});
+
 it('persists an actionable model-access failure without raw provider text or automatic retry', async () => {
   const error = new AssistantModelUnavailable(); error.message = 'PRIVATE-PROVIDER-DETAIL';
   const { service, input, harness } = await setup(async () => { throw error; });
