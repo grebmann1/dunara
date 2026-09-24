@@ -62,6 +62,15 @@ test('creates a library candidate with the connected ChatGPT account and no imag
     expect(engine.mediaJobs.providerStatus()).toMatchObject({ configured: true, source: 'chatgpt', personalConfigured: false });
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.screenshot({ path: info.outputPath('chatgpt-result.png') });
+    await closeMediaDrawer(page); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+    const images = page.getByRole('region', { name: 'OpenAI configuration', exact: true });
+    await expect(images.getByRole('button', { name: 'ChatGPT selected' })).toBeDisabled();
+    await expect(images).toContainText('No API key needed.');
+    for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+      await page.setViewportSize({ width, height }); await images.scrollIntoViewIfNeeded();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: info.outputPath(`chatgpt-settings-${width}.png`) });
+    }
   } finally {
     await page.close(); manager.close(); await assistant?.close(); await studio?.close(); await engine.close(); await rm(root, { recursive: true, force: true });
   }
