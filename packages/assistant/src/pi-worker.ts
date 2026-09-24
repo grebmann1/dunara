@@ -3,6 +3,7 @@ import { createAssistantRuntime } from './provider-runtime.js';
 import { guidance } from '../../catalog/src/index.js';
 import { setupGuidance } from './setup.js';
 import { AssistantModelUnavailable, isModelUnavailable } from './provider-failure.js';
+import { AssistantProviderFailure, recoveryKind } from './recovery.js';
 import { randomUUID } from 'node:crypto';
 import { lstat, realpath, rm } from 'node:fs/promises';
 import path from 'node:path';
@@ -55,7 +56,7 @@ process.on('message', (raw: unknown) => {
     if (envelope.type !== 'start' || started) throw new Error('Invalid worker message');
     started = true;
     const value = z.object({ type: z.literal('start'), input: inputSchema, fixture: z.object({ baseUrl: z.string().url(), model: z.string().max(100), reasoning: z.boolean().optional() }).strict().optional() }).strict().parse(raw);
-    void run(value.input, value.fixture).then(() => send({ type: 'done' })).catch(error => send({ type: 'failed', ...(managedFailure ? { notice: managedFailure } : {}), ...(error instanceof AssistantModelUnavailable ? { modelUnavailable: true } : {}) }));
+    void run(value.input, value.fixture).then(() => send({ type: 'done' })).catch(error => send({ type: 'failed', recovery: recoveryKind(error), ...(managedFailure ? { notice: managedFailure } : {}), ...(error instanceof AssistantModelUnavailable ? { modelUnavailable: true } : {}) }));
   } catch { send({ type: 'failed' }); void close(); }
 });
 async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: string; model: string; reasoning?: boolean }) {
@@ -134,6 +135,6 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
   const last = session.messages.at(-1);
   if (last?.role === 'assistant' && (last.stopReason === 'error' || last.stopReason === 'aborted')) {
     if (last.stopReason === 'error' && isModelUnavailable(last.errorMessage ?? '')) throw new AssistantModelUnavailable();
-    throw new Error('Assistant turn did not complete');
+    throw new AssistantProviderFailure(recoveryKind(last.errorMessage ?? ''));
   }
 }

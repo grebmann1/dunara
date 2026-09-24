@@ -1,11 +1,16 @@
-export type RecoveryKind = 'sign-in' | 'usage' | 'network' | 'runtime' | 'unknown';
+export const recoveryKinds = ['sign-in', 'usage', 'network', 'runtime', 'unknown'] as const;
+export type RecoveryKind = typeof recoveryKinds[number];
+export class AssistantProviderFailure extends Error {
+  constructor(readonly recovery: RecoveryKind) { super(recoveryMessage(recovery, 'The assistant')); this.name = 'AssistantProviderFailure'; }
+}
 /** Classify privately; never interpolate provider text into user-facing errors. */
 export function recoveryKind(error: unknown): RecoveryKind {
+  if (error instanceof Error && 'recovery' in error && recoveryKinds.includes(error.recovery as RecoveryKind)) return error.recovery as RecoveryKind;
   let detail = '';
   try { detail = error instanceof Error ? `${error.name} ${error.message} ${JSON.stringify(error.cause ?? '')}` : JSON.stringify(error); } catch { /* Unknown error remains generic. */ }
   if (/unauthori[sz]ed|authentication|invalid[_ -]?token|token[_ -]?expired|session[_ -]?expired|\b401\b/i.test(detail)) return 'sign-in';
   if (/usageLimitExceeded|rate[_ -]?limit|quota|insufficient[_ -]?credits|usage[_ -]?limit|\b429\b/i.test(detail)) return 'usage';
-  if (/ECONN|ENOTFOUND|ETIMEDOUT|fetch failed|network|connection reset|socket|timed?\s*out/i.test(detail)) return 'network';
+  if (/ECONN|ENOTFOUND|ETIMEDOUT|fetch failed|network|connection (?:reset|error|failed|closed)|socket|timed?\s*out/i.test(detail)) return 'network';
   if (/method not found|unsupported|not supported|ENOENT|capability.*unavailable|-32601\b/i.test(detail)) return 'runtime';
   return 'unknown';
 }

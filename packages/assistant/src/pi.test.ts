@@ -15,7 +15,7 @@ import type { PiHarness } from './pi.js';
 const built: { PiHarness: typeof PiHarness } = await import(new URL('../../../dist/packages/assistant/src/pi.js', import.meta.url).href);
 const cleanups: Array<() => Promise<unknown>> = [];
 const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() })).default([]), input: z.unknown() }).passthrough();
-type Mode = 'text' | 'tool' | 'hold' | '429' | '500' | 'model-unavailable';
+type Mode = 'text' | 'tool' | 'hold' | '401' | '429' | '500' | 'network' | 'model-unavailable';
 async function provider(mode: Mode) {
   const requests: Array<z.infer<typeof requestSchema>> = [];
   const server = createServer((req, res) => { void (async () => {
@@ -24,7 +24,8 @@ async function provider(mode: Mode) {
     const body = requestSchema.parse(JSON.parse(text)); requests.push(body);
     expect(body.store).toBe(false); expect(text).not.toContain('offline-worker-credential-sentinel'); expect(text).not.toContain('INHERITED_POISON');
     if (mode === 'model-unavailable') { res.writeHead(400, { 'Content-Type': 'application/json' }).end(JSON.stringify({ error: { message: "The 'fixture' model is not supported when using this account. PRIVATE-PROVIDER-DETAIL" } })); return; }
-    if (mode === '429' || mode === '500') { res.writeHead(Number(mode), { 'Content-Type': 'application/json', 'Retry-After': '0' }).end(JSON.stringify({ error: { message: 'Offline fixture rejection' } })); return; }
+    if (mode === 'network') { req.socket.destroy(); return; }
+    if (mode === '401' || mode === '429' || mode === '500') { res.writeHead(Number(mode), { 'Content-Type': 'application/json', 'Retry-After': '0' }).end(JSON.stringify({ error: { message: 'Offline fixture rejection PRIVATE-PROVIDER-DETAIL' } })); return; }
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     send(res, { type: 'response.created', response: { id: 'resp_fixture', status: 'in_progress' } });
     if (mode === 'hold') return;
@@ -99,9 +100,12 @@ it.each(['plan', 'build'] as const)('passes trusted %s mode instructions to the 
   } else expect(request).not.toContain('For a new app brief');
   expect(request).toContain(mode === 'plan' ? 'This mode is fixed for the entire turn' : 'Implement the user');
 }, 20000);
-it.each(['429', '500'] as const)('makes exactly one request and no automatic retries after HTTP %s', async mode => {
+it.each([['401', 'sign-in'], ['429', 'usage'], ['500', 'unknown'], ['network', 'network']] as const)('preserves safe %s recovery through the real worker without retry or provider details', async (mode, recovery) => {
   const fixture = await provider(mode); const worker = harness(fixture.baseUrl);
-  await expect(worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal)).rejects.toThrow();
+  const error = await worker.run(input(), { text() {}, async tool() { throw new Error(); } }, new AbortController().signal).catch(error => error);
+  expect(error).toMatchObject({ name: 'AssistantProviderFailure', recovery });
+  expect(error.message).not.toContain('PRIVATE-PROVIDER-DETAIL');
+  expect(error.message).not.toContain('offline-worker-credential-sentinel');
   expect(fixture.requests).toHaveLength(1);
 }, 20000);
 it('forwards validated tool calls and actual PNG content through the real Responses adapter', async () => {
