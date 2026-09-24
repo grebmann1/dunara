@@ -8,6 +8,7 @@
 <p align="center">Build real mobile apps with AI. Preview on your phone. Keep your code.</p>
 
 <p align="center">
+  <a href="#watch-the-demo">Watch the demo</a> ·
   <a href="#start-building">Start building</a> ·
   <a href="#choose-your-ai">Choose your AI</a> ·
   <a href="#inside-the-studio">Explore Studio</a> ·
@@ -16,6 +17,14 @@
 </p>
 
 ![An ivory-suited explorer looks across sunlit desert ruins toward a new settlement.](docs/images/readme/dunara-frontier.webp)
+
+## Watch the demo
+
+https://github.com/user-attachments/assets/d650542b-615c-4969-beb7-e0c730efe79e
+
+**Bonsai Master · 1:52.** A narrated walk from idea to a Japanese anime-inspired bonsai app. [Download the film](docs/media/bonsai-master.mp4?raw=true).
+
+*Simulated workflow, not a recording of live generation.*
 
 <p align="center">
   <a href="https://github.com/grebmann1/dunara/actions/workflows/check.yml"><img src="https://github.com/grebmann1/dunara/actions/workflows/check.yml/badge.svg" alt="Build and test status" /></a>

@@ -29,6 +29,12 @@ license to the extent applicable, without asserting exclusive copyright in
 AI-generated pixels. The geometric Dunara mark is the separate shared brand
 asset in `packages/catalog/assets/brand-mark.svg`.
 
+## Bonsai Master film
+
+[bonsai-master-poster.jpg](bonsai-master-poster.jpg) is the opening frame of a 1920 × 1080, 1:52 narrated presentation. The film itself is [bonsai-master.mp4](../../media/bonsai-master.mp4). It was rendered on September 23, 2026 from an offline, scripted Studio replica and a working mock app. The garden, mentor, icon, and score are original to that presentation. Narration uses the stock Kokoro `af_heart` voice, generated locally; no person's voice was cloned.
+
+The poster and film show a simulated workflow. They are not a measurement of live AI build time, and they are not an actual Studio capture. The README embeds a public GitHub-hosted copy of the film as a video player, with a link to the original MP4 in this repository. The poster is retained alongside the other presentation assets.
+
 ## Product imagery
 
 The README's Studio image is the existing
