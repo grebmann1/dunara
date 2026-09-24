@@ -6,15 +6,22 @@ Implemented September 18, 2026. These steps are available in Studio and in the a
 
 1. Select your app in Studio and click **Connect a device** in the preview toolbar.
 2. Install [Expo Go](https://expo.dev/go) on your iPhone or Android phone. Use the same Wi-Fi as the Dunara computer.
-3. Click **Start phone preview**. Dunara starts or restarts this app with local-network sharing. Generated app execution must already be authorized in the Dunara runtime (`--trust-execution` for CLI launches). The desktop’s existing execution settings still apply. No CLI relaunch with `--lan` is needed.
-4. Scan the QR code with iPhone Camera or Expo Go’s scanner on Android. Keep Dunara running. The address belongs to this preview session and is replaced when it restarts.
-5. Save an app code change in Dunara. Expo Fast Refresh sends saved changes to the phone. If needed, enable Fast Refresh or reload using Expo Go’s developer menu. This is Expo’s [development workflow](https://docs.expo.dev/get-started/start-developing/).
-6. In **Record your phone test**, select **iPhone / iOS** or **Android**. After opening the app, mark the checks you actually perform: code refresh, app sign-in, saved data, reopening and sign-out. Dunara records the time and session. The Assistant can read your observations.
-7. Choose **Use this computer only** when finished sharing. Switching connection or backend environment clears the current checklist. Repeat the checks after reconnecting.
+3. For Expo Go on iPhone, sign in to the **same Expo account** on the computer and in Expo Go. In the app’s project folder, run `npx expo login --browser` and finish browser sign-in. The device dialog shows this requirement before the QR code and can copy the command. Expo manages this account separately from ChatGPT and from your app’s own account. See [Expo’s sign-in requirement](https://docs.expo.dev/troubleshooting/expo-go-sign-in-required/).
+4. Click **Start phone preview**. Dunara starts or restarts this app with local-network sharing. Generated app execution must already be authorized in the Dunara runtime (`--trust-execution` for CLI launches). The desktop’s existing execution settings still apply. No CLI relaunch with `--lan` is needed.
+5. Scan the QR code with iPhone Camera or Expo Go’s scanner on Android. Keep Dunara running. The address belongs to this preview session and is replaced when it restarts.
+6. Save an app code change in Dunara. Expo Fast Refresh sends saved changes to the phone. If needed, enable Fast Refresh or reload using Expo Go’s developer menu. This is Expo’s [development workflow](https://docs.expo.dev/get-started/start-developing/).
+7. In **Record your phone test**, select **iPhone / iOS** or **Android**. After opening the app, mark the checks you actually perform: code refresh, app sign-in, saved data, reopening and sign-out. Dunara records the time and session. The Assistant can read your observations.
+8. Choose **Use this computer only** when finished sharing. Switching connection or backend environment clears the current checklist. Repeat the checks after reconnecting.
 
 A QR code means the preview address is available; it does not establish that a phone connected. Checklists are explicitly **user reported** and kept for the current runtime session. There is one checklist per platform, rather than an inventory of individual phones.
 
 If connecting fails, check the shared Wi-Fi, VPN, firewall and guest-network isolation. Expo Go must support the app’s Expo SDK. Apps requiring custom native modules need a compatible development build; this flow does not install one or create an internet tunnel.
+
+## Cloud: private browser preview
+
+Cloud Studio opens the web version in your phone browser. Choose **Connect a device**, start the cloud preview if needed, and scan its QR code. Sign in with the **same Dunara account** as the workspace that started it. No Expo account, Expo Go installation or shared Wi-Fi is needed. The QR links to the host's sign-in entry with a preview session identifier; the host still authorizes preview access. Stopped or expired previews require a new active session.
+
+For native testing today, download the project and open it in Dunara Desktop. Use Expo Go with the account prerequisite above, or **Build setup** for an installed iPhone app. Cloud native builds and cloud-hosted Expo Go connections are not implemented. A browser preview does not verify native APIs, installed-app behavior or hardware.
 
 ## User: test saved-data sync
 
@@ -57,7 +64,7 @@ The variable-only review does not deploy function code or apply Auth/Storage cha
 1. Discover current MCP schemas and read `builder://guide`. Inspect the intended app with `project_inspect`; confirm it is still selected in Studio.
 2. Explain local-network sharing. Call `preview_set_transport` with the project ID and `input: { transport: "lan", expectedSessionId: preview.sessionId ?? null }`. The built-in Assistant presents a human network-sharing review. Execution trust, selected-project checks and session revisions apply to external MCP too.
 3. Inspect again. Share only `preview.deviceUrl` from a **ready** owned session. Never construct an address, assume a QR scan succeeded, or infer physical-device success from a web capture.
-4. Guide the user through installing Expo Go, scanning, editing and testing data using the steps above. Use normal revision-checked source edits; backend environment changes require a restart.
+4. Guide the user through installing Expo Go, matching the Expo account on computer and phone, scanning, editing and testing data using the steps above. Use normal revision-checked source edits; backend environment changes require a restart.
 5. Read `project_inspect.preview.phoneTests` for `user_reported` observations. There is no MCP tool to mark these checks. Record web, native export and actual hardware evidence separately.
 6. To end sharing, use `preview_set_transport` with `transport: "localhost"` and the latest session ID. A stale revision requires inspection before retrying.
 

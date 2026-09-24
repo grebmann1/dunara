@@ -131,6 +131,18 @@ test('shows a QR code with the current environment and removes it when the previ
   const dialog = page.getByRole('dialog', { name: 'Connect a device', exact: true });
   await expect(dialog.getByRole('img', { name: 'Scan to open Still Connected in Expo Go' })).toBeVisible();
   await expect(dialog).toContainText('sign in to the same Expo account on your computer and in Expo Go');
+  const setup = dialog.getByRole('region', { name: 'Expo sign-in setup' });
+  await expect(setup.getByRole('heading', { name: 'First, sign in to Expo' })).toBeVisible();
+  expect(await setup.evaluate(node => !!(node.compareDocumentPosition(globalThis.document.querySelector('.device-preview-qr')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true);
+  await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
+  await setup.getByRole('button', { name: 'Copy Expo login command' }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('npx expo login --browser');
+  for (const [width, height] of [[1440, 1100], [375, 812], [430, 932]] as const) {
+    await page.setViewportSize({ width, height });
+    await dialog.locator('.device-preview-app').scrollIntoViewIfNeeded();
+    await expect(setup.getByRole('heading')).toBeInViewport();
+    await page.screenshot({ path: info.outputPath(`expo-prerequisite-${width}.png`) });
+  }
   const loginHelp = dialog.locator('.device-expo-login');
   await loginHelp.locator('summary').click();
   await expect(loginHelp).toContainText('npx expo login --browser');
