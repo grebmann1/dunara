@@ -668,6 +668,8 @@ test('approved artwork opens a retained integration draft in existing chat histo
   const message = panel.getByLabel('Message assistant');
   await expect(panel.getByRole('button', { name: 'Send message' })).toBeEnabled();
   await expect(message).toHaveValue(new RegExp(asset.id));
+  await expect(message).not.toHaveValue(/as hero artwork/);
+  await expect(message).toHaveValue(/intended purpose/);
   await panel.getByLabel('Assistant mode').selectOption('plan');
   await message.press('Escape');
   await page.getByRole('button', { name: 'Quiet landscape', exact: true }).click();
@@ -690,6 +692,16 @@ test('approved artwork opens a retained integration draft in existing chat histo
   await expect(panel.getByText('The approved artwork context reached the assistant.')).toBeVisible();
   expect(calls).toBe(1);
   expect((await assistant.conversation(conversation.id)).turns).toHaveLength(1);
+  await panel.getByRole('button', { name: 'Close assistant', exact: true }).click();
+  await page.getByRole('button', { name: 'Quiet landscape', exact: true }).click();
+  const placement = page.locator('.asset-placement:visible');
+  await placement.locator('summary').click();
+  await placement.getByRole('combobox', { name: 'Placement', exact: true }).click();
+  await page.getByRole('option', { name: 'Character / avatar', exact: true }).click();
+  await placement.locator('summary').click();
+  await page.getByRole('button', { name: 'Use in my app', exact: true }).click();
+  await expect(message).toHaveValue(/as avatar artwork using contain fit/);
+  expect(calls).toBe(1);
 });
 
 test('drops and uploads chat images, rejects invalid files, and sends only on request', async ({ page }) => {

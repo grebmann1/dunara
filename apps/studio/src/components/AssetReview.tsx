@@ -8,7 +8,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { FieldSelect } from './ui/field-select';
 
-export function AssetReview({ projectId, asset, assets, state, comparison, onCompare, placement, onPlacementChange, busy, onApprove, onIcons, onRemix, onIntegrate, headingRef, children }: { projectId: string; asset: Asset; assets: Asset[]; state?: StudioState; comparison?: Asset; onCompare: (id: string) => void; placement: AssetPlacementDraft; onPlacementChange(value: AssetPlacementDraft): void; busy: boolean; onApprove: () => void; onIcons: () => void; onRemix?: () => void; onIntegrate?: (placement: AssetPlacement) => void; headingRef: RefObject<HTMLHeadingElement | null>; children: ReactNode }) {
+export function AssetReview({ projectId, asset, assets, state, comparison, onCompare, placement, onPlacementChange, busy, onApprove, onIcons, onRemix, onIntegrate, headingRef, children }: { projectId: string; asset: Asset; assets: Asset[]; state?: StudioState; comparison?: Asset; onCompare: (id: string) => void; placement: AssetPlacementDraft; onPlacementChange(value: AssetPlacementDraft): void; busy: boolean; onApprove: () => void; onIcons: () => void; onRemix?: () => void; onIntegrate?: (placement?: AssetPlacement) => void; headingRef: RefObject<HTMLHeadingElement | null>; children: ReactNode }) {
   const [copyState, setCopyState] = useState<{ id: string; message: string }>();
   const contextRef = useRef<HTMLTextAreaElement>(null);
   const contextDetails = useRef<HTMLDetailsElement>(null);
@@ -30,7 +30,7 @@ export function AssetReview({ projectId, asset, assets, state, comparison, onCom
     {asset.status === 'approved' && <div className="integration-context"><Button variant="ghost" onClick={() => void copy()}>Copy integration context</Button><p role="status">{copyState?.id === asset.id ? copyState.message : ''}</p><details ref={contextDetails}><summary>Integration context</summary><Label htmlFor="asset-integration-context">Integration context (selectable fallback)</Label><Textarea id="asset-integration-context" ref={contextRef} readOnly rows={4} value={context} onFocus={event => event.currentTarget.select()} /></details></div>}
     {children}
     </div><footer className="asset-review-actions"><Button disabled={busy || asset.status === 'approved'} onClick={onApprove}>{asset.status === 'approved' ? 'Approved for integration' : 'Approve candidate'}</Button>
-    {asset.status === 'approved' && <><p>{onIntegrate ? 'Place this artwork with Assistant.' : 'Copy the asset context to your agent.'}</p>{onIntegrate && <Button disabled={busy} onClick={() => onIntegrate(placement)}>Use in my app</Button>}{onRemix && <Button disabled={busy} variant="outline" onClick={onRemix}>Create a variation</Button>}</>}
+    {asset.status === 'approved' && <><p>{onIntegrate ? 'Place this artwork with Assistant.' : 'Copy the asset context to your agent.'}</p>{onIntegrate && <Button disabled={busy} onClick={() => onIntegrate(placement.expanded || placement.requested ? placement : undefined)}>Use in my app</Button>}{onRemix && <Button disabled={busy} variant="outline" onClick={onRemix}>Create a variation</Button>}</>}
     </footer>
   </section>;
 }
