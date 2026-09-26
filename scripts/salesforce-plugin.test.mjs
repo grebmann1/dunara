@@ -5,6 +5,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { Engine } from '../packages/core/src/engine.ts';
 import { Projects } from '../packages/core/src/projects.ts';
+import { snapshotSource } from '../packages/core/src/source.ts';
 import { inspectPackage } from '../packages/plugin-runtime/src/packages.ts';
 import { connection, compatibility, SDK } from '../plugins/salesforce/configuration.js';
 import { createSalesforceClient } from '../plugins/salesforce/template/client.ts';
@@ -38,10 +39,19 @@ describe('Salesforce plugin through the real host', () => {
     await engine.plugins.answerReview(next.reviewId, true);
     expect(JSON.parse((await engine.files.read(project.id, 'backend/salesforce.json')).content).environments).toMatchObject({ development: settings, production: { label: 'Production' } });
     const other = await engine.projects.create({ name: 'Other fixture', slug: 'other-fixture' });
+    const untouched = await snapshotSource(other.root);
+    expect(untouched.files.some(file => /salesforce/i.test(file.path))).toBe(false);
+    expect(await readFile(path.join(other.root, 'package.json'), 'utf8')).not.toContain('react-native-force');
     expect((await engine.plugins.invoke(id, 'inspect', {}, other.id)).configuration.environments).toEqual({});
+    const integration = await engine.plugins.invoke(id, 'add-react-integration', {}, project.id);
+    await engine.plugins.answerReview(integration.reviewId, true);
+    expect((await engine.plugins.invoke(id, 'inspect', {}, project.id)).integrationAdded).toBe(true);
     await engine.plugins.change(id, 'disable');
     await expect(engine.plugins.invoke(id, 'inspect', {}, project.id)).rejects.toThrow();
     expect((await engine.files.read(project.id, 'backend/salesforce.json')).content).toContain('Test sandbox');
+    await engine.plugins.change(id, 'enable');
+    await engine.plugins.invoke(id, 'inspect', {}, other.id);
+    expect((await snapshotSource(other.root)).revision).toBe(untouched.revision);
   });
   it('adds portable React source with reviewed overwrites and leaves manifests and Supabase intact', async () => {
     const manifest = await readFile(path.join(project.root, 'package.json'), 'utf8'), lock = await readFile(path.join(project.root, 'package-lock.json'), 'utf8');
