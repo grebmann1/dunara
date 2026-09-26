@@ -39,7 +39,7 @@ it('exposes the available catalogue read-only and requires a human request to in
   expect((await fetch(`${studio.origin}/api/plugins/install-bundled`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) })).status).toBe(403);
   expect((await post('install-bundled', { ...value, confirm: false })).status).toBe(400);
   expect((await post('install-bundled', value)).status).toBe(200);
-  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('disabled');
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('active');
 });
 it('installs a user package, discovers its action, loads its panel and removes its tools on disable', async () => {
   const source = path.join(root, 'sample'); await scaffoldPlugin(source); const pkg = await inspectPackage(source);
@@ -65,4 +65,36 @@ it('disables an existing feature on both HTTP and MCP while leaving project acce
   expect((await fetch(`${studio.origin}/api/account/workspaces`, { headers })).status).toBe(400);
   expect((await post('change', { id: 'builder.account', operation: 'enable' })).status).toBe(200);
   expect((await fetch(`${studio.origin}/api/account/status`, { headers })).status).toBe(200);
+});
+
+it('enables each backend only for the selected project and rejects agent actions until then', async () => {
+  const a = await engine.projects.create({ name: 'App A', slug: 'app-a' }), b = await engine.projects.create({ name: 'App B', slug: 'app-b' });
+  const session = await engine.studio.snapshot();
+  await engine.studio.control({ expectedRevision: session.revision, action: { type: 'select-project', projectId: a.id } });
+  const route = (project: string, plugin: string) => `${studio.origin}/api/projects/${project}/backend-plugins/${plugin}`;
+  for (const id of ['builder.supabase', 'salesforce.mobile-sdk']) {
+    expect(await engine.backendPluginState(a.id, id)).toMatchObject({ enabled: false, available: true });
+    expect((await fetch(route(a.id, id), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: true, expectedRevision: 'initial' }) })).status).toBe(403);
+    expect((await fetch(route(b.id, id), { method: 'POST', headers, body: JSON.stringify({ enabled: true, expectedRevision: 'initial' }) })).status).toBe(400);
+    const state = await fetch(route(a.id, id), { method: 'POST', headers, body: JSON.stringify({ enabled: true, expectedRevision: 'initial' }) });
+    expect(state.status).toBe(200);
+    expect(await state.json()).toMatchObject({ enabled: true });
+    expect(await engine.backendPluginState(b.id, id)).toMatchObject({ enabled: false });
+    expect((await fetch(route(a.id, id), { method: 'POST', headers, body: JSON.stringify({ enabled: false, expectedRevision: 'initial' }) })).status).toBe(400);
+  }
+  await expect(engine.plugins.invoke('salesforce.mobile-sdk', 'install-in-app', {}, b.id)).rejects.toThrow('Enable this backend for this app');
+  const blocked = await client.callTool({ name: 'backend_catalog', arguments: { projectId: b.id } });
+  expect(blocked.isError).toBe(true); expect(JSON.stringify(blocked)).toContain('Enable this backend for this app');
+  expect((await fetch(`${studio.origin}/api/projects/${b.id}/backend/catalog`, { headers })).status).toBe(400);
+  const review = await engine.plugins.invoke('salesforce.mobile-sdk', 'install-in-app', {}, a.id) as { reviewId: string };
+  const state = await engine.backendPluginState(a.id, 'salesforce.mobile-sdk');
+  await engine.setBackendPlugin(a.id, 'salesforce.mobile-sdk', { enabled: false, expectedRevision: state.revision });
+  await expect(engine.plugins.answerReview(review.reviewId, true)).rejects.toThrow('unavailable');
+  expect((await engine.inspect(a.id)).backendPlugins).toEqual(expect.arrayContaining([
+    expect.objectContaining({ pluginId: 'builder.supabase', projectEnabled: true }),
+    expect.objectContaining({ pluginId: 'salesforce.mobile-sdk', projectEnabled: false }),
+  ]));
+  await engine.projects.writeMetadata(a, (await engine.projects.metadata(a)).studio);
+  expect(await engine.projects.backendPluginSelections(a.id)).toMatchObject({ 'builder.supabase': { enabled: true }, 'salesforce.mobile-sdk': { enabled: false } });
+  expect((await client.listTools()).tools.some(tool => /backend.*enable|backend.*selection/.test(tool.name))).toBe(false);
 });

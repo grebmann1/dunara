@@ -121,6 +121,13 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (operation === 'cancel') { const value = z.object({ id: pluginId }).strict().parse(input); engine.plugins.cancel(value.id); return json(res, { cancellationRequested: true }); }
         return json(res, { error: { message: 'Unknown plugin operation' } }, 404);
       }
+      const backendPlugin = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/backend-plugins\/([a-z0-9.-]+)$/);
+      if (backendPlugin) {
+        const projectId = z.uuid().parse(backendPlugin[1]), id = pluginId.parse(backendPlugin[2]);
+        if (req.method === 'GET') return json(res, await engine.backendPluginState(projectId, id));
+        if (req.method === 'POST') { const input = await body(req, 8192); await assistant?.interruptAccountWork(); return json(res, await engine.setBackendPlugin(projectId, id, input)); }
+        return json(res, { error: { message: 'Method not allowed' } }, 405);
+      }
       const owner = routeOwner(url.pathname); if (owner) engine.plugins.assertEnabled(owner);
       if (url.pathname.startsWith('/api/account/')) {
         try {
@@ -230,6 +237,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           }
           const id = z.uuid().parse(backend![1]), action = backend![2];
           if (req.method === 'GET' && !action) return json(res, await engine.backends.inspect(id));
+          if (action !== 'cancel') await engine.assertBackendEnabled(id, 'builder.supabase');
           if (req.method === 'GET' && action === 'catalog') return json(res, await engine.backends.catalog(id));
           if (req.method === 'GET' && action === 'capabilities') return json(res, await engine.backends.capabilities(id));
           if (req.method !== 'POST' || !action) return json(res, { error: { message: 'Method not allowed' } }, 405);

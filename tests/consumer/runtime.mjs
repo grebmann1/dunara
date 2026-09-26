@@ -36,8 +36,8 @@ try {
   const availableSalesforce = engine.plugins.available().find(plugin => plugin.id === 'salesforce.mobile-sdk');
   assert.equal(availableSalesforce.status, 'available');
   await engine.plugins.installBundled(availableSalesforce.id, availableSalesforce.digest);
-  assert.equal(engine.plugins.snapshot().find(plugin => plugin.id === 'salesforce.mobile-sdk').status, 'disabled');
-  await engine.plugins.change('salesforce.mobile-sdk', 'enable');
+  assert.equal(engine.plugins.snapshot().find(plugin => plugin.id === 'salesforce.mobile-sdk').status, 'active');
+  await engine.projects.setBackendPlugin(project.id, 'salesforce.mobile-sdk', true);
   const salesforce = await engine.plugins.invoke('salesforce.mobile-sdk', 'inspect', {}, project.id);
   assert.equal(salesforce.compatibility.state, 'incompatible');
   assert.equal(salesforce.integrationAdded, false);

@@ -59,7 +59,7 @@ function PluginSettings({ plugin, busy, perform }: { plugin: PluginView; busy: b
     {plugin.capabilities.includes('credentials') && <section className="plugin-box"><h3>Private credentials</h3><p>Stored using Dunara’s protected credential storage. Values are available to this plugin’s trusted server code.</p><form onSubmit={event => { event.preventDefault(); const value = secret; setSecret(''); perform(() => api('/plugins/credential', { id: plugin.id, name, value })); }}><label>Credential name<input required pattern="[a-z][a-z0-9-]{0,47}" value={name} onChange={event => setName(event.target.value)} /></label><label>Secret value<input required type="password" autoComplete="new-password" value={secret} onChange={event => setSecret(event.target.value)} /></label><div className="plugin-controls"><Button type="submit">Save privately</Button><Button variant="outline" disabled={!name} onClick={() => { setSecret(''); perform(() => api('/plugins/credential', { id: plugin.id, name, value: null })); }}>Remove</Button></div></form></section>}
   </fieldset>;
 }
-export function PluginsPanel({ catalog, projectId }: { catalog: ReturnType<typeof usePlugins>; projectId: string | null }) {
+export function PluginsPanel({ catalog, projectId, onBackend }: { catalog: ReturnType<typeof usePlugins>; projectId: string | null; onBackend?: (id: string) => void }) {
   const { api, capabilities } = useStudioClient();
   const [selected, setSelected] = useState(''), [search, setSearch] = useState('');
   const [filter, setFilter] = useState<'all' | 'installed' | 'available'>('all');
@@ -103,7 +103,7 @@ export function PluginsPanel({ catalog, projectId }: { catalog: ReturnType<typeo
   async function installAvailable() {
     if (!candidate || !capabilities.managePlugins) return;
     const current = version.current;
-    const success = await perform(() => api('/plugins/install-bundled', { id: candidate.id, digest: candidate.digest, confirm: true }), 'Plugin installed. Enable it when you are ready to set it up.');
+    const success = await perform(() => api('/plugins/install-bundled', { id: candidate.id, digest: candidate.digest, confirm: true }), 'Plugin installed in the editor. Enable backends separately for each app in Backend.');
     if (success && mounted.current && current === version.current) { setFilter('installed'); focusDetail.current = true; }
   }
   function chooseFilter(next: typeof filter) { setFilter(next); select(''); focusDetail.current = false; }
@@ -136,7 +136,7 @@ export function PluginsPanel({ catalog, projectId }: { catalog: ReturnType<typeo
         <div className="plugin-cards">{plugins.map(item => <button key={item.id} ref={node => { if (node) cards.current.set(item.id, node); else cards.current.delete(item.id); }} className="plugin-card" aria-pressed={selected === item.id} onClick={() => select(item.id)}>
           <span className="plugin-symbol"><Package size={17} aria-hidden /></span>
           <span className="plugin-card-copy"><strong>{item.name}</strong><small>{item.source === 'builtin' ? 'Included with Dunara' : item.source === 'development' ? 'Development' : 'Installed by you'} · {item.version}</small></span>
-          <span className={'plugin-status plugin-status-' + item.status}>{item.status === 'available' ? 'Not installed' : item.status}</span><ChevronRight size={14} aria-hidden />
+          <span className={'plugin-status plugin-status-' + item.status}>{item.status === 'available' ? 'Not installed' : 'workspaceGroup' in item && item.workspaceGroup === 'backend' && ['active', 'disabled'].includes(item.status) ? 'Installed' : item.status}</span><ChevronRight size={14} aria-hidden />
         </button>)}</div>
         {catalog.state && !plugins.length && <p className="plugin-no-results">{search ? 'No matching plugins.' : filter === 'available' ? 'All plugins included with this version of Dunara are installed.' : 'No plugins installed.'}{search && <Button variant="ghost" onClick={() => setSearch('')}>Clear search</Button>}</p>}
         </div>
@@ -146,13 +146,13 @@ export function PluginsPanel({ catalog, projectId }: { catalog: ReturnType<typeo
       <section ref={detail} className="plugin-detail" aria-label="Plugin details">
         {plugin ? <div key={plugin.id}>
           <Button variant="ghost" className="plugin-back" onClick={back}><ArrowLeft size={14} aria-hidden />All plugins</Button>
-          <header className="plugin-detail-heading"><span className="plugin-detail-symbol"><Puzzle size={22} aria-hidden /></span><div><h2 ref={heading} tabIndex={-1}>{plugin.name}</h2><p>{plugin.source === 'builtin' ? 'Included with Dunara' : 'Installed plugin'} · v{plugin.version}</p></div><span className={'plugin-status plugin-status-' + plugin.status}>{plugin.status}</span></header>
+          <header className="plugin-detail-heading"><span className="plugin-detail-symbol"><Puzzle size={22} aria-hidden /></span><div><h2 ref={heading} tabIndex={-1}>{plugin.name}</h2><p>{plugin.source === 'builtin' ? 'Included with Dunara' : 'Installed plugin'} · v{plugin.version}</p></div><span className={'plugin-status plugin-status-' + plugin.status}>{plugin.workspaceGroup === 'backend' && ['active', 'disabled'].includes(plugin.status) ? 'Installed' : plugin.status}</span></header>
           <p className="plugin-description">{plugin.description}</p>
           {plugin.error && <p role="alert" className="plugin-error">{plugin.error}</p>}
-          <div className="plugin-management"><Button variant="outline" disabled={busy || !capabilities.managePlugins} onClick={() => change(plugin.enabled ? 'disable' : 'enable')}>{plugin.enabled ? 'Disable' : 'Enable'}</Button>
+          <div className={'plugin-management' + (plugin.workspaceGroup === 'backend' ? ' plugin-backend-management' : '')}>{plugin.workspaceGroup === 'backend' ? <div><p>Installed in the editor. Select an app, then enable it in Backend.</p>{onBackend && <Button variant="outline" disabled={!projectId || busy} onClick={() => onBackend(plugin.id)}>Open in Backend</Button>}</div> : <Button variant="outline" disabled={busy || !capabilities.managePlugins} onClick={() => change(plugin.enabled ? 'disable' : 'enable')}>{plugin.enabled ? 'Disable' : 'Enable'}</Button>}
             <details><summary>Manage plugin<ChevronDown size={14} aria-hidden /></summary><div className="plugin-controls"><Button variant="outline" disabled={busy || !capabilities.managePlugins || !plugin.enabled} onClick={() => change('reload')}>Reload</Button>{plugin.canRollback && <Button variant="outline" disabled={busy || !capabilities.managePlugins} onClick={() => change('rollback')}>Previous version</Button>}<Button variant="ghost" disabled={busy || !capabilities.managePlugins} onClick={() => change('uninstall')}>Uninstall</Button></div><p className="plugin-muted">Uninstall keeps app source, settings and remote resources.</p><p className="plugin-muted">{plugin.id}{Object.keys(plugin.requires).length > 0 && ' · Requires: ' + Object.keys(plugin.requires).join(', ')}</p></details>
           </div>
-          {plugin.status === 'active' && capabilities.managePlugins && <><PluginSurface plugin={plugin} projectId={projectId} refresh={catalog.refresh} /><PluginSettings plugin={plugin} busy={busy} perform={work => { void perform(work); }} />
+          {plugin.status === 'active' && capabilities.managePlugins && <>{plugin.workspaceGroup !== 'backend' && <PluginSurface plugin={plugin} projectId={projectId} refresh={catalog.refresh} />}<PluginSettings plugin={plugin} busy={busy} perform={work => { void perform(work); }} />
             {plugin.recipes.length > 0 && <section className="plugin-box"><h3>App recipes</h3><p>Review changes before applying them to the selected app.</p>{plugin.recipes.map(recipe => <div key={recipe.id} className="plugin-recipe"><strong>{recipe.title} · {recipe.version}</strong><p>{recipe.description}</p><Button variant="outline" disabled={busy || !projectId} onClick={() => void perform(() => api('/plugins/invoke', { id: plugin.id, action: 'recipe:' + recipe.id, input: {}, projectId }), 'Ready for review')}>Review recipe</Button></div>)}</section>}
           </>}
           {!!plugin.guides.length && <section className="plugin-guides"><h3>Step-by-step guides</h3><div className="plugin-controls">{plugin.guides.map(name => <Button key={name} variant="outline" aria-pressed={guideName === name} onClick={() => void readGuide(name)}><BookOpen size={14} aria-hidden />{name.includes('agent') ? 'For your assistant' : 'For you'}</Button>)}</div>
@@ -164,7 +164,7 @@ export function PluginsPanel({ catalog, projectId }: { catalog: ReturnType<typeo
           <Button variant="ghost" className="plugin-back" onClick={back}><ArrowLeft size={14} aria-hidden />All plugins</Button>
           <header className="plugin-detail-heading"><span className="plugin-detail-symbol"><Puzzle size={22} aria-hidden /></span><div><h2 ref={heading} tabIndex={-1}>{candidate.name}</h2><p>Included with Dunara · v{candidate.version}</p></div><span className="plugin-status">Not installed</span></header>
           <p className="plugin-description">{candidate.description}</p>
-          <p className="plugin-muted plugin-available-copy">Install this plugin in Dunara, then enable it to open its setup. Adding a backend to an app is a separate choice in Backend.</p>
+          <p className="plugin-muted plugin-available-copy">Install this plugin in the editor. Backend providers are enabled separately for each app in Backend.</p>
           {Object.keys(candidate.requires).length > 0 && <p className="plugin-muted">Requires: {Object.keys(candidate.requires).join(', ')}</p>}
           <Button disabled={busy || !capabilities.managePlugins} onClick={() => void installAvailable()}>Install plugin</Button>
         </div> : <div className="plugin-empty"><Puzzle size={30} aria-hidden /><h2>Choose a plugin</h2><p>Browse its features, settings and guides here.</p></div>}

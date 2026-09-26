@@ -21,8 +21,8 @@ test('enables an optional provider, explicitly installs it in this app and revie
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await page.getByRole('group', { name: 'Backend providers' }).getByRole('button', { name: 'Salesforce', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Enable Salesforce', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Enable plugin', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Salesforce for this app', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Enable for this app', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Not installed in this app', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Org settings', exact: true }).click();
   await expect(page.getByLabel('Org label', { exact: true })).toBeDisabled();
@@ -68,14 +68,14 @@ test('provider tabs share the host appearance and fit desktop and phone widths',
   async function captureStage(stage: string) {
     for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
       await page.setViewportSize({ width, height });
-      await page.locator('.backend-title').evaluate(node => node.scrollIntoView({ block: 'start' }));
+      await page.locator('.backend-project-selection').evaluate(node => node.scrollIntoView({ block: 'start' }));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await page.screenshot({ path: `.builder/salesforce-review/${stage}-${width}.png` });
     }
   }
-  await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enable for this app', exact: true })).toBeVisible();
   await captureStage('disabled');
-  await page.getByRole('button', { name: 'Enable plugin', exact: true }).click();
+  await page.getByRole('button', { name: 'Enable for this app', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Not installed in this app', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Install in app', exact: true })).toBeEnabled();
   await captureStage('not-installed');
@@ -92,7 +92,7 @@ test('provider tabs share the host appearance and fit desktop and phone widths',
     await page.setViewportSize({ width, height });
     for (const name of ['Overview', 'Org settings', 'React SDK']) {
       await sections.getByRole('tab', { name, exact: true }).click();
-      await page.locator('.backend-title').evaluate(node => node.scrollIntoView({ block: 'start' }));
+      await page.locator('.backend-project-selection').evaluate(node => node.scrollIntoView({ block: 'start' }));
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
       await expect(page.getByRole('tabpanel', { name, exact: true })).toBeVisible();
       await page.screenshot({ path: `.builder/salesforce-review/${name.replaceAll(' ', '-').toLowerCase()}-${width}.png` });

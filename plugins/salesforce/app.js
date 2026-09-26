@@ -45,7 +45,7 @@ export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce set
   const installButton = element('button', 'Install in app', 'salesforce-primary'); installButton.type = 'button';
   async function proposeInstallation() {
     await api.invoke('install-in-app', {}); installPending = true; render();
-    status.textContent = 'Installation is awaiting review. Apply it in Reviews to enable Salesforce for this app. Agents can see the pending request.';
+    status.textContent = 'Installation is awaiting review. Apply it in Reviews to add the Salesforce integration to this app. Agents can see the pending request.';
   }
   installButton.onclick = () => { void perform(proposeInstallation); };
   installationCard.append(installationTitle, installationText, installButton);
@@ -94,7 +94,7 @@ export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce set
   function render() {
     const installed = current?.installation.state === 'installed', repair = current?.installation.state === 'needs-repair';
     installationTitle.textContent = installPending ? 'Installation awaiting review' : installed ? 'Installed in this app' : repair ? 'Installation needs repair' : 'Not installed in this app';
-    installationText.textContent = installPending ? 'The app has not changed yet. Apply or dismiss the installation in Reviews.' : installed ? 'Salesforce integration is enabled for this app and visible to agents. Native SDK setup and sign-in still need verification.' : 'Choose Install in app to enable Salesforce for this app. It adds the React integration after your review and records the choice for agents. Other apps stay unchanged.';
+    installationText.textContent = installPending ? 'The app has not changed yet. Apply or dismiss the installation in Reviews.' : installed ? 'Salesforce integration is installed in this app and visible to agents. Native SDK setup and sign-in still need verification.' : 'Choose Install in app to add the Salesforce integration. It adds the React integration after your review and records the choice for agents. Other apps stay unchanged.';
     installButton.hidden = installed && !installPending;
     installButton.textContent = repair ? 'Review installation repair' : 'Install in app';
     const saved = current?.configuration.environments[environment];

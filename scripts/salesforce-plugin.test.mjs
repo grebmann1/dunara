@@ -19,6 +19,7 @@ describe('Salesforce plugin through the real host', () => {
     engine = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), false);
     await engine.plugins.ready;
     project = await engine.projects.create({ name: 'Salesforce fixture', slug: 'salesforce-fixture' });
+    await engine.projects.setBackendPlugin(project.id, id, true);
     await engine.plugins.change(id, 'enable');
   });
   afterEach(async () => { await engine?.close(); if (root) await rm(root, { recursive: true, force: true }); });

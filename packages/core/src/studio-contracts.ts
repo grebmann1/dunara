@@ -15,11 +15,13 @@ export function defaultStudio(id: string): StudioPreferences {
   return { workspace: 'preview', designOpen: false, assetsTab: 'library', board: { views: [{ id, label: 1, route: '/', viewport: 'compact' }], activeId: id, mode: 'focus', comparison: 'screens' } };
 }
 export const recipeApplicationSchema = z.object({ pluginId: z.string().max(81), recipeId: z.string().max(48), version: z.string().max(32), digest: z.string().regex(/^[a-f0-9]{64}$/), appliedAt: z.iso.datetime() }).strict();
+export const backendPluginSelectionsSchema = z.record(z.string().regex(/^[a-z][a-z0-9-]{0,39}\.[a-z][a-z0-9-]{0,39}$/), z.object({ enabled: z.boolean(), revision: z.uuid() }).strict()).refine(value => Object.keys(value).length <= 100);
 export const projectMetadataSchema = z.object({
   version: z.literal(1),
   project: z.object({ id: z.uuid(), name: createSchema.shape.name, slug: createSchema.shape.slug, recipe: z.literal('wellness'), createdAt: z.iso.datetime() }).strict(),
   studio: studioPreferencesSchema,
   journey: journeyPreferencesSchema.optional(),
+  backendPlugins: backendPluginSelectionsSchema.optional(),
   recipeApplications: z.array(recipeApplicationSchema).max(30).optional(),
 }).strict();
 export const studioActionSchema = z.discriminatedUnion('type', [

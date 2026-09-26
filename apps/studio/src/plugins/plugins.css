@@ -114,3 +114,5 @@
   .plugin-detail-heading > div { flex-basis: calc(100% - 58px); }
   .plugin-detail-heading > .plugin-status { margin-left: 48px; }
 }
+
+.plugin-backend-management { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }

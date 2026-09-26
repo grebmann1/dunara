@@ -156,6 +156,7 @@ it.each([undefined, 'cd'.repeat(32)])('retains all saved secrets when the encryp
 });
 it('fences concurrent environment switches, preview starts and stale capture identity through the shared Engine', async () => {
   const f = await fixture(); await link(f); await link(f, 'staging'); await f.backends.close();
+  await f.projects.setBackendPlugin(f.project.id, 'builder.supabase', true);
   const engine = new Engine(f.projects, true, false, undefined, {}, {}, undefined, {});
   try {
     const id = f.project.id, state = await engine.backends.inspect(id), configuration = await engine.previews.configurationRevision(id), sourceRevision = await engine.boardCaptures.sourceRevision(id);

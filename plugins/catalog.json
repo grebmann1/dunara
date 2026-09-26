@@ -9,7 +9,7 @@
     {
       "directory": "salesforce",
       "autoInstall": true,
-      "defaultEnabled": false
+      "defaultEnabled": true
     }
   ]
 }

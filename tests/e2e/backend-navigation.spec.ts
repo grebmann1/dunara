@@ -26,6 +26,7 @@ test.beforeEach(async ({ page }) => {
   } });
   await engine.plugins.ready;
   projectId = (await engine.projects.create({ name: 'Backend navigation', slug: 'backend-navigation' })).id;
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   engine.backends.configure({ token: 'fixture-management-token' });
   const plan = await engine.backends.plan(projectId, { action: 'link', environment: 'development', projectRef: ref, organization: 'studio-test' });
   const operation = await engine.backends.submit(projectId, { plan, requestId: randomUUID() });
@@ -83,6 +84,7 @@ test('an installed provider joins Backend and keeps its app reviews isolated', a
   const pkg = await inspectPackage(source); await engine.plugins.install(source, pkg.digest, true);
   const providers = page.getByRole('group', { name: 'Backend providers' });
   await providers.getByRole('button', { name: 'CRM fixture', exact: true }).click();
+  await page.getByRole('button', { name: 'Enable for this app', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'CRM fixture backend', exact: true })).toBeVisible();
   await expect(page.getByText('Should stay in Plugins', { exact: true })).toHaveCount(0);
   await expect(page.getByText(`App: ${projectId}`, { exact: true })).toBeVisible();
@@ -98,15 +100,16 @@ test('an installed provider joins Backend and keeps its app reviews isolated', a
   await page.getByRole('button', { name: 'Apply reviewed changes' }).click();
   await expect.poll(() => engine.files.read(projectId, 'BACKEND-NOTE.md').then(file => file.content).catch(() => '')).toBe('Reviewed fixture');
   const other = await engine.projects.create({ name: 'Other app', slug: 'other-app' });
+  await engine.projects.setBackendPlugin(other.id, 'example.crm', true);
   await engine.plugins.invoke('example.crm', 'save-note', {}, other.id);
   await page.goto(studio.issueLaunchUrl());
   await providers.getByRole('button', { name: 'CRM fixture', exact: true }).click();
   await page.getByRole('tab', { name: 'Reviews', exact: true }).click();
   await expect(page.getByText('No changes to review.', { exact: true })).toBeVisible();
   await engine.plugins.change('builder.supabase', 'disable');
-  await expect(providers.getByRole('button', { name: 'Supabase', exact: true })).toHaveCount(0);
+  await expect(providers.getByRole('button', { name: 'Supabase', exact: true })).toHaveCount(1);
   await expect(providers.getByRole('button', { name: 'CRM fixture', exact: true })).toHaveAttribute('aria-current', 'page');
   await engine.plugins.change('example.crm', 'disable');
-  await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Enable for this app', exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'CRM fixture backend', exact: true })).toHaveCount(0);
 });
