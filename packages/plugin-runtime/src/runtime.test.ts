@@ -30,7 +30,9 @@ it('discovers backend workspaces only from a validated, enabled plugin package',
   expect(engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)).toMatchObject({ workspaceGroup: 'backend', status: 'disabled' });
 });
 it('installs defaults offline and preserves disabled and removed defaults across restart', async () => {
-  expect(engine.plugins.snapshot()).toHaveLength(9); expect(engine.plugins.snapshot().every(p => p.status === 'active')).toBe(true);
+  expect(engine.plugins.snapshot()).toHaveLength(10);
+  expect(engine.plugins.snapshot().filter(p => p.id !== 'salesforce.mobile-sdk').every(p => p.status === 'active')).toBe(true);
+  expect(engine.plugins.snapshot().find(p => p.id === 'salesforce.mobile-sdk')?.status).toBe('disabled');
   await engine.plugins.change('builder.plugin-guide', 'uninstall'); await engine.plugins.change('builder.icons', 'disable');
   await engine.close(); await start();
   expect(engine.plugins.snapshot().some(p => p.id === 'builder.plugin-guide')).toBe(false);

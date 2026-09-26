@@ -1,0 +1,11 @@
+# Salesforce for the Assistant
+
+This API 1 backend plugin exposes project-scoped `inspect`, `configure` and `add-react-integration`. Discover the installed action schemas through plugin_list. Writes prepare a human review; do not claim an action applied until its operation succeeded and the source confirms it.
+
+Read `inspect` first. `configuration` contains public settings, not proof of a live connection. `compatibility` is a static manifest check, not native qualification. `integrationAdded` indicates files exist, not that the app imports them. Preserve other environments, providers, source edits and OAuth identities.
+
+Never ask for or put access/refresh tokens, passwords or client secrets in action inputs, generated source, logs or Assistant context. OAuth consumer keys are public. Native Mobile SDK owns the actual login and private token storage. This plugin has no credential capability or outbound provider requests.
+
+`add-react-integration` adds src/salesforce/client.ts, src/salesforce/SalesforceProvider.tsx and salesforce/SETUP.md. Wire the React provider only after a native integration is qualified. For web, create a client with null SDK; do not import native modules or substitute sample data for a failed live call.
+
+The adapter targets the callback API of stable Mobile SDK 13.2.1, React Native 0.81.5 and React 19.1.0. Do not use the incompatible Promise API from the SDK 14 development README. Dunara's Expo 57/React Native 0.86.3 profile is incompatible with this stable dependency set. Do not change its manifest/lockfile or bypass preview guards. Native integration, SDK 14 qualification and offline MobileSync are separate work; report their actual status.

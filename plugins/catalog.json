@@ -5,6 +5,11 @@
       "directory": "plugin-guide",
       "autoInstall": true,
       "defaultEnabled": true
+    },
+    {
+      "directory": "salesforce",
+      "autoInstall": true,
+      "defaultEnabled": false
     }
   ]
 }

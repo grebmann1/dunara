@@ -32,6 +32,15 @@ try {
   const provider = engine.plugins.snapshot().find(plugin => plugin.id === 'consumer.backend');
   assert.equal(provider.workspacePanel, 'backend'); assert.equal(provider.workspaceGroup, 'backend'); assert(provider.appUrl);
   const project = await engine.projects.create({ name: 'External package', slug: 'external-package' });
+  assert.equal(engine.plugins.snapshot().find(plugin => plugin.id === 'salesforce.mobile-sdk').status, 'disabled');
+  await engine.plugins.change('salesforce.mobile-sdk', 'enable');
+  const salesforce = await engine.plugins.invoke('salesforce.mobile-sdk', 'inspect', {}, project.id);
+  assert.equal(salesforce.compatibility.state, 'incompatible');
+  assert.equal(salesforce.integrationAdded, false);
+  const integration = await engine.plugins.invoke('salesforce.mobile-sdk', 'add-react-integration', {}, project.id);
+  await engine.plugins.answerReview(integration.reviewId, true);
+  assert((await engine.files.read(project.id, 'src/salesforce/client.ts')).content.includes('createSalesforceClient'));
+  assert((await engine.files.read(project.id, 'salesforce/SETUP.md')).content.includes('13.2.1'));
   const manifest = JSON.parse(await readFile(path.join(project.root, 'package.json'), 'utf8'));
   assert(!JSON.stringify(manifest).includes('@mobile-builder/'));
   assert(!(await readFile(path.join(project.root, 'package-lock.json'), 'utf8')).includes('/nexus/'));
