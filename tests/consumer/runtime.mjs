@@ -32,6 +32,10 @@ try {
   const provider = engine.plugins.snapshot().find(plugin => plugin.id === 'consumer.backend');
   assert.equal(provider.workspacePanel, 'backend'); assert.equal(provider.workspaceGroup, 'backend'); assert(provider.appUrl);
   const project = await engine.projects.create({ name: 'External package', slug: 'external-package' });
+  await engine.plugins.change('salesforce.mobile-sdk', 'uninstall');
+  const availableSalesforce = engine.plugins.available().find(plugin => plugin.id === 'salesforce.mobile-sdk');
+  assert.equal(availableSalesforce.status, 'available');
+  await engine.plugins.installBundled(availableSalesforce.id, availableSalesforce.digest);
   assert.equal(engine.plugins.snapshot().find(plugin => plugin.id === 'salesforce.mobile-sdk').status, 'disabled');
   await engine.plugins.change('salesforce.mobile-sdk', 'enable');
   const salesforce = await engine.plugins.invoke('salesforce.mobile-sdk', 'inspect', {}, project.id);
