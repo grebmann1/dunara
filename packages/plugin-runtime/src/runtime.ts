@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { atomicWrite, exists, noSymlinks, readText, SerialQueue } from '../../core/src/storage.js';
 import type { ActionContext, Json, PluginAction, PluginFactory, PluginServer, PluginSetting } from '../../plugin-sdk/src/server.js';
 import type { PluginRecipe } from '../../plugin-sdk/src/recipes.js';
-import { localId, pluginId, storeSchema, version, type InstalledPlugin, type PluginStore, type PluginView } from './contracts.js';
+import { localId, pluginId, storeSchema, version, type AvailablePluginView, type InstalledPlugin, type PluginStore, type PluginView } from './contracts.js';
 import { inspectPackage, materializePackage, type PackageContents } from './packages.js';
 
 export type RuntimeHost = {
@@ -86,6 +86,29 @@ export class PluginRuntime extends EventEmitter {
     });
   }
   async inspect(source: string) { const pkg = await inspectPackage(source); return { package: pkg.package, digest: pkg.digest, files: Object.keys(pkg.files), trust: 'Full-trust local code. Installation grants access to this user’s machine.' }; }
+  available(): AvailablePluginView[] {
+    return [...this.builtins.values()].filter(builtin => !this.row(builtin.contents.package.builder.id, false)).map(({ contents }) => {
+      const { builder } = contents.package;
+      return { id: builder.id, name: builder.name, description: builder.description, version: contents.package.version, digest: contents.digest, source: 'builtin', status: 'available', capabilities: builder.capabilities, requires: builder.requires };
+    });
+  }
+  /** Install one package shipped with this build; activation remains a separate user choice. */
+  async installBundled(id: string, digest: string) {
+    await this.ready;
+    return this.queue.run(async () => {
+      if (this.closed) throw Error('Plugin runtime is closed');
+      pluginId.parse(id);
+      const builtin = this.builtins.get(id);
+      if (!builtin || builtin.contents.digest !== digest) throw Error('Available plugin changed. Refresh the library and try again.');
+      if (this.row(id, false)) throw Error('Plugin is already installed');
+      if (this.store.installed.length >= 100) throw Error('Plugin installation limit reached');
+      await this.host.beforeChange?.(id);
+      await materializePackage(path.join(this.root, 'packages'), builtin.contents);
+      this.store.installed.push({ package: builtin.contents.package, digest, source: 'builtin', enabled: false, installedAt: new Date().toISOString() });
+      this.store.uninstalled = this.store.uninstalled.filter(value => value !== id);
+      await this.save(); this.emit('change'); return this.snapshot();
+    });
+  }
   async install(source: string, digest: string, trusted: boolean, development = false) {
     await this.ready;
     return this.queue.run(async () => {

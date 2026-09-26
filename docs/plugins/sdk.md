@@ -19,6 +19,12 @@ Approved writes are recorded before dispatch and marked succeeded only after a v
 
 Packages are limited to 200 regular text files and 8 MiB; individual files are at most 2 MiB. Entries must remain within the package. Symlinks, hard links, hidden files, native addons and installation hooks are excluded. API 1 supports local folders and Dunara text archives. Git/npm installation resolvers, marketplace distribution, arbitrary dependency recipes and an untrusted-code sandbox are separate future capabilities.
 
+## Plugin library
+
+Studio's Plugins page has **All**, **Installed** and **Available** views. Available entries come from the bundled catalogue in the running Dunara build, including bundled plugins the user removed. This is an offline library, not a remote marketplace. Local packages can still be inspected and installed through **Install plugin**.
+
+Installing an available entry uses its reviewed catalogue identity and digest, restores only that entry and leaves it disabled. **Enable** activates it separately. Backend providers then use their own reviewed **Install in app** workflow; library installation changes no app source. Existing disabled and uninstalled choices survive restart. `plugin_list` exposes available metadata to agents but offers no installation or activation tool.
+
 ## Builtin compatibility
 
 ### Backend workspaces

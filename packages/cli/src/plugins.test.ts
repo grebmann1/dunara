@@ -27,6 +27,20 @@ it('protects installation/review endpoints and exposes only public plugin metada
   const tools = (await client.listTools()).tools; expect(tools).toHaveLength(74); expect(tools.some(t => /install|approve/.test(t.name) && t.name.startsWith('plugin'))).toBe(false);
   const result = await client.callTool({ name: 'plugin_list', arguments: {} }); expect(JSON.stringify(result)).not.toContain(root);
 });
+it('exposes the available catalogue read-only and requires a human request to install a bundled plugin', async () => {
+  const id = 'salesforce.mobile-sdk';
+  await engine.plugins.change(id, 'uninstall');
+  const available = engine.plugins.available().find(plugin => plugin.id === id)!;
+  const value = { id, digest: available.digest, confirm: true };
+  const catalogue = await fetch(`${studio.origin}/api/plugins`, { headers });
+  expect(await catalogue.json()).toMatchObject({ available: [available] });
+  const discovery = await client.callTool({ name: 'plugin_list', arguments: {} });
+  expect(discovery.structuredContent).toMatchObject({ result: { available: [available] } });
+  expect((await fetch(`${studio.origin}/api/plugins/install-bundled`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(value) })).status).toBe(403);
+  expect((await post('install-bundled', { ...value, confirm: false })).status).toBe(400);
+  expect((await post('install-bundled', value)).status).toBe(200);
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('disabled');
+});
 it('installs a user package, discovers its action, loads its panel and removes its tools on disable', async () => {
   const source = path.join(root, 'sample'); await scaffoldPlugin(source); const pkg = await inspectPackage(source);
   expect((await post('install', { source, digest: pkg.digest, trust: true })).status).toBe(200);

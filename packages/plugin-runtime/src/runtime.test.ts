@@ -60,6 +60,25 @@ it('installs defaults offline and preserves disabled and removed defaults across
   expect(engine.plugins.snapshot().find(p => p.id === 'builder.icons')?.status).toBe('disabled');
   await engine.plugins.restoreDefaults(); expect(engine.plugins.isEnabled('builder.plugin-guide')).toBe(true); expect(engine.plugins.isEnabled('builder.icons')).toBe(false);
 });
+it('lists uninstalled bundled plugins and installs one disabled without restoring others', async () => {
+  const id = 'salesforce.mobile-sdk';
+  expect(engine.plugins.available()).toEqual([]);
+  await engine.plugins.change(id, 'uninstall'); await engine.plugins.change('builder.plugin-guide', 'uninstall');
+  await engine.close(); await start();
+  const available = engine.plugins.available().find(plugin => plugin.id === id)!;
+  expect(available).toMatchObject({ name: 'Salesforce', status: 'available', source: 'builtin' });
+  expect(JSON.stringify(engine.plugins.available())).not.toContain(root);
+  await expect(engine.plugins.installBundled(id, '0'.repeat(64))).rejects.toThrow('changed');
+  expect(engine.plugins.snapshot().some(plugin => plugin.id === id)).toBe(false);
+  await engine.plugins.installBundled(id, available.digest);
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)).toMatchObject({ status: 'disabled', enabled: false, actions: [] });
+  expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
+  await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
+  await expect(engine.plugins.installBundled(id, available.digest)).rejects.toThrow('already installed');
+  await engine.close(); await start();
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('disabled');
+  expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
+});
 it('requires trust and an unchanged package digest, reserves builtin identities, and rejects traversal/symlinks', async () => {
   const pkg = await inspectPackage(source);
   await expect(engine.plugins.install(source, pkg.digest, false)).rejects.toThrow('trust');

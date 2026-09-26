@@ -22,6 +22,7 @@ export const installedSchema = z.object({
   previous: z.object({ package: packageSchema, digest: z.string(), source: z.enum(['builtin', 'local', 'development']), sourcePath: z.string().optional(), dataRevision: z.string().optional() }).optional(),
 });
 export type InstalledPlugin = z.infer<typeof installedSchema>;
+export type AvailablePluginView = { id: string; name: string; description: string; version: string; digest: string; source: 'builtin'; status: 'available'; capabilities: string[]; requires: Record<string, string> };
 export const storeSchema = z.object({ version: z.literal(1), installed: z.array(installedSchema).max(100), uninstalled: z.array(pluginId).max(200) });
 export type PluginStore = z.infer<typeof storeSchema>;
 export type PluginView = { id: string; name: string; description: string; version: string; digest: string; source: InstalledPlugin['source']; enabled: boolean; status: 'active' | 'disabled' | 'failed' | 'recovery'; error?: string; capabilities: string[]; requires: Record<string, string>; actions: Array<{ id: string; title: string; description: string; effect: 'read' | 'write'; scope: 'project' | 'global'; input: Record<string, unknown> }>; recipes: Array<{ id: string; title: string; version: string; description: string }>; settings: Array<{ id: string; label: string; type: 'string' | 'boolean' | 'number'; default?: unknown }>; appUrl?: string; workspacePanel?: string; workspaceGroup?: 'backend'; guides: string[]; canRollback: boolean };

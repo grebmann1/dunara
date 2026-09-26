@@ -76,3 +76,37 @@ for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
+  test(`available plugins install separately from activation and app setup at ${width}`, async ({ page }) => {
+    await engine.plugins.ready;
+    await engine.plugins.change('salesforce.mobile-sdk', 'uninstall');
+    await page.setViewportSize({ width, height }); await page.goto(studio.launchUrl);
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+    const tabs = page.getByRole('tablist', { name: 'Plugin library filters' });
+    await tabs.getByRole('tab', { name: /^All / }).focus(); await page.keyboard.press('End');
+    await expect(tabs.getByRole('tab', { name: /^Available / })).toBeFocused();
+    await expect(page.getByRole('heading', { name: 'Available to install' })).toBeVisible();
+    const card = page.getByRole('button', { name: /Salesforce.*Not installed/ });
+    await expect(card).toBeVisible();
+    await page.getByRole('heading', { name: 'Plugins', exact: true }).scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `.builder/plugin-review/available-list-${width}.png` });
+    await card.click();
+    const detail = page.getByRole('region', { name: 'Plugin details', exact: true });
+    await expect(detail.getByRole('heading', { name: 'Salesforce', exact: true })).toBeFocused();
+    await expect(detail.getByRole('button', { name: 'Install plugin', exact: true })).toBeVisible();
+    await detail.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: `.builder/plugin-review/available-detail-${width}.png` });
+    await detail.getByRole('button', { name: 'Install plugin', exact: true }).click();
+    await expect(detail.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
+    await expect(detail.locator('.plugin-status')).toHaveText('disabled');
+    await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
+    await page.getByRole('button', { name: 'Backend', exact: true }).click();
+    await page.getByRole('group', { name: 'Backend providers' }).getByRole('button', { name: 'Salesforce', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+    await tabs.getByRole('tab', { name: /^Available / }).click();
+    await expect(page.getByText('All plugins included with this version of Dunara are installed.', { exact: true })).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}

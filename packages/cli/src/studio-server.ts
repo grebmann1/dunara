@@ -104,11 +104,12 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           return res.end(archive.bytes);
         } finally { res.off('close', disconnect); }
       }
-      if (url.pathname === '/api/plugins' && req.method === 'GET') return json(res, { plugins: engine.plugins.snapshot(), reviews: engine.plugins.reviewsFor(), operations: engine.plugins.operationList(), recovery: engine.plugins.recovery });
+      if (url.pathname === '/api/plugins' && req.method === 'GET') return json(res, { plugins: engine.plugins.snapshot(), available: engine.plugins.available(), reviews: engine.plugins.reviewsFor(), operations: engine.plugins.operationList(), recovery: engine.plugins.recovery });
       if (url.pathname.startsWith('/api/plugins/') && req.method === 'POST') {
         const operation = url.pathname.slice('/api/plugins/'.length), input = await body(req);
         if (operation === 'inspect') { const value = z.object({ source: z.string().min(1).max(4096) }).strict().parse(input); return json(res, await engine.plugins.inspect(value.source)); }
         if (operation === 'install') { const value = z.object({ source: z.string().max(4096), digest: z.string().regex(/^[a-f0-9]{64}$/), trust: z.literal(true), development: z.boolean().default(false) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.install(value.source, value.digest, value.trust, value.development)); }
+        if (operation === 'install-bundled') { const value = z.object({ id: pluginId, digest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.installBundled(value.id, value.digest)); }
         if (operation === 'change') { const value = z.object({ id: pluginId, operation: z.enum(['enable', 'disable', 'uninstall', 'reload', 'rollback']) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.change(value.id, value.operation)); }
         if (operation === 'restore') { z.object({ confirm: z.literal(true) }).strict().parse(input); return json(res, await engine.plugins.restoreDefaults()); }
         if (operation === 'invoke') { const value = z.object({ id: pluginId, action: z.string().max(64), input: z.json().default({}), projectId: z.uuid().nullable().default(null) }).strict().parse(input); return json(res, await engine.plugins.invoke(value.id, value.action, value.input, value.projectId)); }
