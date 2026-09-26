@@ -9,7 +9,7 @@ import { ProjectDurability, ProjectTransactions, type ProjectWorkspacePersistenc
 import { snapshotSource } from './source.js';
 import { flushHomeState, mountHomeState, type HomeStatePersistence } from './durable-state.js';
 import { presets } from '../../templates/src/catalog.js';
-import { defaultStudio, projectMetadataSchema, recipeApplicationSchema, type StudioPreferences } from './studio-contracts.js';
+import { backendPluginSelectionsSchema, defaultStudio, projectMetadataSchema, recipeApplicationSchema, type StudioPreferences } from './studio-contracts.js';
 import type { JourneyPreferences } from './journey-contracts.js';
 export type UnavailableProject = { project: Project; reason: 'missing' | 'unreadable' | 'invalid' };
 export const projectMetadataFile = '.mobile-builder.json';
@@ -116,7 +116,7 @@ export class Projects {
         await atomicWrite(path.join(root, 'app.json'), JSON.stringify(config, null, 2) + '\n');
         await atomicWrite(path.join(root, 'src/theme/design.json'), JSON.stringify({ preset: value.preset, mode: 'light', tokens: presets[value.preset].light }, null, 2) + '\n');
         const project: Project = { id: randomUUID(), name: value.name, slug: value.slug, root, recipe: value.recipe, createdAt: new Date().toISOString() };
-        await this.writeMetadata(project, defaultStudio(project.id));
+        await this.writeMetadata(project, defaultStudio(project.id), undefined, undefined, {});
         await atomicWrite(path.join(this.home, 'projects.json'), JSON.stringify([...records, project], null, 2));
         return project;
       } catch (error) { if (created) await rm(root, { recursive: true, force: true }); throw error; }
@@ -146,27 +146,39 @@ export class Projects {
           const file = path.join(root, relative); await mkdir(path.dirname(file), { recursive: true }); await noSymlinks(root, file); await writeFile(file, content, { flag: 'wx', mode: 0o600 });
         }
         const project: Project = { id: randomUUID(), name: value.name, slug: value.slug, root, recipe: 'wellness', createdAt: new Date().toISOString() };
-        await this.writeMetadata(project, defaultStudio(project.id));
+        await this.writeMetadata(project, defaultStudio(project.id), undefined, undefined, {});
         await atomicWrite(path.join(this.home, 'projects.json'), JSON.stringify([...records, project], null, 2));
         return project;
       } catch (error) { await rm(root, { recursive: true, force: true }); throw error; }
     });
   }
   // Call under mutations; the dotfile is deliberately outside generic source-file writes.
-  async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {
-    return this.mutations.run(() => this.writeMetadataUnlocked(project, studio, applications, journey));
+  async writeMetadata(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences, backendPlugins?: z.infer<typeof backendPluginSelectionsSchema>) {
+    return this.mutations.run(() => this.writeMetadataUnlocked(project, studio, applications, journey, backendPlugins));
   }
-  private async writeMetadataUnlocked(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences) {
+  private async writeMetadataUnlocked(project: Project, studio: StudioPreferences, applications?: z.infer<typeof recipeApplicationSchema>[], journey?: JourneyPreferences, backendPlugins?: z.infer<typeof backendPluginSelectionsSchema>) {
     await this.validate(project);
     const file = path.join(project.root, projectMetadataFile);
     await noSymlinks(project.root, file);
     const existing = await this.metadata(project);
     const recipeApplications = applications ?? ('recipeApplications' in existing ? existing.recipeApplications : undefined);
     const savedJourney = journey ?? ('journey' in existing ? existing.journey : undefined);
-    const value = projectMetadataSchema.parse({ version: 1, project: { id: project.id, name: project.name, slug: project.slug, recipe: project.recipe, createdAt: project.createdAt }, studio, ...(recipeApplications ? { recipeApplications } : {}), ...(savedJourney ? { journey: savedJourney } : {}) });
+    const selections = backendPlugins ?? ('backendPlugins' in existing ? existing.backendPlugins : undefined);
+    const value = projectMetadataSchema.parse({ ...(selections ? { backendPlugins: selections } : {}), version: 1, project: { id: project.id, name: project.name, slug: project.slug, recipe: project.recipe, createdAt: project.createdAt }, studio, ...(recipeApplications ? { recipeApplications } : {}), ...(savedJourney ? { journey: savedJourney } : {}) });
     const content = JSON.stringify(value, null, 2) + '\n';
     if (Buffer.byteLength(content) > 16_384) throw new BuilderError('LIMIT_EXCEEDED', 'Studio preferences exceed 16 KiB. Use shorter screen names or fewer screens.');
     await atomicWrite(file, content);
+  }
+  async backendPluginSelections(id: string) {
+    const metadata = await this.metadata(await this.get(id));
+    return 'backendPlugins' in metadata ? metadata.backendPlugins ?? {} : {};
+  }
+  async setBackendPlugin(id: string, pluginId: string, enabled: boolean, defaults: Record<string, boolean> = {}) {
+    return this.mutations.run(async () => {
+      const project = await this.get(id), metadata = await this.metadata(project);
+      const selections = backendPluginSelectionsSchema.parse({ ...Object.fromEntries(Object.entries(defaults).map(([id, enabled]) => [id, { enabled, revision: randomUUID() }])), ...await this.backendPluginSelections(id), [pluginId]: { enabled, revision: randomUUID() } });
+      await this.writeMetadata(project, metadata.studio, undefined, undefined, selections);
+    });
   }
   async recordRecipe(id: string, input: z.infer<typeof recipeApplicationSchema>) {
     return this.mutations.run(async () => {

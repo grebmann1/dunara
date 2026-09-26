@@ -1,8 +1,8 @@
 # Salesforce backend
 
-Open **Backend → Salesforce** in an app and choose **Enable plugin** if it is disabled. You can also manage the plugin in Plugins. Salesforce is optional and can coexist with Supabase. Each app keeps its own development, staging and production org settings.
+Open **Backend → Salesforce** in an app and choose **Enable for this app**. Supabase uses the same project control. Install or manage the editor plugin in Plugins; each app enables it separately. Salesforce is optional and can coexist with Supabase. Each app keeps its own development, staging and production org settings.
 
-The plugin is bundled with Dunara, not installed into every app. Enabling it or opening its workspace adds no app files or dependencies. Only the app selected for an explicitly reviewed Salesforce change receives that change; other apps keep their existing source, settings and dependencies.
+The plugin is bundled with Dunara, not installed into every app. Enabling it for an app adds no app files or dependencies. **Install in app** remains a separate reviewed source change. **Disable for this app** retains the saved setup and integration source. Only the app selected for an explicitly reviewed Salesforce change receives that change; other apps keep their existing source, settings and dependencies.
 
 1. Choose **Install in app**. Review the typed client, React provider/hooks, setup guide and app installation record in **Reviews**, then apply them. Until approval, the app stays unchanged.
 2. In **Org settings**, enter the org label, Salesforce login/My Domain URL, public OAuth consumer key and native callback URI. Choose the object and field API names the app will read.

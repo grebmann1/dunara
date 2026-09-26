@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react';
 import { Database, ExternalLink, RefreshCw, ShieldCheck } from 'lucide-react';
 import type { Backends } from '../../../../packages/core/src/backends';
 import { anyBackendPlan, type BackendPlan } from '../../../../packages/core/src/backend-contracts';
@@ -60,7 +60,7 @@ export function SupabaseSettings({ disabled, onConnected, compact = false }: { d
 }
 
 export type SupabaseTab = 'overview' | 'projects' | 'services' | 'variables' | 'reviews' | 'settings';
-export function BackendPanel({ projectId, disabled, navigation }: { projectId: string; disabled: boolean; navigation?: { tab?: SupabaseTab } }) {
+export function BackendPanel({ projectId, disabled, navigation, projectControl }: { projectId: string; disabled: boolean; navigation?: { tab?: SupabaseTab }; projectControl?: ReactNode }) {
   const { api } = useStudioClient();
   const [tab, setTab] = useState<SupabaseTab>(navigation?.tab ?? 'overview');
   const [visited, setVisited] = useState<Set<SupabaseTab>>(() => new Set([navigation?.tab ?? 'overview']));
@@ -116,6 +116,7 @@ export function BackendPanel({ projectId, disabled, navigation }: { projectId: s
   const requiresProject = <section className="backend-card backend-empty"><Database size={24} aria-hidden /><h2>Connect a project first</h2><p>Choose a Supabase project for {environment} to manage its services and private variables.</p><Button disabled={disabled} onClick={() => revealTab(state?.connection.configured ? 'projects' : 'settings')}>{state?.connection.configured ? 'Choose a project' : 'Connect Supabase account'}</Button></section>;
   return <main className="destination backend-workspace">
     <header className="backend-title"><div><p className="backend-eyebrow">BACKEND</p><h1 ref={heading} tabIndex={-1}>Supabase</h1><p>Accounts, data, and files for your app.</p></div><Button variant="outline" disabled={disabled || busy} onClick={() => void perform(refresh)}><RefreshCw size={16} aria-hidden />Refresh</Button></header>
+    {projectControl}
     <div className="backend-context"><label>Environment<select disabled={disabled || busy} value={environment} onChange={event => setEnvironment(event.target.value as EnvironmentName)}>{environments.map(env => <option key={env}>{env}</option>)}</select></label><span className="backend-context-status"><span className="backend-status-dot" data-connected={!!binding} />{binding ? 'Project connected' : 'No project connected'}{state?.activeEnvironment === environment && <span className="backend-badge">Used for preview</span>}</span></div>
     {error && <p role="alert" className="backend-alert">{error}</p>}{(busy || notice) && <p role="status">{busy ? 'Working…' : notice}</p>}
     {!state ? <p role="status">Loading Supabase…</p> : <BackendTabs label="Supabase sections" tabs={tabs} active={tab} onChange={openTab}>{section => {

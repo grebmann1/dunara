@@ -53,14 +53,14 @@ it('validates automatic project context and contains failures without disclosing
 it('installs defaults offline and preserves disabled and removed defaults across restart', async () => {
   expect(engine.plugins.snapshot()).toHaveLength(10);
   expect(engine.plugins.snapshot().filter(p => p.id !== 'salesforce.mobile-sdk').every(p => p.status === 'active')).toBe(true);
-  expect(engine.plugins.snapshot().find(p => p.id === 'salesforce.mobile-sdk')?.status).toBe('disabled');
+  expect(engine.plugins.snapshot().find(p => p.id === 'salesforce.mobile-sdk')?.status).toBe('active');
   await engine.plugins.change('builder.plugin-guide', 'uninstall'); await engine.plugins.change('builder.icons', 'disable');
   await engine.close(); await start();
   expect(engine.plugins.snapshot().some(p => p.id === 'builder.plugin-guide')).toBe(false);
   expect(engine.plugins.snapshot().find(p => p.id === 'builder.icons')?.status).toBe('disabled');
   await engine.plugins.restoreDefaults(); expect(engine.plugins.isEnabled('builder.plugin-guide')).toBe(true); expect(engine.plugins.isEnabled('builder.icons')).toBe(false);
 });
-it('lists uninstalled bundled plugins and installs one disabled without restoring others', async () => {
+it('lists uninstalled bundled plugins and installs one backend without enabling it in any app or restoring others', async () => {
   const id = 'salesforce.mobile-sdk';
   expect(engine.plugins.available()).toEqual([]);
   await engine.plugins.change(id, 'uninstall'); await engine.plugins.change('builder.plugin-guide', 'uninstall');
@@ -71,12 +71,12 @@ it('lists uninstalled bundled plugins and installs one disabled without restorin
   await expect(engine.plugins.installBundled(id, '0'.repeat(64))).rejects.toThrow('changed');
   expect(engine.plugins.snapshot().some(plugin => plugin.id === id)).toBe(false);
   await engine.plugins.installBundled(id, available.digest);
-  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)).toMatchObject({ status: 'disabled', enabled: false, actions: [] });
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)).toMatchObject({ status: 'active', enabled: true });
   expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
   await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
   await expect(engine.plugins.installBundled(id, available.digest)).rejects.toThrow('already installed');
   await engine.close(); await start();
-  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('disabled');
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('active');
   expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
 });
 it('requires trust and an unchanged package digest, reserves builtin identities, and rejects traversal/symlinks', async () => {

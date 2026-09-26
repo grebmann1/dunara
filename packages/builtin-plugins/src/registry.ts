@@ -26,6 +26,7 @@ export class BuiltinActions {
     if (definition.owner) this.engine.plugins.assertEnabled(definition.owner);
     const input = definition.config.inputSchema instanceof z.ZodType ? definition.config.inputSchema : z.object(definition.config.inputSchema);
     const parsed = input.parse(args) as Record<string, unknown>, owner = definition.owner ?? 'host';
+    if (owner === 'builder.supabase' && typeof parsed.projectId === 'string' && !['backend_inspect', 'backend_operation', 'backend_cancel'].includes(name)) await this.engine.assertBackendEnabled(parsed.projectId, owner);
     this.active.set(owner, (this.active.get(owner) ?? 0) + 1);
     try { return await definition.handler(parsed, { signal }); }
     finally { this.active.set(owner, (this.active.get(owner) ?? 1) - 1); }

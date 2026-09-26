@@ -61,7 +61,12 @@ for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
     await expect.poll(() => engine.plugins.snapshot().some(p => p.id === 'example.project-notes')).toBe(false);
     expect((await engine.files.read(projectId, 'APP-NOTES.md')).content).toContain('My app');
-    for (const name of ['Supabase', 'Dunara Account']) {
+    await page.getByRole('button', { name: /Supabase.*Included with Dunara/ }).click();
+    await expect(page.getByRole('button', { name: 'Disable', exact: true })).toHaveCount(0);
+    await page.getByText('Manage plugin', { exact: true }).click();
+    await page.getByRole('button', { name: 'Uninstall', exact: true }).click();
+    await expect.poll(() => engine.plugins.snapshot().some(plugin => plugin.id === 'builder.supabase')).toBe(false);
+    for (const name of ['Dunara Account']) {
       await page.getByRole('button', { name: new RegExp(`${name}.*Included with Dunara`) }).click();
       await page.getByRole('button', { name: 'Disable', exact: true }).click();
       await expect(page.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
@@ -98,12 +103,12 @@ for (const [width, height] of [[375, 812], [430, 932], [1440, 1000]] as const) {
     await detail.scrollIntoViewIfNeeded();
     await page.screenshot({ path: `.builder/plugin-review/available-detail-${width}.png` });
     await detail.getByRole('button', { name: 'Install plugin', exact: true }).click();
-    await expect(detail.getByRole('button', { name: 'Enable', exact: true })).toBeVisible();
-    await expect(detail.locator('.plugin-status')).toHaveText('disabled');
+    await expect(detail.getByRole('button', { name: 'Enable', exact: true })).toHaveCount(0);
+    await expect(detail.locator('.plugin-status')).toHaveText('Installed');
     await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
     await page.getByRole('button', { name: 'Backend', exact: true }).click();
     await page.getByRole('group', { name: 'Backend providers' }).getByRole('button', { name: 'Salesforce', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Enable for this app', exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Plugins', exact: true }).click();
     await tabs.getByRole('tab', { name: /^Available / }).click();
     await expect(page.getByText('All plugins included with this version of Dunara are installed.', { exact: true })).toBeVisible();

@@ -63,7 +63,7 @@ export class McpGateway implements AssistantGateway {
     if (!this.binding.projectId) return null;
     const projectId = this.binding.projectId;
     const inspected = metadata(await this.invoke('project_inspect', { projectId }, signal));
-    return { projectId, backendPlugins: inspected.backendPlugins ?? [], note: 'Plugin availability does not authorize app installation. Pending reviews are not completed installations. Read project_inspect again after changes.' };
+    return { projectId, backendPlugins: inspected.backendPlugins ?? [], note: 'Plugin availability does not enable a backend for this app or authorize app installation. Respect projectEnabled; ask the user to enable a disabled backend in Backend. Pending reviews are not completed installations. Read project_inspect again after changes.' };
   }
   async close() { this.closed = true; this.removeAbortListener(); await this.client.close(); }
   private guard(signal: AbortSignal) { signal.throwIfAborted(); this.lifetime.throwIfAborted(); if (this.closed) throw new Error('Assistant MCP connection is closed'); }
