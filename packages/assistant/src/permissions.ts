@@ -2,7 +2,12 @@ import { createHash, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import type { AssistantMode, RunBinding } from './contracts.js';
 
-export const TOOL_POLICY: Readonly<Record<string, 'catalog' | 'read' | 'write' | 'review' | 'project' | 'studio' | 'cancel'>> = Object.freeze({
+export const TOOL_POLICY: Readonly<Record<string, 'catalog' | 'read' | 'write' | 'review' | 'project' | 'studio' | 'cancel' | 'global-review'>> = Object.freeze({
+  project_catalog: 'catalog', project_remove_unavailable: 'global-review',
+  project_journey_read: 'read', project_journey_update: 'write', project_export: 'read',
+  project_import_review: 'catalog', project_import_inspect: 'catalog', project_import_apply: 'project',
+  project_backend_list: 'read', plugin_reviews: 'read',
+  android_delivery_preflight: 'read', android_delivery_plan: 'read', android_delivery_build: 'review', android_delivery_list: 'read', android_delivery_install_plan: 'read', android_delivery_install: 'review', android_delivery_cancel: 'review', android_delivery_remove: 'review', android_delivery_artifact: 'read',
   plugin_list: 'catalog', plugin_guide: 'catalog', plugin_action: 'write',
   native_build_inspect: 'read', native_build_plan: 'read', native_build_apply: 'review',
   native_workspace_plan: 'read', native_workspace_list: 'read', native_workspace_prepare: 'review', native_workspace_cancel: 'review', native_workspace_remove: 'review',

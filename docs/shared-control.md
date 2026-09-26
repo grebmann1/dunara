@@ -49,7 +49,7 @@ Existing project/file/design, Preview, capture, diagnostics, media, icon and Lau
 
 ## CLI against desktop
 
-Launch desktop, then copy **Dunara → Copy MCP socket path**. Set `SOCKET` to the actual current path. The command client only attaches to that private same-user socket; it refuses workspace/home/trust flags that would suggest a competing runtime.
+Launch desktop, then run `node dist/packages/cli/src/index.js runtimes`. Set `SOCKET` to its current socket path, or replace `--desktop-connect "$SOCKET"` with `--connect-home /absolute/builder-home` for a stable configuration. The command client only attaches to that private same-user socket; it refuses workspace/home/trust flags that would suggest a competing runtime.
 
 ```sh
 node dist/packages/cli/src/index.js --desktop-connect "$SOCKET" tools
@@ -72,7 +72,7 @@ node dist/packages/cli/src/index.js --desktop-connect "$SOCKET" call studio_cont
 node dist/packages/cli/src/index.js --desktop-connect "$SOCKET" resource builder://guide
 ```
 
-`tools` discovers schemas; `call <tool-name>` accepts one JSON object via `--input` or `--input-file`; `resource <builder-uri>` reads a scoped resource. Stdout contains JSON, tool calls retain the MCP result envelope (`structuredContent`, `content`, `isError`), and failures exit nonzero. Large asset inputs should use a file, not shell arguments. No command creates an Engine. Closing a command's connection leaves desktop and Preview running. Backend restart changes the socket path; copy it again. Task-oriented calls are currently available through desktop's socket, not a second browser-server RPC mode.
+`tools` discovers schemas; `call <tool-name>` accepts one JSON object via `--input` or `--input-file`; `resource <builder-uri>` reads a scoped resource. Stdout contains JSON, tool calls retain the MCP result envelope (`structuredContent`, `content`, `isError`), and failures exit nonzero. Large asset inputs should use a file, not shell arguments. No command creates an Engine. Closing a command's connection leaves desktop and Preview running. Backend restart changes the socket path; `--connect-home` resolves the replacement. Desktop and CLI Studio modes advertise their shared sockets. Resources, templates, prompts and artifact file output are described in the [agent access audit](agent-access.md).
 
 ## Deliberate boundaries
 

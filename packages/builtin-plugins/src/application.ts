@@ -1,3 +1,7 @@
+import { ProjectImports } from '../../core/src/project-import.js';
+import { ProjectExports } from '../../core/src/project-export.js';
+import { ProjectJourney } from '../../core/src/journey.js';
+import { AgentArtifacts } from '../../core/src/agent-artifacts.js';
 import { AndroidDeliveries } from './features/android-deliveries.js';
 import type { PreviewDriver } from '../../core/src/preview-driver.js';
 import { Projects } from "../../core/src/projects.js";
@@ -36,6 +40,10 @@ import { BuilderKernel } from '../../core/src/kernel.js';
 /** First-party distribution composition; the core Engine export remains a compatibility facade. */
 export class Engine extends BuilderKernel {
   private shutdown?: Promise<void>;
+  readonly projectImports: ProjectImports;
+  readonly projectExports: ProjectExports;
+  readonly journey: ProjectJourney;
+  readonly agentArtifacts: AgentArtifacts;
   readonly plugins: PluginRuntime;
   readonly actions: BuiltinActions;
   readonly assets: Assets;
@@ -68,6 +76,10 @@ export class Engine extends BuilderKernel {
     this.mediaJobs = new MediaJobs(this.assets, imageProvider, 180_000, { home: projects.home, managed: runtime.managedImages, credentials: sharedOpenAIStore(projects.home, secretProtection(services)), ...providerOptions });
     const protection = secretProtection(services), accountStore = new EncryptedSettingsStore(projects.home, 'builder-account', savedAccountSchema, protection);
     this.account = new AccountSession(accountProvider ?? (services.account ? new AccountProvider(services.account) : undefined), Date.now, { available: !!protection, load: () => accountStore.load(), save: value => accountStore.save(value), remove: () => accountStore.remove() });
+    this.projectImports = new ProjectImports(projects, () => this.account.context().revision);
+    this.projectExports = new ProjectExports(projects);
+    this.agentArtifacts = new AgentArtifacts(() => this.account.context().revision);
+    this.journey = new ProjectJourney(projects, id => this.boardCaptures.sourceRevision(id));
     this.backendOAuth = new BackendOAuth(this.account, services.oauthBrokerOrigin, backendOptions.fetch);
     this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, enabled: id => this.backendActive(id, 'builder.supabase'), paused: () => !!runtime.computePaused, changed: () => this.diagnostics.emit('change') });
     const environment = (id: string) => this.backends.appEnvironment(id);

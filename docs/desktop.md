@@ -28,15 +28,15 @@ This authorizes local dependency installation and execution with your user permi
 
 ## Connect an agent to the same backend
 
-With desktop running, use **Studio → Copy MCP socket path**. Configure a stdio MCP connection whose command is Node and whose arguments are:
+With desktop running, run `node dist/packages/cli/src/index.js runtimes` and choose its home. Configure a stdio MCP connection whose command is Node and whose arguments are:
 
 ```text
-/absolute/path/to/mobile-app-builder/dist/packages/cli/src/index.js
---desktop-connect
-/the/socket/path/copied/from/the/Studio/menu
+/absolute/path/to/dunara/dist/packages/cli/src/index.js
+--connect-home
+/absolute/home/from/runtime/discovery
 ```
 
-Use the actual copied path, not the placeholder above. Do not add `--workspace`, `--home`, `--studio`, `--studio-only`, `--trust-execution` or `--lan` to this connection. The bridge creates no Engine; its canonical tools share the desktop's projects, previews, captures, assets, Launch Kits and Studio workspace/view state. JSON CLI commands use the same socket; see [Shared controls and project memory](shared-control.md). Disconnecting an agent does not stop desktop. The private current-user Unix socket accepts at most four clients. Its path changes on backend restart; copy it again and reload the agent connection. Other processes running as your user are within this local trust boundary.
+Use the actual home path from discovery. `--desktop-connect` still accepts an exact socket path. Do not add `--workspace`, `--home`, `--studio`, `--studio-only`, `--trust-execution` or `--lan` to this connection. The bridge creates no Engine; its canonical tools share the desktop's projects, previews, captures, assets, Launch Kits and Studio workspace/view state. JSON CLI commands use the same socket; see [Shared controls and project memory](shared-control.md). Disconnecting an agent does not stop desktop. The private current-user Unix socket accepts at most four clients. Its socket changes on backend restart; `--connect-home` resolves it when the agent reconnects. Other processes running as your user are within this local trust boundary.
 
 ## Lifecycle
 

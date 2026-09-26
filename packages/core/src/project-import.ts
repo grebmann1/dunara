@@ -70,6 +70,11 @@ export class ProjectImports {
     const review = { id: randomUUID(), revision: revision(bytes.toString('base64')), files: [...source].map(([path, content]) => ({ path, bytes: content.length })), skipped, scripts, expiresAt: new Date(Date.now() + 15 * 60_000).toISOString() };
     this.reviews.set(review.id, { review, source, context }); return review;
   }
+  inspect(id: string) {
+    const entry = this.reviews.get(id);
+    if (!entry || entry.context !== this.context() || Date.parse(entry.review.expiresAt) <= Date.now()) fail('Import review expired or account changed. Review the ZIP again.');
+    return structuredClone(entry!.review);
+  }
   async apply(input: unknown) {
     const value = z.object({ id: z.uuid(), revision: z.string(), name: createSchema.shape.name, slug: createSchema.shape.slug, confirmed: z.literal(true) }).strict().parse(input);
     const entry = this.reviews.get(value.id);

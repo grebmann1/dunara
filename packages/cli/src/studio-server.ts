@@ -1,4 +1,3 @@
-import { ProjectImports } from '../../core/src/project-import.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -22,8 +21,6 @@ import { nativeBuildConfiguration } from '../../core/src/native-builds.js';
 import { workspaceSelection } from '../../core/src/native-workspace-contracts.js';
 import { routeOwner } from '../../builtin-plugins/src/catalog.js';
 import { pluginId } from '../../plugin-runtime/src/contracts.js';
-import { ProjectJourney } from '../../core/src/journey.js';
-import { ProjectExports } from '../../core/src/project-export.js';
 
 const equal = (actual: string | undefined, expected: string) => !!actual && Buffer.byteLength(actual) === Buffer.byteLength(expected) && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
@@ -47,9 +44,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
   assistant?.useSourceChanges(engine.sourceChanges, async projectId => {
     if ((await engine.studio.snapshot()).projectId !== projectId) throw new BuilderError('REVISION_CONFLICT', 'Select the conversation’s app before restoring its source.');
   });
-  const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
-  const projectExports = new ProjectExports(engine.projects);
-  const projectImports = new ProjectImports(engine.projects, () => engine.account.context().revision);
+  const { journey, projectExports, projectImports } = engine;
   await engine.plugins.ready;
   if (engine.plugins.isEnabled('builder.account')) await engine.account.restore();
   const drafts = new AssistantDrafts(engine.projects.home, assistant?.epoch ?? randomUUID(), () => engine.account.context());
