@@ -3,10 +3,12 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { Engine } from '../../core/src/engine.js';
 import { guidance } from '../../templates/src/catalog.js';
+import { agentAccess } from './capabilities.js';
 import { pluginId } from '../../plugin-runtime/src/contracts.js';
 
 export function createMcpServer(engine: Engine) {
-  const server = new McpServer({ name: 'mobile-app-builder', version: '0.1.0' }, { instructions: guidance });
+  const server = new McpServer({ name: 'mobile-app-builder', version: '0.1.0' }, { instructions: `${guidance}\nRead builder://capabilities for the agent workflow map, CLI access and required human steps. Use MCP/CLI for operations; never automate approval or credential UI.` });
+  server.registerResource('agent-capabilities', 'builder://capabilities', { mimeType: 'application/json', description: 'Agent workflow map, CLI connection/discovery/artifact instructions, and explicit human-only steps' }, async uri => ({ contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(agentAccess) }] }));
   const unmount = engine.actions.mount(server);
   const connect = server.connect.bind(server);
   server.connect = async transport => { await engine.plugins.ready; await connect(transport); };

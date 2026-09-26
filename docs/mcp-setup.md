@@ -4,11 +4,11 @@ Build first with `pnpm build`. This release uses **local stdio**, not a hosted H
 
 ## Connect to desktop instead
 
-The macOS Electron prototype owns its backend. Start it with `pnpm desktop` (execution is opt-in), then copy **Studio → Copy MCP socket path**. Configure the built CLI with only `--desktop-connect <copied-absolute-socket-path>` instead of workspace/home/Studio flags. The stdio bridge shares desktop's Engine and does not start a competing runtime. Quit/restart disconnects clients; after restart copy the new socket path and reload the MCP connection. No existing harness configuration is changed automatically. See [Desktop](desktop.md) for launch and security boundaries.
+The editor owns its backend. Run `node dist/packages/cli/src/index.js runtimes`, then configure the built CLI with `--connect-home <home-from-discovery>`. The stdio bridge shares that Engine and resolves its new socket after each restart. `--desktop-connect <absolute-socket-path>` remains available for an exact endpoint. No browser access, launch ticket or computer use is required. Do not combine connection flags with workspace/home/Studio creation flags. See the [agent access audit and client commands](agent-access.md) and [Desktop](desktop.md).
 
 ## Shared UI controls and project memory
 
-The shared tool surface includes `project_list`, `project_open`, revision-safe `studio_inspect`/`studio_control`, `activity_list`, and Inspector setup review/apply. Agents can select a project, switch Studio workspaces, open Design/Launch Kit, and add/activate/route/resize/reload/remove Preview views on the same Engine. New projects contain `.mobile-builder.json` with portable identity and view/workspace preferences; no credentials or running-process state is saved there. Desktop also exposes JSON CLI `tools`, `call` and `resource` commands through its existing MCP socket. See [Shared controls](shared-control.md) for inputs, recovery, conflicts and intentional approval boundaries.
+The shared tool surface includes `project_list`, `project_open`, revision-safe `studio_inspect`/`studio_control`, `activity_list`, and Inspector setup review/apply. Agents can select a project, switch Studio workspaces, open Design/Launch Kit, and add/activate/route/resize/reload/remove Preview views on the same Engine. New projects contain `.mobile-builder.json` with portable identity and view/workspace preferences; no credentials or running-process state is saved there. Desktop also exposes JSON CLI `tools`, `resources`, `resource-templates`, `prompts`, `call`, `prompt` and `resource` commands through its existing MCP socket. See [Shared controls](shared-control.md) for inputs, recovery, conflicts and intentional approval boundaries.
 
 ## Generic configuration
 
@@ -20,7 +20,7 @@ Replace every placeholder with an absolute path. Choose a dedicated workspace an
     "mobile-builder": {
       "command": "node",
       "args": [
-        "/absolute/path/to/mobile-app-builder/dist/packages/cli/src/index.js",
+        "/absolute/path/to/dunara/dist/packages/cli/src/index.js",
         "--workspace", "/absolute/path/to/generated-apps",
         "--home", "/absolute/path/to/builder-state",
         "--studio"
@@ -30,7 +30,7 @@ Replace every placeholder with an absolute path. Choose a dedicated workspace an
 }
 ```
 
-This is intentionally untrusted: creation/inspection/editing work, execution does not. After reviewing SECURITY.md, the **operator** may append `--trust-execution` to authorize managed installation and previews. Add `--lan` only for a trusted LAN/Expo Go session. Do not pass `--studio-only` to a stdio harness: that disables MCP.
+This is intentionally untrusted: creation/inspection/editing work, execution does not. After reviewing SECURITY.md, the **operator** may append `--trust-execution` to authorize managed installation and previews. Add `--lan` only for a trusted LAN/Expo Go session. Do not pass `--studio-only` to a stdio harness: that disables stdio MCP.
 
 ## Claude Code
 
@@ -79,7 +79,7 @@ These instructions do not install a timer, add automatic captures, repair harnes
 
 ## Tool workflow
 
-For the connected UI walkthrough, see `docs/studio-usage.md`. Use **one harness-owned process with `--studio`** for both interfaces; a separate `--studio-only` process does not share running previews. Compare `project_inspect`'s ID and resolved root with Studio's **Project identity** before editing. Existing registered apps should be selected, not recreated. Route metadata lists starter paths, not automatically discovered screens; use custom path entry for agent-added routes.
+For the connected UI walkthrough, see `docs/studio-usage.md`. Use **one harness-owned process with `--studio`** for both interfaces; a separate `--studio-only` process owns a separate runtime, which agents can join using `--connect-home`. Compare `project_inspect`'s ID and resolved root with Studio's **Project identity** before editing. Existing registered apps should be selected, not recreated. Route metadata lists starter paths, not automatically discovered screens; use custom path entry for agent-added routes.
 
 1. `project_create`: provide `name`, unique lowercase hyphenated `slug`, recipe `wellness`, and preset `sage`, `clay`, or `midnight`.
 2. `project_inspect`: provide the returned `projectId`; optional `paths` (at most 10) return source content and revisions. Empty paths still returns scoped file tree, routes, design, captures, and preview state.
@@ -90,7 +90,7 @@ For the connected UI walkthrough, see `docs/studio-usage.md`. Use **one harness-
 7. `project_diagnostics`: read bounded logs and truncation state for `projectId`.
 8. `preview_stop`: stop the project preview owned by this runtime.
 
-The creative-workbench extension adds thirteen media tools and four Launch Kit tools, for **25 total**:
+The creative workbench exposes media, icon and Launch Kit workflows:
 
 - `media_list`, `media_read`, `media_import`: project-scoped metadata/jobs/capabilities, image content, bounded base64 import.
 - `media_brief`, `media_approve`, `media_transform`: revision-checked creative brief, candidate approval and immutable crop/resize.
@@ -106,11 +106,11 @@ See `docs/media-workflow.md` for the end-to-end brief/import/review/approve/inte
 
 For an existing legacy app, `recipe_upgrade_preview({ projectId })` reviews the versioned Supabase recipe, including exact source/manifest/lockfile changes, dependency versions and conflicts. After operator review, `recipe_upgrade_apply({ projectId, proposedRevision, confirmed: true })` applies that exact proposal and stops its preview. The same tools provide reviewed restoration after an interrupted upgrade. Custom integrations require manual merging; neither tool provisions a backend or executes SQL. See [upgrade and recovery instructions](backend-setup.md#upgrade-an-existing-app).
 
-The default canonical inventory has **74 tools**, including nine local iPhone delivery tools, five native-workspace tools and three plugin tools. Local delivery reviews a ready iOS Preview/No backend workspace, builds and signs with Xcode, then separately reviews installation and launch on an exact physical iPhone. See [local native delivery](native-build-setup.md). Supabase setup includes project-scoped `backend_catalog` (paged discovery with snapshot revisions), `backend_capabilities` (redacted read-access evidence and missing requirements), and `backend_select_environment` (revision-checked, stops preview, requires the app still selected in Studio). Read `backend_inspect.environmentRevision` before selection. The Assistant uses these same schemas and enforces the conversation scope. Existing `backend_plan` and `backend_apply` stage link/create/migration changes for authenticated human approval in Backend; capability checks never grant remote write consent. See [setup and input details](backend-setup.md#assistant-and-mcp-configuration-discovery) and the [provider contract matrix](supabase-provider-capabilities.md).
+The default canonical inventory has **93 tools**, including Android delivery, project import/export, journey preferences and scoped backend/plugin review inspection. Local delivery reviews a ready iOS Preview/No backend workspace, builds and signs with Xcode, then separately reviews installation and launch on an exact physical iPhone. See [local native delivery](native-build-setup.md). Supabase setup includes project-scoped `backend_catalog` (paged discovery with snapshot revisions), `backend_capabilities` (redacted read-access evidence and missing requirements), and `backend_select_environment` (revision-checked, stops preview, requires the app still selected in Studio). Read `backend_inspect.environmentRevision` before selection. The Assistant uses these same schemas and enforces the conversation scope. Existing `backend_plan` and `backend_apply` stage link/create/migration changes for authenticated human approval in Backend; capability checks never grant remote write consent. See [setup and input details](backend-setup.md#assistant-and-mcp-configuration-discovery) and the [provider contract matrix](supabase-provider-capabilities.md).
 
 `plugin_list` discovers installed features, public action schemas and operation status. `plugin_guide` reads an installed user/agent guide. `plugin_action` invokes a scoped action; external writes prepare a human review in Plugins. Enabled user actions also appear as namespaced `mb_…` tools, with effect/scope metadata used by Assistant Plan/Build. Disabling a plugin removes its actions from discovery. Installation, credentials and review approval remain private Studio operations. See [plugin authoring and recovery](plugins/README.md).
 
-Resources: `builder://guide`, `builder://projects`, `builder://projects/{projectId}/captures/{artifactId}`, and `builder://projects/{projectId}/media/{assetId}`. Optional prompt: `build-mobile-app`, with `brief`. Core tools do not depend on resources, prompts, or image support. Without vision, ask a person to review captures/assets in Studio; never claim to have assessed an unseen screenshot.
+Resources: `builder://capabilities`, `builder://guide`, `builder://projects`, `builder://projects/{projectId}/captures/{artifactId}`, and `builder://projects/{projectId}/media/{assetId}`. Optional prompt: `build-mobile-app`, with `brief`. Core tools do not depend on resources, prompts, or image support. Without vision, ask a person to review captures/assets in Studio; never claim to have assessed an unseen screenshot.
 
 Structured error results include `isError: true` and an error code/message. Common codes: `TRUST_REQUIRED`, `REVISION_CONFLICT`, `DEPENDENCIES_CHANGED`, `PREVIEW_NOT_READY`, `INVALID_PATH`, and `LIMIT_EXCEEDED`. Framework-level schema/cancellation errors may use MCP protocol errors instead.
 

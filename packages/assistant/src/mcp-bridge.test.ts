@@ -341,3 +341,25 @@ it('shares configuration plans and private-input boundaries between the Assistan
   await expect(call('backend_requirements', { projectId: other })).rejects.toThrow('Cross-project');
   await expect(call('backend_validate', { projectId: other, input: {} })).rejects.toThrow('Cross-project');
 });
+it('scopes backend reviews and journey writes, and reads the agent workflow map', async () => {
+  const projectId = await create();
+  const other = await engine.projects.create({ name: 'Other tools', slug: 'other-tools' });
+  expect((await call('builder_mcp_read_resource', { uri: 'builder://capabilities' })).content).toHaveLength(1);
+  expect(data(await call('project_backend_list', { projectId }))).toMatchObject({ backends: expect.arrayContaining([expect.objectContaining({ pluginId: 'builder.supabase', enabled: false })]) });
+  await expect(call('plugin_reviews', { projectId: other.id })).rejects.toThrow('Cross-project');
+  const state = data(await call('project_journey_read', { projectId }));
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: state.revision, patch: { brief: 'Agent-readable idea' } } })).isError).not.toBe(true);
+  expect((await engine.journey.read(projectId)).preferences.brief).toBe('Agent-readable idea');
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: state.revision, patch: { brief: 'stale' } } })).isError).toBe(true);
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: (await engine.journey.read(projectId)).revision, patch: { tested: true } } })).isError).toBe(true);
+});
+it('requires an exact user approval before dispatching a new Android build tool', async () => {
+  const projectId = await create(), selection = { workspaceId: randomUUID() }, proposedRevision = 'a'.repeat(64);
+  const plan = { selection, proposedRevision, packageName: 'com.example.fixture', backend: 'none', consequences: ['Compile local debug APK'] };
+  vi.spyOn(engine.androidDeliveries, 'plan').mockResolvedValue(plan);
+  const build = vi.spyOn(engine.androidDeliveries, 'build').mockRejectedValue(new Error('Offline test: no compiler invoked'));
+  const pending = call('android_delivery_build', { projectId, input: { selection, proposedRevision, requestId: randomUUID(), confirmed: true } });
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  expect(build).not.toHaveBeenCalled(); expect(broker.list()[0]!.review).toEqual(plan);
+  await decide(); expect((await pending).isError).toBe(true); expect(build).toHaveBeenCalledOnce();
+});

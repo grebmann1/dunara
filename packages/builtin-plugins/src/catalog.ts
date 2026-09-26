@@ -41,7 +41,7 @@ export async function bundledPlugins(activate?: PluginFactory): Promise<BuiltinP
 }
 export function actionOwner(name: string): string | null {
   if (name.startsWith('backend_')) return 'builder.supabase';
-  if (/^(native_|recipe_upgrade_|preview_|board_capture)/.test(name) || name === 'project_create') return 'builder.expo';
+  if (/^(native_|android_delivery_|project_import_|recipe_upgrade_|preview_|board_capture)/.test(name) || name === 'project_create') return 'builder.expo';
   if (name.startsWith('media_')) return 'builder.media';
   if (name.startsWith('icon_')) return 'builder.icons';
   if (name.startsWith('launch_kit_')) return 'builder.launch-kit';

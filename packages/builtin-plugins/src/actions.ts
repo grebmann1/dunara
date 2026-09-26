@@ -2,6 +2,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import type { Engine } from '../../core/src/engine.js';
+import { registerAgentTools } from './agent-actions.js';
 import { registerBackendTools } from './backend-actions.js';
 import { captureRouteSchema, createSchema, errorResult, previewTransportInput, routeSchema, viewportSchema, writeSchema } from '../../core/src/contracts.js';
 import { testingGuide } from '../../core/src/testing-guide.js';
@@ -26,6 +27,7 @@ const annotations = (readOnlyHint: boolean, destructiveHint = false) => ({ readO
 export function registerBuiltinTools(server: McpServer, engine: Engine) {
   const guarded = (operation: () => Promise<CallToolResult>) => guardedResult(async () => { const result = await operation(); await engine.projects.flushState(); return result; });
   registerBackendTools(server, engine);
+  registerAgentTools(server, engine);
   server.registerTool('native_delivery_preflight', { description: 'Inspect local Xcode, CocoaPods, paired physical iPhones and available Apple Development signing teams. No build, account login or phone changes. Local Studio only.', inputSchema: { projectId }, annotations: annotations(true) }, ({ projectId }) => guarded(async () => { await engine.projects.get(projectId); return text(await engine.nativeDeliveries.preflight()); }));
   server.registerTool('native_delivery_plan', { description: 'Review a local iOS Release build from a ready Preview/No backend preparation, selecting an exact iPhone and signing team. Includes Apple automatic provisioning effects. No build or installation.', inputSchema: { projectId, selection: deliverySelection }, annotations: annotations(true) }, ({ projectId, selection }) => guarded(async () => text(await engine.nativeDeliveries.plan(projectId, selection))));
   server.registerTool('native_delivery_build', { description: 'Start the reviewed local iOS Release build with execution trust and human confirmation. Downloads native dependencies and runs Xcode automatic signing; may register this app/device with Apple. Stable requestId prevents replay. Poll native_delivery_list. Does not install or publish.', inputSchema: { projectId, input: deliveryBuildInput }, annotations: { ...annotations(false), openWorldHint: true } }, ({ projectId, input }) => guarded(async () => text(await engine.nativeDeliveries.build(projectId, input))));

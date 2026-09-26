@@ -1,4 +1,5 @@
-import { chmod, mkdtemp, rm, stat } from 'node:fs/promises';
+import { discoverRuntimes, resolveRuntimeHome } from './discovery.js';
+import { chmod, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { createConnection } from 'node:net';
@@ -23,7 +24,7 @@ it('shares one Engine across reconnecting MCP clients without closing it on disc
   expect((await stat(endpoint.socketPath)).mode & 0o777).toBe(0o600);
   expect((await stat(path.dirname(endpoint.socketPath))).mode & 0o777).toBe(0o700);
   const first = await client();
-  expect((await first.listTools()).tools).toHaveLength(74);
+  expect((await first.listTools()).tools).toHaveLength(93);
   expect((await first.callTool({ name: 'project_create', arguments: { name: 'Café desktop', slug: 'desktop' } })).isError).not.toBe(true);
   const project = (await engine.projects.list())[0]!;
   await first.close();
@@ -40,5 +41,21 @@ it('rejects public socket permissions and malformed peers without damaging the r
   await new Promise<void>((resolve, reject) => { peer.once('connect', resolve); peer.once('error', reject); });
   const closed = new Promise<void>(resolve => peer.once('close', () => resolve()));
   peer.write('not-json\n'); await closed;
-  expect((await (await client()).listTools()).tools).toHaveLength(74);
+  expect((await (await client()).listTools()).tools).toHaveLength(93);
+});
+
+it('advertises only private valid endpoints and rejects missing or ambiguous home selection', async () => {
+  const file = path.join(path.dirname(endpoint.socketPath), 'runtime.json');
+  expect((await stat(file)).mode & 0o777).toBe(0o600);
+  expect(await resolveRuntimeHome(engine.projects.home)).toBe(endpoint.socketPath);
+  const other = await startDesktopMcp(engine);
+  try { await expect(resolveRuntimeHome(engine.projects.home)).rejects.toThrow('Multiple runtimes'); }
+  finally { await other.close(); }
+  const original = await readFile(file, 'utf8');
+  await chmod(file, 0o644);
+  expect((await discoverRuntimes()).some(item => item.socketPath === endpoint.socketPath)).toBe(false);
+  await chmod(file, 0o600); await writeFile(file, '{}');
+  await expect(resolveRuntimeHome(engine.projects.home)).rejects.toThrow('No running');
+  await writeFile(file, original);
+  expect(await resolveRuntimeHome(engine.projects.home)).toBe(endpoint.socketPath);
 });

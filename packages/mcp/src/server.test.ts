@@ -1,3 +1,5 @@
+import { TOOL_POLICY } from '../../assistant/src/permissions.js';
+import { agentAccess } from './capabilities.js';
 import { mkdtemp, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -53,7 +55,12 @@ it('performs an actual stdio handshake, discovery, source/design loop and trust 
   try {
     await client.connect(transport);
     const tools = (await client.listTools()).tools;
-    expect(tools.map(t => t.name)).toEqual(['backend_environment_inspect', 'backend_environment_declare', 'backend_recipe_preview', 'backend_recipe_apply', 'recipe_upgrade_preview', 'recipe_upgrade_apply', 'backend_inspect', 'backend_catalog', 'backend_capabilities', 'backend_select_environment', 'backend_plan', 'backend_validate', 'backend_requirements', 'backend_setup', 'backend_apply', 'backend_operation', 'backend_cancel', 'backend_reconcile', 'backend_generate_types', 'backend_export_config', 'native_delivery_preflight', 'native_delivery_plan', 'native_delivery_build', 'native_delivery_list', 'native_delivery_install_plan', 'native_delivery_install', 'native_delivery_launch', 'native_delivery_cancel', 'native_delivery_remove', 'native_workspace_plan', 'native_workspace_prepare', 'native_workspace_list', 'native_workspace_cancel', 'native_workspace_remove', 'native_build_inspect', 'native_build_plan', 'native_build_apply', 'project_list', 'project_open', 'studio_inspect', 'studio_control', 'activity_list', 'board_capture', 'inspector_setup_preview', 'inspector_setup_apply', 'project_create', 'project_inspect', 'project_write_files', 'design_apply', 'preview_start', 'preview_set_transport', 'preview_stop', 'preview_capture', 'project_diagnostics', 'icon_check', 'icon_prepare', 'icon_preview', 'icon_apply', 'media_list', 'media_read', 'media_import', 'media_brief', 'media_approve', 'media_transform', 'media_request', 'media_job', 'launch_kit_create', 'launch_kit_list', 'launch_kit_read', 'launch_kit_remove', 'media_cancel', 'plugin_list', 'plugin_guide', 'plugin_action']);
+    expect(tools).toHaveLength(93);
+    for (const tool of tools) {
+      expect(TOOL_POLICY[tool.name], `${tool.name} must be usable by the Assistant`).toBeDefined();
+      expect(agentAccess.workflows.some(group => ('tools' in group && group.tools?.includes(tool.name)) || ('prefixes' in group && group.prefixes?.some(prefix => tool.name.startsWith(prefix)))), `${tool.name} must have a documented workflow`).toBe(true);
+      expect(tool.description).toBeTruthy(); expect(tool.inputSchema.type).toBe('object');
+    }
     for (const name of ['project_write_files', 'design_apply']) expect(tools.find(t => t.name === name)?.annotations).toMatchObject({ readOnlyHint: false, destructiveHint: true });
     expect(tools.find(t => t.name === 'preview_start')?.annotations).toMatchObject({ readOnlyHint: false, openWorldHint: true });
     const created = await client.callTool({ name: 'project_create', arguments: { name: 'Test app', slug: 'test-app' } });
@@ -73,7 +80,7 @@ it('performs an actual stdio handshake, discovery, source/design loop and trust 
     expect(capture.structuredContent).toMatchObject({ error: { code: 'PREVIEW_NOT_READY' } });
     expect((await client.callTool({ name: 'preview_stop', arguments: { projectId: project.id } })).isError).not.toBe(true);
     expect((await client.callTool({ name: 'project_diagnostics', arguments: { projectId: project.id } })).structuredContent).toMatchObject({ entries: [] });
-    expect((await client.listResources()).resources).toHaveLength(2);
+    expect((await client.listResources()).resources).toHaveLength(3);
     const createdGuidance = z.object({ guidance: z.string() }).parse(created.structuredContent).guidance;
     expect(createdGuidance).toContain('same viewport and appearance');
     expect(createdGuidance).toContain('a larger viewport does not prove a compact-layout fix');
@@ -94,15 +101,15 @@ it('performs an actual stdio handshake, discovery, source/design loop and trust 
     expect(tools.find(t => t.name === 'preview_capture')?.description).toContain('Report visual review blocked');
     const guideResource = z.object({ text: z.string() }).parse((await client.readResource({ uri: 'builder://guide' })).contents[0]);
     expect(JSON.parse(guideResource.text).guidance).toBe(createdGuidance);
-    expect(client.getInstructions()).toBe(createdGuidance);
+    expect(client.getInstructions()).toContain(createdGuidance);
     expect((await client.readResource({ uri: 'builder://projects' })).contents[0]).toHaveProperty('text');
-    expect((await client.listResourceTemplates()).resourceTemplates).toHaveLength(4);
+    expect((await client.listResourceTemplates()).resourceTemplates).toHaveLength(5);
     const prompt = await client.getPrompt({ name: 'build-mobile-app', arguments: { brief: 'Build a habit tracker' } });
     expect(prompt.messages).toHaveLength(1);
     expect(prompt.messages[0]?.content).toMatchObject({ type: 'text', text: expect.stringContaining(createdGuidance) });
     for (const tool of tools) {
       expect(tool.inputSchema.type).toBe('object');
-      expect(tool.annotations?.readOnlyHint).toBe(['native_delivery_preflight', 'native_delivery_plan', 'native_delivery_list', 'native_delivery_install_plan', 'native_workspace_plan', 'native_workspace_list', 'native_build_inspect', 'native_build_plan', 'backend_environment_inspect', 'backend_recipe_preview', 'recipe_upgrade_preview', 'backend_inspect', 'backend_catalog', 'backend_capabilities', 'backend_plan', 'backend_validate', 'backend_requirements', 'backend_operation', 'project_list', 'studio_inspect', 'activity_list', 'inspector_setup_preview', 'project_inspect', 'project_diagnostics', 'media_list', 'media_read', 'media_job', 'icon_check', 'icon_preview', 'launch_kit_list', 'launch_kit_read', 'plugin_list', 'plugin_guide'].includes(tool.name));
+      expect(tool.annotations?.readOnlyHint, tool.name).toBe(['read', 'catalog'].includes(TOOL_POLICY[tool.name]!));
       assertPortableJsonSchemaPatterns(tool.inputSchema, tool.name);
     }
     expect(tools.find(t => t.name === 'preview_stop')?.annotations?.idempotentHint).toBe(true);
