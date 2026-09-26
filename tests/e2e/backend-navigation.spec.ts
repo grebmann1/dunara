@@ -77,13 +77,13 @@ test('all Supabase tabs fit compact, large and desktop viewports', async ({ page
 
 test('an installed provider joins Backend and keeps its app reviews isolated', async ({ page }, info) => {
   const source = path.join(root, 'crm-plugin'); await mkdir(source);
-  await writeFile(path.join(source, 'package.json'), JSON.stringify({ name: 'backend-fixture', version: '1.0.0', type: 'module', builder: { id: 'example.crm', name: 'Salesforce', description: 'Disposable provider fixture — no Salesforce connection.', apiVersion: 1, server: 'server.js', app: 'app.js', workspacePanel: 'backend', workspaceGroup: 'backend', capabilities: ['project.write'] } }));
+  await writeFile(path.join(source, 'package.json'), JSON.stringify({ name: 'backend-fixture', version: '1.0.0', type: 'module', builder: { id: 'example.crm', name: 'CRM fixture', description: 'Disposable provider fixture — no Salesforce connection.', apiVersion: 1, server: 'server.js', app: 'app.js', workspacePanel: 'backend', workspaceGroup: 'backend', capabilities: ['project.write'] } }));
   await writeFile(path.join(source, 'server.js'), `export default api => { api.actions.register({ id: 'save-note', title: 'Save backend note', description: 'Fixture write', effect: 'write', scope: 'project', input: {type:'object',additionalProperties:false}, output: {type:'object'}, plan: () => ({file:'BACKEND-NOTE.md'}), run: async (_input, context) => { await context.files.write([{path:'BACKEND-NOTE.md',content:'Reviewed fixture',expectedRevision:null}]); return {}; } }); };`);
-  await writeFile(path.join(source, 'app.js'), `export default { apiVersion:1, panels:[{id:'backend',title:'CRM workspace',scope:'project',mount(root, context) {const title=document.createElement('h2');title.textContent='Salesforce backend';const p=document.createElement('p');p.textContent='App: '+context.projectId;const button=document.createElement('button');button.textContent='Prepare backend note';button.onclick=()=>context.invoke('save-note',{});root.append(title,p,button);return ()=>root.replaceChildren();}},{id:'other',title:'Unrelated panel',scope:'global',mount(root){root.textContent='Should stay in Plugins';}}]};`);
+  await writeFile(path.join(source, 'app.js'), `export default { apiVersion:1, panels:[{id:'backend',title:'CRM workspace',scope:'project',mount(root, context) {const title=document.createElement('h2');title.textContent='CRM fixture backend';const p=document.createElement('p');p.textContent='App: '+context.projectId;const button=document.createElement('button');button.textContent='Prepare backend note';button.onclick=()=>context.invoke('save-note',{});root.append(title,p,button);return ()=>root.replaceChildren();}},{id:'other',title:'Unrelated panel',scope:'global',mount(root){root.textContent='Should stay in Plugins';}}]};`);
   const pkg = await inspectPackage(source); await engine.plugins.install(source, pkg.digest, true);
   const providers = page.getByRole('group', { name: 'Backend providers' });
-  await providers.getByRole('button', { name: 'Salesforce', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Salesforce backend', exact: true })).toBeVisible();
+  await providers.getByRole('button', { name: 'CRM fixture', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'CRM fixture backend', exact: true })).toBeVisible();
   await expect(page.getByText('Should stay in Plugins', { exact: true })).toHaveCount(0);
   await expect(page.getByText(`App: ${projectId}`, { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Prepare backend note' }).click();
@@ -100,13 +100,13 @@ test('an installed provider joins Backend and keeps its app reviews isolated', a
   const other = await engine.projects.create({ name: 'Other app', slug: 'other-app' });
   await engine.plugins.invoke('example.crm', 'save-note', {}, other.id);
   await page.goto(studio.issueLaunchUrl());
-  await providers.getByRole('button', { name: 'Salesforce', exact: true }).click();
+  await providers.getByRole('button', { name: 'CRM fixture', exact: true }).click();
   await page.getByRole('tab', { name: 'Reviews', exact: true }).click();
   await expect(page.getByText('No changes to review.', { exact: true })).toBeVisible();
   await engine.plugins.change('builder.supabase', 'disable');
   await expect(providers.getByRole('button', { name: 'Supabase', exact: true })).toHaveCount(0);
-  await expect(providers.getByRole('button', { name: 'Salesforce', exact: true })).toHaveAttribute('aria-current', 'page');
+  await expect(providers.getByRole('button', { name: 'CRM fixture', exact: true })).toHaveAttribute('aria-current', 'page');
   await engine.plugins.change('example.crm', 'disable');
-  await expect(page.getByRole('button', { name: 'Open Plugins', exact: true })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Salesforce backend', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'CRM fixture backend', exact: true })).toHaveCount(0);
 });

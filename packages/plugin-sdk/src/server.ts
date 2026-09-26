@@ -10,6 +10,8 @@ export interface PluginManifest {
   /** The app panel to show as this provider's workspace under Backend. */
   workspacePanel?: string;
   workspaceGroup?: 'backend';
+  /** Optional read-only, project-scoped action returning bounded public agent context. */
+  projectContext?: string;
   capabilities?: Array<'project.read' | 'project.write' | 'storage' | 'credentials'>;
   requires?: Record<string, string>;
 }
