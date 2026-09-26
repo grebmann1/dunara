@@ -37,7 +37,7 @@ Export an API 1 app panel with the matching `id: "backend"`. Studio uses the plu
 
 Both manifest fields are optional. `workspacePanel` requires an app entry; `workspaceGroup` requires that panel. Only active providers appear in Backend. Disabling, failing, or removing a provider unmounts its panel and falls back to another available provider. Backend remains accessible when Supabase is disabled. Hosted plugin availability and server authorization remain controlled by the host. This is an additive API 1 extension; older runtimes that reject these manifest fields need a coordinated runtime/Studio/SDK upgrade before installation.
 
-This registers a workspace, not a Salesforce implementation or a new execution provider. No connection, data migration, or remote provisioning happens when the provider is selected.
+Registering a workspace performs no connection, data migration, or remote provisioning. The optional bundled [Salesforce plugin](../../plugins/salesforce/user.md) uses this contract with public project/environment settings and reviewed React integration files. Its native SDK compatibility report distinguishes source setup from a qualified device build. Enable it in Plugins to add Salesforce beside Supabase; it is disabled by default.
 
 The bundled catalogue, feature implementations and application composition live in `packages/builtin-plugins`. Core owns the project/file/identity primitives and generic runtime. Old core feature imports remain as compatibility re-exports so existing tests, scripts and integrations keep working. Existing React feature workspaces remain in the distribution UI; SDK panels coexist with them and use the same action registry. These compatibility adapters are private implementation details, not public SDK APIs.
 
