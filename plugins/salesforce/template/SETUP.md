@@ -1,6 +1,6 @@
 # Salesforce Mobile SDK integration
 
-This app contains a typed adapter and React context for **Salesforce Mobile SDK 13.2.1**. Public environment settings live in `backend/salesforce.json`. Saving those settings or adding this source does not install or initialize the native SDK, authenticate anyone, or change the app's entry point.
+This app contains a typed adapter and React context for **Salesforce Mobile SDK 13.2.1**. The reviewed app opt-in lives in `backend/salesforce-installation.json`, which makes installation visible to agents. Public environment settings live in `backend/salesforce.json`. Saving those settings or adding this source does not install or initialize the native SDK, authenticate anyone, or change the app's entry point.
 
 ## Build compatibility
 

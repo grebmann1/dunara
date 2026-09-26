@@ -17,14 +17,24 @@ test.beforeEach(async () => {
 });
 test.afterEach(async ({ page }) => { await page.close(); await studio?.close(); await engine?.close(); await rm(root, { recursive: true, force: true }); });
 
-test('enables an optional provider, reviews per-app settings and adds the React integration', async ({ page }) => {
+test('enables an optional provider, explicitly installs it in this app and reviews org settings', async ({ page }) => {
   await page.goto(studio.launchUrl);
-  await page.getByRole('button', { name: 'Plugins', exact: true }).click();
-  await page.getByRole('button', { name: /Salesforce.*Included with Dunara/ }).click();
-  await page.getByRole('button', { name: 'Enable', exact: true }).click();
-  await expect(page.getByRole('region', { name: 'Salesforce setup', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await page.getByRole('group', { name: 'Backend providers' }).getByRole('button', { name: 'Salesforce', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Enable Salesforce', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Enable plugin', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Not installed in this app', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Org settings', exact: true }).click();
+  await expect(page.getByLabel('Org label', { exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: 'Install in app', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installation awaiting review', exact: true })).toBeVisible();
+  await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
+  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await expect(page.getByRole('tabpanel', { name: /Reviews/ }).getByText('Install Salesforce in app', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Apply reviewed changes', exact: true }).click();
+  await expect.poll(() => engine.files.read(projectId, 'backend/salesforce-installation.json').then(file => file.content).catch(() => '')).toContain('"enabled": true');
+  await page.getByRole('tab', { name: 'Workspace', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installed in this app', exact: true })).toBeVisible();
   const sections = page.getByRole('tablist', { name: 'Salesforce setup sections' });
   await sections.getByRole('tab', { name: 'Overview', exact: true }).focus(); await page.keyboard.press('ArrowRight');
   await expect(sections.getByRole('tab', { name: 'Org settings', exact: true })).toBeFocused();
@@ -47,20 +57,35 @@ test('enables an optional provider, reviews per-app settings and adds the React 
   await expect.poll(() => engine.files.read(projectId, 'backend/salesforce.json').then(file => file.content).catch(() => '')).toContain('Mobile sandbox');
   await page.getByRole('tab', { name: 'Workspace', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Mobile sandbox', exact: true })).toBeVisible();
-  await sections.getByRole('tab', { name: 'React SDK', exact: true }).click();
-  await page.getByRole('button', { name: 'Add React integration', exact: true }).click();
-  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
-  await expect(page.getByRole('tabpanel', { name: /Reviews/ }).getByText('Add Salesforce React integration', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Apply reviewed changes', exact: true }).click();
-  await expect.poll(() => engine.files.read(projectId, 'src/salesforce/client.ts').then(file => file.content).catch(() => '')).toContain('createSalesforceClient');
+
 });
 
 test('provider tabs share the host appearance and fit desktop and phone widths', async ({ page }) => {
-  await engine.plugins.change('salesforce.mobile-sdk', 'enable');
   await mkdir('.builder/salesforce-review', { recursive: true });
   await page.goto(studio.launchUrl);
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await page.getByRole('group', { name: 'Backend providers' }).getByRole('button', { name: 'Salesforce', exact: true }).click();
+  async function captureStage(stage: string) {
+    for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
+      await page.setViewportSize({ width, height });
+      await page.locator('.backend-title').evaluate(node => node.scrollIntoView({ block: 'start' }));
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.screenshot({ path: `.builder/salesforce-review/${stage}-${width}.png` });
+    }
+  }
+  await expect(page.getByRole('button', { name: 'Enable plugin', exact: true })).toBeVisible();
+  await captureStage('disabled');
+  await page.getByRole('button', { name: 'Enable plugin', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Not installed in this app', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Install in app', exact: true })).toBeEnabled();
+  await captureStage('not-installed');
+  await page.getByRole('button', { name: 'Install in app', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installation awaiting review', exact: true })).toBeVisible();
+  await captureStage('pending');
+  await page.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await page.getByRole('button', { name: 'Apply reviewed changes', exact: true }).click();
+  await page.getByRole('tab', { name: 'Workspace', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Installed in this app', exact: true })).toBeVisible();
   const sections = page.getByRole('tablist', { name: 'Salesforce setup sections' });
   const outer = page.getByRole('tablist', { name: 'Salesforce sections', exact: true });
   for (const [width, height] of [[1440, 1000], [375, 812], [430, 932]] as const) {
@@ -72,7 +97,7 @@ test('provider tabs share the host appearance and fit desktop and phone widths',
       await expect(page.getByRole('tabpanel', { name, exact: true })).toBeVisible();
       await page.screenshot({ path: `.builder/salesforce-review/${name.replaceAll(' ', '-').toLowerCase()}-${width}.png` });
       if (name !== 'Overview') {
-        const action = page.getByRole('button', { name: name === 'Org settings' ? 'Review org settings' : 'Add React integration', exact: true });
+        const action = page.getByRole('button', { name: name === 'Org settings' ? 'Review org settings' : 'Review integration update', exact: true });
         await action.scrollIntoViewIfNeeded();
         await expect(action).toBeInViewport({ ratio: 1 });
         if (width < 500) await page.screenshot({ path: `.builder/salesforce-review/${name.replaceAll(' ', '-').toLowerCase()}-action-${width}.png` });

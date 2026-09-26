@@ -31,6 +31,8 @@ describe('Salesforce plugin through the real host', () => {
     await expect(engine.plugins.invoke(id, 'inspect', {}, null)).rejects.toThrow('Select');
   });
   it('reviews public org settings, preserves other environments and isolates projects', async () => {
+    const install = await engine.plugins.invoke(id, 'install-in-app', {}, project.id);
+    await engine.plugins.answerReview(install.reviewId, true);
     const proposed = await engine.plugins.invoke(id, 'configure', settings, project.id);
     await expect(engine.files.read(project.id, 'backend/salesforce.json')).rejects.toThrow();
     expect(engine.plugins.reviewsFor(id)[0].plan.files[0]).toMatchObject({ path: 'backend/salesforce.json', before: null });
@@ -58,7 +60,7 @@ describe('Salesforce plugin through the real host', () => {
     const supabase = (await engine.files.read(project.id, 'src/backend/client.ts')).content;
     const review = await engine.plugins.invoke(id, 'add-react-integration', {}, project.id);
     const plan = engine.plugins.reviewsFor(id)[0].plan;
-    expect(plan.files).toHaveLength(3);
+    expect(plan.files).toHaveLength(4);
     expect(plan.nativeBuild).toContain('separately qualified');
     await engine.plugins.answerReview(review.reviewId, true);
     expect((await engine.files.read(project.id, 'src/salesforce/client.ts')).content).toContain('createSalesforceClient');
@@ -70,6 +72,28 @@ describe('Salesforce plugin through the real host', () => {
     expect(await readFile(path.join(project.root, 'package.json'), 'utf8')).toBe(manifest);
     expect(await readFile(path.join(project.root, 'package-lock.json'), 'utf8')).toBe(lock);
     expect((await engine.files.read(project.id, 'src/backend/client.ts')).content).toBe(supabase);
+  });
+  it('exposes reviewed app installation to agents without opting other apps in', async () => {
+    const other = await engine.projects.create({ name: 'No Salesforce', slug: 'no-salesforce' });
+    const untouched = await snapshotSource(other.root);
+    const status = async app => (await engine.inspect(app)).backendPlugins.find(plugin => plugin.pluginId === id);
+    expect(await status(project.id)).toMatchObject({ context: { installation: { state: 'not-installed', enabled: false } }, pendingReviews: [] });
+    await expect(engine.plugins.invoke(id, 'configure', settings, project.id)).rejects.toThrow('Install in app');
+    const dismissed = await engine.plugins.invoke(id, 'install-in-app', {}, project.id);
+    expect(await status(project.id)).toMatchObject({ context: { installation: { state: 'not-installed' } }, pendingReviews: [{ id: dismissed.reviewId, action: 'install-in-app', state: 'awaiting-approval' }] });
+    expect(await status(other.id)).toMatchObject({ context: { installation: { state: 'not-installed' } }, pendingReviews: [], operations: [] });
+    await engine.plugins.answerReview(dismissed.reviewId, false);
+    await expect(engine.files.read(project.id, 'backend/salesforce-installation.json')).rejects.toThrow();
+    const approved = await engine.plugins.invoke(id, 'install-in-app', {}, project.id);
+    await engine.plugins.answerReview(approved.reviewId, true);
+    expect(await status(project.id)).toMatchObject({ context: { installation: { state: 'installed', enabled: true }, nativeBuild: { verified: false } }, pendingReviews: [], operations: [{ id: approved.reviewId, state: 'succeeded' }] });
+    await engine.close();
+    engine = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), false);
+    expect(await status(project.id)).toMatchObject({ context: { installation: { state: 'installed' } } });
+    await rm(path.join(project.root, 'src/salesforce/client.ts'));
+    expect(await status(project.id)).toMatchObject({ context: { installation: { state: 'needs-repair', missingFiles: ['src/salesforce/client.ts'] } } });
+    await expect(engine.plugins.invoke(id, 'configure', settings, project.id)).rejects.toThrow('Install in app');
+    expect((await snapshotSource(other.root)).revision).toBe(untouched.revision);
   });
   it('rejects secrets, SOQL expressions, unsafe endpoints and malformed saved settings', async () => {
     for (const patch of [{ clientSecret: 'private' }, { loginUrl: 'http://localhost:9999' }, { loginUrl: 'https://example.my.salesforce.com.evil.example' }, { loginUrl: 'https://user:pass@login.salesforce.com' }, { redirectUri: 'javascript://alert' }, { object: 'Account WHERE Name != null' }, { fields: ['Id', 'Name FROM User'] }]) {

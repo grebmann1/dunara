@@ -9,7 +9,7 @@ function element(tag, text, className) {
 export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce setup', scope: 'project', async mount(root, api) {
   const style = element('link'); style.rel = 'stylesheet'; style.href = new URL('./style.css', import.meta.url).href;
   root.classList.add('salesforce-workspace'); root.append(style);
-  let current, busy = false, environment = 'development', active = 'overview';
+  let current, busy = false, installPending = false, environment = 'development', active = 'overview';
   const drafts = Object.fromEntries(Object.keys(names).map(key => [key, defaults(key)]));
   const toolbar = element('div', null, 'salesforce-toolbar');
   const environmentLabel = element('label', 'Environment');
@@ -39,6 +39,16 @@ export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce set
     const next = event.key === 'Home' ? 0 : event.key === 'End' ? keys.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + keys.length) % keys.length;
     show(keys[next]); buttons.get(keys[next]).focus();
   };
+  const installationCard = element('section', null, 'backend-card salesforce-installation');
+  installationCard.setAttribute('aria-label', 'Salesforce app installation');
+  const installationTitle = element('h2'), installationText = element('p');
+  const installButton = element('button', 'Install in app', 'salesforce-primary'); installButton.type = 'button';
+  async function proposeInstallation() {
+    await api.invoke('install-in-app', {}); installPending = true; render();
+    status.textContent = 'Installation is awaiting review. Apply it in Reviews to enable Salesforce for this app. Agents can see the pending request.';
+  }
+  installButton.onclick = () => { void perform(proposeInstallation); };
+  installationCard.append(installationTitle, installationText, installButton);
   const overview = element('section', null, 'backend-card'), overviewTitle = element('h2'), overviewText = element('p');
   const orgSummary = element('dl', null, 'salesforce-summary');
   const edit = element('button', 'Set up an org'); edit.type = 'button'; edit.onclick = () => { show('connection'); buttons.get('connection').focus(); };
@@ -75,18 +85,21 @@ export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce set
   const integration = element('section', null, 'backend-card'), integrationState = element('p');
   integration.append(element('h2', 'React integration'), element('p', 'Add a typed client and React hooks for sign-in, sign-out and reading records. Your app keeps its current preview and entry point.'), integrationState);
   const list = element('ul'); for (const file of ['src/salesforce/client.ts', 'src/salesforce/SalesforceProvider.tsx', 'salesforce/SETUP.md']) list.append(element('li', file)); integration.append(list);
-  const add = element('button', 'Add React integration', 'salesforce-primary'); add.type = 'button'; add.onclick = () => { void perform(async () => {
-    await api.invoke('add-react-integration', {}); status.textContent = 'React integration files are ready in Reviews. Read the changes before applying.';
-  }); };
+  const add = element('button', 'Review integration update', 'salesforce-primary'); add.type = 'button'; add.onclick = () => { void perform(proposeInstallation); };
   integration.append(add, element('p', 'Native SDK installation and device testing are separate steps. This source addition does not connect the app or enable offline sync.'));
   panels.get('sdk').append(sdk, integration);
-  root.append(toolbar, tabs, status, error, ...panels.values()); show('overview');
+  root.append(installationCard, toolbar, tabs, status, error, ...panels.values()); show('overview');
 
   function summary(node, rows) { node.replaceChildren(); for (const [key, value] of rows) node.append(element('dt', key), element('dd', value)); }
   function render() {
+    const installed = current?.installation.state === 'installed', repair = current?.installation.state === 'needs-repair';
+    installationTitle.textContent = installPending ? 'Installation awaiting review' : installed ? 'Installed in this app' : repair ? 'Installation needs repair' : 'Not installed in this app';
+    installationText.textContent = installPending ? 'The app has not changed yet. Apply or dismiss the installation in Reviews.' : installed ? 'Salesforce integration is enabled for this app and visible to agents. Native SDK setup and sign-in still need verification.' : 'Choose Install in app to enable Salesforce for this app. It adds the React integration after your review and records the choice for agents. Other apps stay unchanged.';
+    installButton.hidden = installed && !installPending;
+    installButton.textContent = repair ? 'Review installation repair' : 'Install in app';
     const saved = current?.configuration.environments[environment];
     overviewTitle.textContent = saved ? saved.label : `Set up ${names[environment].toLowerCase()}`;
-    overviewText.textContent = saved ? 'Org settings saved. Native sign-in has not been verified by Studio.' : 'Choose the Salesforce org this app will use, then add its React integration.';
+    overviewText.textContent = saved ? 'Org settings saved. Native sign-in has not been verified by Studio.' : installed ? 'Choose the Salesforce org this app will use.' : 'Install the integration in this app, then choose the Salesforce org it will use.';
     edit.textContent = saved ? 'Edit org settings' : 'Set up an org';
     summary(orgSummary, saved ? [['Login URL', saved.loginUrl], ['Object', saved.object], ['Status', 'Configuration saved']] : [['Status', 'No org configured']]);
     for (const [key, input] of Object.entries(inputs)) input.value = drafts[environment][key];
@@ -94,16 +107,24 @@ export default { apiVersion: 1, panels: [{ id: 'backend', title: 'Salesforce set
     compatibilityTitle.textContent = report?.compatible ? 'Native setup needs verification' : 'Native build integration required';
     compatibilityText.textContent = report?.message ?? 'Checking this app’s dependencies…';
     summary(versions, report ? [['Salesforce Mobile SDK', report.sdk.version], ['Required React Native', report.sdk.reactNative], ['This app’s React Native', report.reactNative ?? 'Not detected']] : []);
-    integrationState.textContent = current?.integrationAdded ? 'Integration files are present. Review any updates before replacing edited files.' : 'React integration has not been added to this app.';
-    add.textContent = current?.integrationAdded ? 'Review integration files' : 'Add React integration';
+    integrationState.textContent = installed ? 'Integration files are present. Review any updates before replacing edited files.' : 'Choose Install in app above before configuring or updating the integration.';
+    syncControls();
+  }
+  function syncControls() {
+    const installed = current?.installation.state === 'installed';
+    select.disabled = refresh.disabled = busy;
+    save.disabled = busy || !installed;
+    add.disabled = busy || installPending || !installed;
+    installButton.disabled = busy || installPending || !current;
+    for (const input of Object.values(inputs)) input.disabled = busy || !installed;
   }
   async function perform(work) {
     if (busy || api.signal.aborted) return;
     busy = true; error.hidden = true; status.textContent = '';
-    for (const control of [select, refresh, save, add]) control.disabled = true;
+    syncControls();
     try { await work(); }
     catch (cause) { if (!api.signal.aborted) { error.textContent = cause instanceof Error ? cause.message : 'Salesforce setup could not complete.'; error.hidden = false; } }
-    finally { busy = false; if (!api.signal.aborted) for (const control of [select, refresh, save, add]) control.disabled = false; }
+    finally { busy = false; if (!api.signal.aborted) syncControls(); }
   }
   async function load(initial = false) {
     const value = await api.invoke('inspect', {}); if (api.signal.aborted) return;

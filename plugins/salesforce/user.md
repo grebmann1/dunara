@@ -1,13 +1,15 @@
 # Salesforce backend
 
-Enable **Salesforce** in Plugins, then open **Backend → Salesforce** in an app. Salesforce is optional and can coexist with Supabase. Each app keeps its own development, staging and production org settings.
+Open **Backend → Salesforce** in an app and choose **Enable plugin** if it is disabled. You can also manage the plugin in Plugins. Salesforce is optional and can coexist with Supabase. Each app keeps its own development, staging and production org settings.
 
 The plugin is bundled with Dunara, not installed into every app. Enabling it or opening its workspace adds no app files or dependencies. Only the app selected for an explicitly reviewed Salesforce change receives that change; other apps keep their existing source, settings and dependencies.
 
-1. In **Org settings**, enter the org label, Salesforce login/My Domain URL, public OAuth consumer key and native callback URI. Choose the object and field API names the app will read.
-2. Choose **Review org settings**, then apply the change in the host's **Reviews** tab. A saved configuration does not mean the app has signed in.
-3. In **React SDK**, inspect compatibility and choose **Add React integration**. Review the typed client, React provider/hooks and setup guide before applying.
-4. Follow `salesforce/SETUP.md` in the app to initialize the official native SDK and connect your React entry point. App users sign in on their devices; Studio never asks for a Salesforce password, client secret or token.
+1. Choose **Install in app**. Review the typed client, React provider/hooks, setup guide and app installation record in **Reviews**, then apply them. Until approval, the app stays unchanged.
+2. In **Org settings**, enter the org label, Salesforce login/My Domain URL, public OAuth consumer key and native callback URI. Choose the object and field API names the app will read.
+3. Choose **Review org settings**, then apply the change in **Reviews**. A saved configuration does not mean the app has signed in.
+4. In **React SDK**, inspect compatibility and follow `salesforce/SETUP.md` in the app to initialize the official native SDK and connect your React entry point. App users sign in on their devices; Studio never asks for a Salesforce password, client secret or token.
+
+Agents receive the selected app's installation status, pending reviews and recent operation results through `project_inspect.backendPlugins`. The built-in Assistant receives fresh backend status at the start of each project turn. A pending review is not an installed integration. The app's reviewed choice persists in `backend/salesforce-installation.json`; missing integration files are reported as needing repair.
 
 Mobile SDK 13.2.1 targets React Native 0.81.5. Dunara's current Expo template uses 0.86.3, so native installation needs a separately qualified build. This plugin adds portable source and public configuration; it does not change dependencies, claim Expo Go compatibility, or qualify a native build. The existing preview stays unchanged. No live org was used to qualify this plugin.
 

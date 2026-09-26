@@ -7,11 +7,13 @@ export const manifestSchema = z.object({
   id: pluginId, name: z.string().min(1).max(80), description: z.string().max(1000), apiVersion: z.literal(1),
   server: entryPath.regex(/\.(m?js)$/).optional(), app: entryPath.regex(/\.(m?js)$/).optional(),
   workspacePanel: localId.optional(), workspaceGroup: z.literal('backend').optional(),
+  projectContext: localId.optional(),
   guides: z.array(entryPath).max(10).default([]),
   capabilities: z.array(z.enum(['project.read', 'project.write', 'storage', 'credentials'])).max(4).default([]),
   requires: z.record(pluginId, version).default({}),
 }).strict().refine(value => !value.workspacePanel || !!value.app, 'workspacePanel requires an app entry')
-  .refine(value => !value.workspaceGroup || !!value.workspacePanel, 'workspaceGroup requires a workspacePanel');
+  .refine(value => !value.workspaceGroup || !!value.workspacePanel, 'workspaceGroup requires a workspacePanel')
+  .refine(value => !value.projectContext || !!value.server, 'projectContext requires a server entry');
 export const packageSchema = z.object({ name: z.string().min(1).max(160), version, type: z.literal('module'), builder: manifestSchema }).passthrough();
 export type PluginPackage = z.infer<typeof packageSchema>;
 export const installedSchema = z.object({

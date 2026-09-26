@@ -37,9 +37,10 @@ try {
   const salesforce = await engine.plugins.invoke('salesforce.mobile-sdk', 'inspect', {}, project.id);
   assert.equal(salesforce.compatibility.state, 'incompatible');
   assert.equal(salesforce.integrationAdded, false);
-  const integration = await engine.plugins.invoke('salesforce.mobile-sdk', 'add-react-integration', {}, project.id);
+  const integration = await engine.plugins.invoke('salesforce.mobile-sdk', 'install-in-app', {}, project.id);
   await engine.plugins.answerReview(integration.reviewId, true);
   assert((await engine.files.read(project.id, 'src/salesforce/client.ts')).content.includes('createSalesforceClient'));
+  assert.equal((await engine.inspect(project.id)).backendPlugins.find(plugin => plugin.pluginId === 'salesforce.mobile-sdk').context.installation.state, 'installed');
   assert((await engine.files.read(project.id, 'salesforce/SETUP.md')).content.includes('13.2.1'));
   const manifest = JSON.parse(await readFile(path.join(project.root, 'package.json'), 'utf8'));
   assert(!JSON.stringify(manifest).includes('@mobile-builder/'));

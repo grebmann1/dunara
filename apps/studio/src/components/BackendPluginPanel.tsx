@@ -12,6 +12,13 @@ export function BackendPluginPanel({ plugin, projectId, catalog, disabled }: { p
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [revision, setRevision] = useState(0);
   const operating = useRef(false);
   const reviews = catalog.state?.reviews.filter(review => review.pluginId === plugin.id && (review.projectId === projectId || review.projectId === null)) ?? [];
+  async function enable() {
+    if (disabled || operating.current || !capabilities.managePlugins) return;
+    operating.current = true; setBusy(true); setError('');
+    try { await api('/plugins/change', { id: plugin.id, operation: 'enable' }); await catalog.refresh(); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : 'Plugin could not be enabled.'); }
+    finally { operating.current = false; setBusy(false); }
+  }
   async function answer(id: string, approve: boolean) {
     if (disabled || operating.current || !capabilities.managePlugins) return;
     operating.current = true; setBusy(true); setError('');
@@ -20,7 +27,7 @@ export function BackendPluginPanel({ plugin, projectId, catalog, disabled }: { p
     finally { operating.current = false; setBusy(false); }
   }
   return <main className="destination backend-workspace"><header className="backend-title"><div><p className="backend-eyebrow">BACKEND</p><h1>{plugin.name}</h1><p>{plugin.description}</p></div></header>
-    {!capabilities.managePlugins ? <p>This backend integration is managed by your host.</p> : <BackendTabs<'workspace' | 'reviews'> label={`${plugin.name} sections`} tabs={[{ id: 'workspace', label: 'Workspace' }, { id: 'reviews', label: 'Reviews', count: reviews.length }]} active={tab} onChange={setTab}>{section => section === 'workspace' ? <>
+    {!capabilities.managePlugins ? <p>This backend integration is managed by your host.</p> : plugin.status === 'disabled' ? <section className="backend-card"><h2>Enable {plugin.name}</h2><p>This plugin is installed in Dunara. Enable it to open its setup, then choose whether to install its integration in this app.</p>{error && <p role="alert">{error}</p>}<Button disabled={disabled || busy} onClick={() => void enable()}>Enable plugin</Button></section> : <BackendTabs<'workspace' | 'reviews'> label={`${plugin.name} sections`} tabs={[{ id: 'workspace', label: 'Workspace' }, { id: 'reviews', label: 'Reviews', count: reviews.length }]} active={tab} onChange={setTab}>{section => section === 'workspace' ? <>
       {reviews.length > 0 && <div className="backend-card backend-review-notice"><p>{reviews.length} proposed {reviews.length === 1 ? 'change is' : 'changes are'} ready for review.</p><Button onClick={() => setTab('reviews')}>Review changes</Button></div>}
       <fieldset disabled={disabled || busy} className="backend-plugin-surface"><PluginSurface key={revision} plugin={plugin} panelId={plugin.workspacePanel} projectId={projectId} refresh={catalog.refresh} /></fieldset>
     </> : <section aria-label={`${plugin.name} reviews`}><div className="backend-section-intro"><h2>Changes & reviews</h2><p>Approve proposed changes for this app or this provider’s account.</p></div>{error && <p role="alert">{error}</p>}{reviews.length === 0 && <div className="backend-card"><p>No changes to review.</p></div>}{reviews.map(review => <article key={review.id} className="backend-card"><h3>{plugin.actions.find(action => action.id === review.action)?.title ?? review.action}</h3><p>{review.projectId ? 'This app' : 'Account-wide change'} · expires {new Date(review.expiresAt).toLocaleTimeString()}</p><pre tabIndex={0}>{JSON.stringify({ input: review.input, changes: review.plan }, null, 2)}</pre><div className="backend-actions"><Button disabled={disabled || busy} onClick={() => void answer(review.id, true)}>Apply reviewed changes</Button><Button variant="outline" disabled={disabled || busy} onClick={() => void answer(review.id, false)}>Dismiss</Button></div></article>)}</section>}</BackendTabs>}

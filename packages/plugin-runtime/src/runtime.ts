@@ -200,6 +200,11 @@ export class PluginRuntime extends EventEmitter {
       let factory = builtin?.activate;
       if (!factory && row.package.builder.server) factory = (await import(`${pathToFileURL(path.join(root, row.package.builder.server)).href}?generation=${live.generation}`)).default as PluginFactory;
       if (factory) { if (typeof factory !== 'function') throw Error('Server must export a plugin factory'); await factory(api); }
+      if (row.package.builder.projectContext) {
+        const action = live.actions.get(row.package.builder.projectContext);
+        if (!action || action.effect !== 'read' || action.scope !== 'project') throw Error('Project context must name a read-only project action');
+        schema(action.input).parse({});
+      }
       registering = false; this.live.set(id, live);
     } catch (error) { registering = false; for (const dispose of live.disposers.reverse()) { try { await dispose(); } catch { /* Failed activation must release every registered resource. */ } } await this.dataQueue.run(async () => atomicWrite(this.dataFile(id), JSON.stringify(previousData))); throw error; }
   }
@@ -262,6 +267,29 @@ export class PluginRuntime extends EventEmitter {
     finally { controller.abort(); parent.removeEventListener('abort', abort); live.running.delete(controller); this.emit('change'); }
   }
   reviewsFor(id?: string) { for (const [key, review] of this.reviews) if (Date.parse(review.expiresAt) <= Date.now()) this.reviews.delete(key); return [...this.reviews.values()].filter(review => !id || review.pluginId === id).map(({ approved: _approved, fingerprint: _fingerprint, ...review }) => structuredClone(review)); }
+  /** Public per-app status for agents, excluding review inputs, plans and private settings. */
+  async projectContext(projectId: string) {
+    await this.ready;
+    // A large or unavailable source binding must not prevent ordinary project inspection.
+    const readable = await this.host.binding(projectId).then(() => true, () => false);
+    return Promise.all(this.snapshot().filter(plugin => plugin.workspaceGroup === 'backend').map(async plugin => {
+      const action = this.row(plugin.id)!.package.builder.projectContext;
+      let context: Json = null, contextStatus = readable && action && plugin.status === 'active' ? 'available' : 'unavailable';
+      if (readable && action && plugin.status === 'active') {
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          context = bounded(await Promise.race([this.invoke(plugin.id, action, {}, projectId, controller.signal), new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => { controller.abort(); reject(Error('Plugin context timed out')); }, 2000);
+          })]), 8192);
+        } catch { contextStatus = 'unavailable'; }
+        finally { clearTimeout(timer); controller.abort(); }
+      }
+      const pendingReviews = this.reviewsFor(plugin.id).filter(review => review.projectId === projectId).map(review => ({ id: review.id, action: review.action, state: 'awaiting-approval', expiresAt: review.expiresAt }));
+      const operations = (this.operations.get(plugin.id) ?? []).filter(operation => operation.projectId === projectId).slice(-5).map(({ id, action, state, updatedAt }) => ({ id, action, state, updatedAt }));
+      return { pluginId: plugin.id, name: plugin.name, pluginStatus: plugin.status, contextStatus, context, pendingReviews, operations, guides: plugin.guides };
+    }));
+  }
   async answerReview(reviewId: string, approve: boolean) {
     await this.ready; const review = this.reviews.get(reviewId); if (!review || Date.parse(review.expiresAt) <= Date.now()) throw Error('Review expired or is unavailable');
     this.reviews.delete(reviewId); this.emit('change'); if (!approve) return { dismissed: true };

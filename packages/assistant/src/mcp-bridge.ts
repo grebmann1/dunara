@@ -59,6 +59,12 @@ export class McpGateway implements AssistantGateway {
     } catch (error) { signal.removeEventListener('abort', close); await client.close(); throw error; }
   }
   private removeAbortListener = () => {};
+  async projectContext(signal: AbortSignal) {
+    if (!this.binding.projectId) return null;
+    const projectId = this.binding.projectId;
+    const inspected = metadata(await this.invoke('project_inspect', { projectId }, signal));
+    return { projectId, backendPlugins: inspected.backendPlugins ?? [], note: 'Plugin availability does not authorize app installation. Pending reviews are not completed installations. Read project_inspect again after changes.' };
+  }
   async close() { this.closed = true; this.removeAbortListener(); await this.client.close(); }
   private guard(signal: AbortSignal) { signal.throwIfAborted(); this.lifetime.throwIfAborted(); if (this.closed) throw new Error('Assistant MCP connection is closed'); }
   private async invoke(name: string, args: Record<string, unknown>, signal: AbortSignal) {

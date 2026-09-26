@@ -12,6 +12,7 @@
     "app": "app.js",
     "workspacePanel": "backend",
     "workspaceGroup": "backend",
+    "projectContext": "project-context",
     "capabilities": ["project.read", "project.write"],
     "guides": ["user.md", "agent.md"]
   }

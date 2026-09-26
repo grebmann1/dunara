@@ -127,7 +127,7 @@ export class Engine extends BuilderKernel {
     const routeCandidates = discoverRoutes(tree);
     const [discoveredScreens, sourceRevision, metadata] = await Promise.all([screenCatalog(this.files, id, tree.files, routeCandidates), this.boardCaptures.sourceRevision(id, tree), this.projects.metadata(project)]);
     const screens = metadata.studio.board.screens ?? discoveredScreens;
-    return { project, tree, routeCandidates, screens, sourceRevision, boardCaptures: await this.boardCaptures.list(id, sourceRevision), files: await Promise.all(paths.map(p => this.files.read(id, p))), design, routes: recipes[0].routes, preview: this.previews.status(id), captures: this.captures.list(id) };
+    return { project, tree, routeCandidates, screens, sourceRevision, backendPlugins: await this.plugins.projectContext(id), boardCaptures: await this.boardCaptures.list(id, sourceRevision), files: await Promise.all(paths.map(p => this.files.read(id, p))), design, routes: recipes[0].routes, preview: this.previews.status(id), captures: this.captures.list(id) };
   }
   async selectBackendEnvironment(id: string, input: unknown, signal?: AbortSignal) {
     return this.projects.mutations.run(async () => {

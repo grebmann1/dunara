@@ -40,6 +40,20 @@ beforeEach(async () => {
   gateway = await McpGateway.open(endpoint.socketPath, binding, controller.signal, { approvals: broker, async bindProject(id) { binding.projectId = id; } });
 });
 afterEach(async () => { vi.restoreAllMocks(); controller.abort(); broker.close(); await gateway.close(); await client.close(); await endpoint.close(); await engine.close(); await rm(root, { recursive: true, force: true }); });
+it('reads backend app installation and pending reviews only for the bound project', async () => {
+  expect(await gateway.projectContext(controller.signal)).toBeNull();
+  const projectId = await create(), id = 'salesforce.mobile-sdk';
+  await engine.plugins.change(id, 'enable');
+  const other = await engine.projects.create({ name: 'Other backend app', slug: 'other-backend-app' });
+  const otherReview = z.object({ reviewId: z.string() }).parse(await engine.plugins.invoke(id, 'install-in-app', {}, other.id));
+  const own = z.object({ reviewId: z.string() }).parse(await engine.plugins.invoke(id, 'install-in-app', {}, projectId));
+  const pending = await gateway.projectContext(controller.signal);
+  expect(pending).toMatchObject({ projectId, backendPlugins: expect.arrayContaining([expect.objectContaining({ pluginId: id, context: expect.objectContaining({ installation: expect.objectContaining({ state: 'not-installed' }) }), pendingReviews: [expect.objectContaining({ id: own.reviewId })] })]) });
+  expect(JSON.stringify(pending)).not.toContain(otherReview.reviewId);
+  await engine.plugins.answerReview(own.reviewId, true);
+  expect(await gateway.projectContext(controller.signal)).toMatchObject({ backendPlugins: expect.arrayContaining([expect.objectContaining({ pluginId: id, context: expect.objectContaining({ installation: expect.objectContaining({ state: 'installed' }) }), pendingReviews: [] })]) });
+  expect(broker.list()).toEqual([]);
+});
 it('preserves exact canonical discovery, annotations, resources/templates and prompts rather than a duplicate tool surface', async () => {
   const tools = await client.listTools(), resources = await client.listResources(), templates = await client.listResourceTemplates(), prompts = await client.listPrompts();
   const discovery = await call('builder_mcp_discover');
