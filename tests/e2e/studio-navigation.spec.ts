@@ -72,6 +72,13 @@ test('workspace arrow keys move focus and Enter or Space activate real destinati
   await expect(assets).toHaveAttribute('aria-current', 'page');
   await expect.poll(async () => (await engine.studio.snapshot()).studio?.workspace).toBe('assets');
 
+  const backend = nav.getByRole('button', { name: 'Backend', exact: true });
+  await backend.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(nav.getByRole('button', { name: 'Activity', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowUp');
+  await expect(backend).toBeFocused();
+
   await assets.focus();
   await page.keyboard.press('End');
   await expect(plugins).toBeFocused();

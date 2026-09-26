@@ -80,6 +80,11 @@
 .sidebar-drawer-heading h2 { font-size: 15px; letter-spacing: -.2px; }
 .sidebar.sidebar-drawer .sidebar-action, .sidebar-drawer .sidebar-project-row { min-height: 44px; }
 .sidebar.sidebar-drawer .workspace-nav { display: flex; flex-direction: column; }
+.backend-provider-nav { display: grid; gap: 2px; margin: 0 0 6px 19px; padding-left: 10px; border-left: 1px solid var(--border); }
+.backend-provider-dot { width: 6px; height: 6px; border-radius: 50%; background: #7a858a; flex-shrink: 0; }
+.backend-provider-link[aria-current=page] .backend-provider-dot { background: var(--primary); }
+.backend-provider-link span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@container studio (max-width: 760px) { .studio .sidebar .backend-provider-nav { grid-column: 1 / -1; display: flex; flex-wrap: wrap; margin: 0; padding: 3px 0 0; border-left: 0; border-top: 1px solid var(--border); } .studio .sidebar .backend-provider-link { width: auto; } }
 .sidebar-drawer .sidebar-projects { display: flex; flex: 1 0 160px; margin-top: 18px; }
 .sidebar-drawer .sidebar-project-list { overflow: visible; }
 .sidebar-drawer .sidebar-resizer { display: none; }

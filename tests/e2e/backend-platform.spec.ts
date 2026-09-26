@@ -51,6 +51,7 @@ test('pages discovery, checks access, and switches a linked preview environment'
     await expect.poll(async () => (await engine.backends.operation(projectId, operation.id)).state).toBe('succeeded');
   }
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByRole('tab', { name: 'Projects', exact: true }).click();
   const configure = page.getByRole('region', { name: 'Configure backend' });
   await page.getByRole('button', { name: 'Load Supabase projects', exact: true }).click();
   await expect(configure).toContainText('50 of 51 projects loaded');
@@ -65,11 +66,13 @@ test('pages discovery, checks access, and switches a linked preview environment'
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath(`backend-access-${width}.png`) });
   }
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   const staging = page.locator('.backend-environments > section').filter({ has: page.getByRole('heading', { name: 'staging', exact: true }) });
   const before = await engine.previews.configurationRevision(projectId);
   await staging.getByRole('button', { name: 'Use for preview', exact: true }).click();
   await expect(staging).toContainText('Preview'); expect(engine.previews.status(projectId).status).toBe('stopped');
   expect(await engine.previews.configurationRevision(projectId)).not.toBe(before);
+  await page.getByRole('tab', { name: 'Projects', exact: true }).click();
   await expect(configure).not.toContainText('6 access checks passed');
   await expect(page.locator('body')).not.toContainText('canary');
 });
@@ -78,7 +81,7 @@ test('explains locked encrypted settings and keeps the existing ciphertext', asy
   const store = new PlatformStore(path.join(engine.projects.home, 'platform'), new SecretBox('ad'.repeat(32)));
   try { store.putSecret({ id: 'local-owner', workspaceId: store.identity(), role: 'owner', source: 'local-owner' }, 'supabase-management', 'saved-management-canary'); } finally { store.close(); }
   await page.getByRole('button', { name: 'Settings', exact: true }).click();
-  const settings = page.getByRole('region', { name: 'Supabase connection' });
+  const settings = page.getByRole('region', { name: 'Supabase connection', includeHidden: true });
   await expect(settings).toContainText('Saved connections are locked');
   await expect(settings.getByRole('checkbox', { name: 'Remember with encrypted storage' })).toBeDisabled();
   await expect(settings.getByRole('button', { name: 'Save Supabase connection', exact: true })).toBeDisabled();
@@ -96,12 +99,15 @@ test.afterEach(async ({ page }) => { await page.close(); await studio?.close(); 
 test('connects a backend through review and keeps management credentials out of rendered state', async ({ page }, info) => {
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await expect(page.getByText('Connect Supabase to get started')).toBeVisible();
-  await page.getByRole('button', { name: 'Connection settings' }).click();
-  const settings = page.getByRole('region', { name: 'Supabase connection' });
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
+  const settings = page.getByRole('region', { name: 'Supabase connection', includeHidden: true });
+  await expect(settings.getByLabel('Personal access token', { exact: true })).not.toHaveAttribute('placeholder');
   await settings.getByLabel('Personal access token', { exact: true }).fill('fixture-management-canary');
   await settings.getByRole('button', { name: 'Save Supabase connection' }).click();
   await expect(settings.getByLabel('Personal access token', { exact: true })).toHaveValue('');
-  await expect(settings).toContainText('Connection saved');
+  await expect(settings.getByLabel('Personal access token', { exact: true })).toHaveAttribute('placeholder', '••••••••');
+  expect(await settings.getByLabel('Personal access token', { exact: true }).evaluate((input: HTMLInputElement) => input.validity.valueMissing)).toBe(true);
+  await expect(settings).toContainText('Account saved');
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
   await page.getByRole('button', { name: 'Load Supabase projects' }).click();
   await expect(page.getByRole('combobox', { name: 'Organization', exact: true })).toHaveValue('');
@@ -251,6 +257,7 @@ test('adds a private Supabase environment variable and publishes only after the 
   await engine.backends.approve(projectId, { operationId: linked.id, planHash: linked.planHash });
   await expect.poll(async () => (await engine.backends.operation(projectId, linked.id)).state).toBe('succeeded');
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByRole('tab', { name: 'Variables', exact: true }).click();
   const variables = page.getByRole('region', { name: 'Supabase environment variables', exact: true });
   await variables.getByLabel('Variable name', { exact: true }).fill('PAYMENTS_API_KEY');
   await variables.getByRole('button', { name: 'Add variable', exact: true }).click();
@@ -284,6 +291,7 @@ test('reviews a legacy app upgrade, refuses stale edits, and applies the exact f
   const manifestPath = path.join(project.root, 'package.json'), original = await readFile(manifestPath, 'utf8');
   const navigation = await readFile(path.join(project.root, 'src/ui/index.tsx'), 'utf8');
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByRole('tab', { name: 'Settings', exact: true }).click();
   await page.getByText('Advanced app setup', { exact: true }).click();
   const panel = page.getByRole('region', { name: 'App backend support' });
   await panel.getByRole('button', { name: 'Review upgrade', exact: true }).click();
@@ -334,6 +342,7 @@ test('collects private SMTP input, reviews exact Auth changes, verifies readback
   const source = await engine.files.read(projectId, 'backend/configuration.json');
   await engine.files.write(projectId, [{ path: source.path, expectedRevision: source.revision, content: JSON.stringify({ version: 1, auth: { settings: { site_url: 'https://new.example', external_email_enabled: true }, secrets: [{ field: 'smtp_pass', secret: 'mail_password' }] }, requirements: [{ name: 'mail_password', purpose: 'smtp', label: 'SMTP password' }] }) }]);
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByRole('tab', { name: 'Services', exact: true }).click();
   const services = page.getByRole('region', { name: 'App services configuration' });
   await services.getByRole('button', { name: 'Check required inputs', exact: true }).click();
   await expect(services.getByText('Input required', { exact: false })).toBeVisible();
@@ -361,6 +370,7 @@ test('collects private SMTP input, reviews exact Auth changes, verifies readback
   await review.getByRole('button', { name: 'Approve configuration on development' }).click();
   await expect(review.getByText('Completed', { exact: true })).toBeVisible();
   expect(authFields.site_url).toBe('https://new.example'); expect(authFields.smtp_pass).toBe('private-smtp-input-canary');
+  await page.getByRole('tab', { name: 'Services', exact: true }).click();
   await services.getByRole('button', { name: 'Validate configuration', exact: true }).click();
   await expect(services).toContainText('Validation · pass');
   await expect(services).toContainText('email delivery: not run');
@@ -380,7 +390,8 @@ test('collects private SMTP input, reviews exact Auth changes, verifies readback
     await page.screenshot({ path: info.outputPath(`backend-activity-${width}.png`) });
   }
   await activity.getByRole('button', { name: 'Open Backend reviews' }).click();
-  await expect(page.getByRole('region', { name: 'Configure backend' })).toBeVisible();
+  await expect(page.getByRole('tab', { name: 'Reviews', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Backend operations' })).toBeVisible();
 });
 
 test('guides creation stages and connects Supabase inline before an explicit project review', async ({ page }, info) => {
@@ -415,13 +426,14 @@ test('guides creation stages and connects Supabase inline before an explicit pro
   }
   await connection.getByLabel('Personal access token', { exact: true }).fill('fixture-guided-management-token');
   await connection.getByRole('button', { name: 'Save Supabase connection', exact: true }).click();
-  await expect(setup).toContainText('STEP 3 OF 3');
+  await expect(page.getByRole('tab', { name: 'Projects', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('combobox', { name: 'Organization', exact: true }).locator('option')).toHaveCount(2);
   await page.getByRole('combobox', { name: 'Organization', exact: true }).selectOption('studio-test');
   await page.getByRole('combobox', { name: 'Supabase project', exact: true }).selectOption(ref);
   await page.getByRole('button', { name: 'Prepare for review', exact: true }).click();
   expect((await engine.backends.inspect(projectId)).environments).toHaveLength(0);
   await page.getByRole('button', { name: 'Approve connection', exact: true }).click();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await expect(setup).toContainText('PROJECT CONNECTED');
   await expect(page.locator('.creation-guide')).toContainText('Next: Preview & test');
   expect(await page.content()).not.toContain('fixture-guided-management-token');

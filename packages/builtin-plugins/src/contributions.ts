@@ -9,4 +9,4 @@ export const featureCatalog = [
   { id: 'builder.assistant', name: 'Assistant', description: 'Plan and Build conversations, attachments and recoverable drafts.', requires: ['builder.media'] },
 ] as const;
 
-export const workspaceOwner: Record<string, string> = { preview: 'builder.expo', backend: 'builder.supabase', assets: 'builder.media', activity: 'builder.media', icons: 'builder.icons' };
+export const workspaceOwner: Record<string, string> = { preview: 'builder.expo', assets: 'builder.media', activity: 'builder.media', icons: 'builder.icons' };

@@ -7,6 +7,9 @@ export type Effect = 'read' | 'write';
 export interface PluginManifest {
   id: string; name: string; description: string; apiVersion: 1;
   server?: string; app?: string; guides?: string[];
+  /** The app panel to show as this provider's workspace under Backend. */
+  workspacePanel?: string;
+  workspaceGroup?: 'backend';
   capabilities?: Array<'project.read' | 'project.write' | 'storage' | 'credentials'>;
   requires?: Record<string, string>;
 }
