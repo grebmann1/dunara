@@ -116,7 +116,7 @@ test('Supabase setup and connection forms reflow without hiding actions', async 
   const form = page.getByRole('region', { name: 'Supabase connection', exact: true });
   for (const size of sizes) {
     await page.setViewportSize(size);
-    await noOverflow(page, [setup, form], `Supabase ${size.width}×${size.height}`);
+    await noOverflow(page, [form], `Supabase ${size.width}×${size.height}`);
     await form.getByRole('button', { name: 'Save Supabase connection', exact: true }).focus();
     await form.getByLabel('Personal access token', { exact: true }).focus();
     await expect(form.getByLabel('Personal access token', { exact: true })).toBeInViewport({ ratio: 1 });

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { GripVertical, PanelBottom, PanelLeft, PanelRight, RotateCcw } from 'lucide-react';
 import { Button } from '../ui/button';
+import { SectionTab } from '../ui/section-tab';
 import '../../workspace-dock.css';
 
 export type DockId = 'design' | 'console';
@@ -87,13 +88,13 @@ export function DockWorkspace({ children }: { children: ReactNode }) {
     {dock.panes.map(pane => {
       const position = dock.layout.positions[pane.id], visible = dock.desktop && shown(position)?.id === pane.id;
       return <div key={pane.id} className="dock-slot" data-panel={pane.id} data-position={position} hidden={!visible} style={{ gridArea: position }}>
-        {at(position).length > 1 && <div className="dock-tabs" role="tablist" aria-label={`${position} panels`} onKeyDown={event => {
+        {at(position).length > 1 && <div className="dock-tabs section-tabs" role="tablist" aria-label={`${position} panels`} onKeyDown={event => {
           if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
           const panes = at(position), current = panes.findIndex(item => item.id === pane.id);
           const next = event.key === 'Home' ? 0 : event.key === 'End' ? panes.length - 1 : (current + (event.key === 'ArrowRight' ? 1 : -1) + panes.length) % panes.length;
           event.preventDefault(); dock.activate(panes[next]!.id, position);
           requestAnimationFrame(() => root.current?.querySelector<HTMLButtonElement>(`.dock-slot:not([hidden]) [data-tab="${panes[next]!.id}"]`)?.focus());
-        }}>{at(position).map(item => <button key={item.id} id={`dock-tab-${pane.id}-${item.id}`} role="tab" data-tab={item.id} aria-controls={`dock-host-${item.id}`} aria-selected={item.id === pane.id} tabIndex={item.id === pane.id ? 0 : -1} onClick={() => dock.activate(item.id, position)}>{item.label}</button>)}</div>}
+        }}>{at(position).map(item => <SectionTab selected={item.id === pane.id} key={item.id} id={`dock-tab-${pane.id}-${item.id}`} role="tab" data-tab={item.id} aria-controls={`dock-host-${item.id}`} aria-selected={item.id === pane.id} tabIndex={item.id === pane.id ? 0 : -1} onClick={() => dock.activate(item.id, position)}>{item.label}</SectionTab>)}</div>}
         <div ref={dock.hostRefs[pane.id]} id={`dock-host-${pane.id}`} className="dock-host" role={at(position).length > 1 ? 'tabpanel' : undefined} aria-labelledby={at(position).length > 1 ? `dock-tab-${pane.id}-${pane.id}` : undefined} />
       </div>;
     })}

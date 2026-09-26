@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
+import { Fragment, useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type ReactNode, type Ref } from 'react';
 import { readShellPreferences, saveShellPreferences } from '../../shell-preferences';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X, Activity, Database, FolderPlus, Image, LayoutGrid, Puzzle, Settings, Smartphone } from 'lucide-react';
@@ -26,10 +26,11 @@ type Props = {
   connectionLabel: string; pendingReview: number; projectStatus: ReactNode; assistantControl?: ReactNode; accountControl?: ReactNode;
   assistant?: { open: boolean; desktop: boolean; render(host: HTMLDivElement | null): ReactNode };
   hiddenDestinations?: string[];
+  backendProviders?: { id: string; name: string }[]; backendProvider?: string; onBackendProvider?: (id: string) => void;
   onSelect: (id: string) => void; onNavigate: (workspace: Workspace) => void; onCreate: () => void;
 };
 
-export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, accountControl, assistant, hiddenDestinations = [], onSelect, onNavigate, onCreate }: Props) {
+export function StudioShell({ children, banners, overlays, footer, contentRef, projects, selected, workspace, usable, busy, connectionLabel, pendingReview, projectStatus, assistantControl, accountControl, assistant, hiddenDestinations = [], backendProviders = [], backendProvider, onBackendProvider, onSelect, onNavigate, onCreate }: Props) {
   const { capabilities } = useStudioClient();
   const hosted = capabilities.connectionLabel === 'Cloud workspace';
   const shell = useRef<HTMLDivElement>(null), sidebarTrigger = useRef<HTMLButtonElement>(null);
@@ -79,7 +80,7 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
   const create = () => { closeDrawer('dialog'); onCreate(); };
   function navigateWithKeyboard(event: KeyboardEvent<HTMLElement>) {
     if (event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
-    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([aria-disabled="true"])'));
+    const buttons = Array.from(event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled):not([aria-disabled="true"])')).filter(button => !button.closest('[hidden]'));
     const index = buttons.indexOf(event.target as HTMLButtonElement);
     if (index < 0) return;
     let next: number;
@@ -97,7 +98,7 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
         {drawer && <div className="sidebar-drawer-heading"><Dialog.Title>Workspace</Dialog.Title><Dialog.Close asChild><Button variant="ghost" aria-label="Close navigation"><X aria-hidden /></Button></Dialog.Close></div>}
         <Button className="new-project sidebar-action" variant="ghost" aria-label="+ New app" disabled={!usable || busy} onClick={create}><FolderPlus aria-hidden />New app</Button>
         <nav className="workspace-nav" aria-label="Workspace" onKeyDown={navigateWithKeyboard}>
-          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Button key={id} disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-label={label} aria-describedby={id === 'activity' && pendingReview > 0 ? 'sidebar-review-count' : undefined} aria-pressed={workspace === id} aria-current={workspace === id ? 'page' : undefined} onClick={() => navigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span>{id === 'activity' && pendingReview > 0 && <span id="sidebar-review-count" className="sidebar-count" title={`${pendingReview} paid requests awaiting review`} aria-label={`${pendingReview} awaiting review`}>{pendingReview}</span>}</Button>)}
+          {destinations.filter(item => !hiddenDestinations.includes(item.id)).map(({ id, label, icon: Icon }) => <Fragment key={id}><Button disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-label={label} aria-describedby={id === 'activity' && pendingReview > 0 ? 'sidebar-review-count' : undefined} aria-pressed={workspace === id} aria-expanded={id === 'backend' ? workspace === 'backend' : undefined} aria-controls={id === 'backend' ? 'backend-provider-nav' : undefined} aria-current={workspace === id && (id !== 'backend' || !backendProviders.length) ? 'page' : undefined} onClick={() => navigate(id)}><Icon aria-hidden /><span className="workspace-nav-label">{label}</span>{id === 'activity' && pendingReview > 0 && <span id="sidebar-review-count" className="sidebar-count" title={`${pendingReview} paid requests awaiting review`} aria-label={`${pendingReview} awaiting review`}>{pendingReview}</span>}</Button>{id === 'backend' && <div id="backend-provider-nav" className="backend-provider-nav" role="group" aria-label="Backend providers" hidden={workspace !== 'backend' || !backendProviders.length}>{backendProviders.map(provider => <Button key={provider.id} variant="ghost" className="sidebar-action backend-provider-link" disabled={!usable} aria-current={workspace === 'backend' && backendProvider === provider.id ? 'page' : undefined} onClick={() => { closeDrawer('workspace'); onBackendProvider?.(provider.id); }}><span className="backend-provider-dot" aria-hidden /><span>{provider.name}</span></Button>)}</div>}</Fragment>)}
         </nav>
         <SidebarProjects projects={projects} selected={selected} disabled={!usable || busy} onSelect={select} onCreate={create} />
         <div className="sidebar-footer">

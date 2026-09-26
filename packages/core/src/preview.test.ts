@@ -11,6 +11,7 @@ import { Processes, freePort } from './processes.js';
 import { revision } from './files.js';
 import { makeLegacyApp } from '../../../tests/fixtures/legacy-app.js';
 import { dependencyFiles, dependencyProfiles } from './dependency-profiles.js';
+import { nativeAuthDependencies } from '../../../tests/fixtures/native-auth-app.js';
 let dir: string, projects: Projects;
 beforeEach(async () => { dir = await mkdtemp(path.join(os.tmpdir(), 'builder-preview-')); projects = await Projects.open(path.join(dir, 'apps'), path.join(dir, 'home')); });
 afterEach(async () => { await rm(dir, { recursive: true, force: true }); });
@@ -149,6 +150,24 @@ it('rejects changed dependency locks before installing', async () => {
   const install = vi.spyOn(p.processes, 'run');
   try { await expect(p.start(app.id)).rejects.toMatchObject({ code: 'DEPENDENCIES_CHANGED' }); expect(install).not.toHaveBeenCalled(); }
   finally { await p.close(); install.mockRestore(); }
+});
+it('starts a preview with pinned native sign-in dependencies without rewriting the app', async () => {
+  const app = await projects.create({ name: 'Native sign-in', slug: 'native-sign-in' });
+  const files = nativeAuthDependencies(await dependencyFiles(app.root));
+  await writeFile(path.join(app.root, 'package.json'), files.manifest);
+  await writeFile(path.join(app.root, 'package-lock.json'), files.lock);
+  const p = new Previews(projects, new Diagnostics(), true);
+  const install = vi.spyOn(p.processes, 'run').mockImplementation(async () => {
+    const cli = path.join(app.root, 'node_modules/expo/bin/cli');
+    await mkdir(path.dirname(cli), { recursive: true });
+    await writeFile(cli, "require('node:http').createServer((req,res)=>res.end('ready')).listen(Number(process.argv.at(-1)));");
+  });
+  try {
+    expect((await p.start(app.id)).status).toBe('ready');
+    expect(install).toHaveBeenCalledOnce();
+    expect(install.mock.calls[0]!.slice(0, 2)).toEqual(['npm', ['ci', '--ignore-scripts', '--no-audit', '--no-fund']]);
+    expect(await dependencyFiles(app.root)).toEqual(files);
+  } finally { await p.close(); install.mockRestore(); }
 });
 it('does not retain exited child PIDs for later shutdown', async () => {
   const p = new Processes(); const child = p.spawn(process.execPath, ['-e', 'process.exit(0)'], dir, () => {});

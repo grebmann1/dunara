@@ -1,6 +1,6 @@
 /* global fetch, URL, console */
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { createBuilderRuntime } from '@mobile-builder/runtime';
@@ -23,6 +23,14 @@ const engine = await createBuilderRuntime({ home: path.resolve('state/home'), wo
 let studio, mcp, transport;
 try {
   assert(engine.plugins.snapshot().some(plugin => plugin.id === 'builder.expo' && plugin.status === 'active'));
+  const providerRoot = path.resolve('state/provider-fixture');
+  await mkdir(providerRoot, { recursive: true });
+  await writeFile(path.join(providerRoot, 'package.json'), JSON.stringify({ name: 'consumer-backend', version: '1.0.0', type: 'module', builder: { id: 'consumer.backend', name: 'Consumer backend', description: 'Offline package fixture', apiVersion: 1, app: 'app.js', workspacePanel: 'backend', workspaceGroup: 'backend' } }));
+  await writeFile(path.join(providerRoot, 'app.js'), "export default {apiVersion:1,panels:[{id:'backend',title:'Backend',scope:'project',mount(root){root.textContent='Fixture';}}]};");
+  const inspected = await engine.plugins.inspect(providerRoot);
+  await engine.plugins.install(providerRoot, inspected.digest, true);
+  const provider = engine.plugins.snapshot().find(plugin => plugin.id === 'consumer.backend');
+  assert.equal(provider.workspacePanel, 'backend'); assert.equal(provider.workspaceGroup, 'backend'); assert(provider.appUrl);
   const project = await engine.projects.create({ name: 'External package', slug: 'external-package' });
   const manifest = JSON.parse(await readFile(path.join(project.root, 'package.json'), 'utf8'));
   assert(!JSON.stringify(manifest).includes('@mobile-builder/'));

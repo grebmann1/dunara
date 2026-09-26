@@ -6,10 +6,12 @@ export const entryPath = z.string().max(240).refine(p => !p.startsWith('/') && !
 export const manifestSchema = z.object({
   id: pluginId, name: z.string().min(1).max(80), description: z.string().max(1000), apiVersion: z.literal(1),
   server: entryPath.regex(/\.(m?js)$/).optional(), app: entryPath.regex(/\.(m?js)$/).optional(),
+  workspacePanel: localId.optional(), workspaceGroup: z.literal('backend').optional(),
   guides: z.array(entryPath).max(10).default([]),
   capabilities: z.array(z.enum(['project.read', 'project.write', 'storage', 'credentials'])).max(4).default([]),
   requires: z.record(pluginId, version).default({}),
-}).strict();
+}).strict().refine(value => !value.workspacePanel || !!value.app, 'workspacePanel requires an app entry')
+  .refine(value => !value.workspaceGroup || !!value.workspacePanel, 'workspaceGroup requires a workspacePanel');
 export const packageSchema = z.object({ name: z.string().min(1).max(160), version, type: z.literal('module'), builder: manifestSchema }).passthrough();
 export type PluginPackage = z.infer<typeof packageSchema>;
 export const installedSchema = z.object({
@@ -20,4 +22,4 @@ export const installedSchema = z.object({
 export type InstalledPlugin = z.infer<typeof installedSchema>;
 export const storeSchema = z.object({ version: z.literal(1), installed: z.array(installedSchema).max(100), uninstalled: z.array(pluginId).max(200) });
 export type PluginStore = z.infer<typeof storeSchema>;
-export type PluginView = { id: string; name: string; description: string; version: string; digest: string; source: InstalledPlugin['source']; enabled: boolean; status: 'active' | 'disabled' | 'failed' | 'recovery'; error?: string; capabilities: string[]; requires: Record<string, string>; actions: Array<{ id: string; title: string; description: string; effect: 'read' | 'write'; scope: 'project' | 'global'; input: Record<string, unknown> }>; recipes: Array<{ id: string; title: string; version: string; description: string }>; settings: Array<{ id: string; label: string; type: 'string' | 'boolean' | 'number'; default?: unknown }>; appUrl?: string; guides: string[]; canRollback: boolean };
+export type PluginView = { id: string; name: string; description: string; version: string; digest: string; source: InstalledPlugin['source']; enabled: boolean; status: 'active' | 'disabled' | 'failed' | 'recovery'; error?: string; capabilities: string[]; requires: Record<string, string>; actions: Array<{ id: string; title: string; description: string; effect: 'read' | 'write'; scope: 'project' | 'global'; input: Record<string, unknown> }>; recipes: Array<{ id: string; title: string; version: string; description: string }>; settings: Array<{ id: string; label: string; type: 'string' | 'boolean' | 'number'; default?: unknown }>; appUrl?: string; workspacePanel?: string; workspaceGroup?: 'backend'; guides: string[]; canRollback: boolean };
