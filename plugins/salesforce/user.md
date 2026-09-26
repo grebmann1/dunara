@@ -2,6 +2,8 @@
 
 Enable **Salesforce** in Plugins, then open **Backend → Salesforce** in an app. Salesforce is optional and can coexist with Supabase. Each app keeps its own development, staging and production org settings.
 
+The plugin is bundled with Dunara, not installed into every app. Enabling it or opening its workspace adds no app files or dependencies. Only the app selected for an explicitly reviewed Salesforce change receives that change; other apps keep their existing source, settings and dependencies.
+
 1. In **Org settings**, enter the org label, Salesforce login/My Domain URL, public OAuth consumer key and native callback URI. Choose the object and field API names the app will read.
 2. Choose **Review org settings**, then apply the change in the host's **Reviews** tab. A saved configuration does not mean the app has signed in.
 3. In **React SDK**, inspect compatibility and choose **Add React integration**. Review the typed client, React provider/hooks and setup guide before applying.

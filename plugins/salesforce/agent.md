@@ -4,6 +4,8 @@ This API 1 backend plugin exposes project-scoped `inspect`, `configure` and `add
 
 Read `inspect` first. `configuration` contains public settings, not proof of a live connection. `compatibility` is a static manifest check, not native qualification. `integrationAdded` indicates files exist, not that the app imports them. Preserve other environments, providers, source edits and OAuth identities.
 
+Bundling or enabling the plugin is workspace availability, not permission to add Salesforce to apps. Propose Salesforce configuration or integration only for an app whose user has chosen Salesforce. Never add SDK dependencies, integration files or settings to unrelated apps or the default app template.
+
 Never ask for or put access/refresh tokens, passwords or client secrets in action inputs, generated source, logs or Assistant context. OAuth consumer keys are public. Native Mobile SDK owns the actual login and private token storage. This plugin has no credential capability or outbound provider requests.
 
 `add-react-integration` adds src/salesforce/client.ts, src/salesforce/SalesforceProvider.tsx and salesforce/SETUP.md. Wire the React provider only after a native integration is qualified. For web, create a client with null SDK; do not import native modules or substitute sample data for a failed live call.
