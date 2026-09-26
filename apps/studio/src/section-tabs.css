@@ -1,0 +1,6 @@
+.section-tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.section-tabs .section-tab { min-width: 0; min-height: var(--control-size); padding: 7px 12px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--foreground); font-size: 13px; font-weight: 500; line-height: 20px; }
+.section-tabs .section-tab:hover { background: var(--ui-muted); }
+.section-tabs .section-tab[data-selected=true] { color: var(--primary); background: var(--primary-soft); }
+.section-tabs .section-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+@media (max-width: 760px) { .section-tabs .section-tab { padding-inline: 9px; font-size: 12px; } }

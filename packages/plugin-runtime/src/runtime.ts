@@ -80,6 +80,8 @@ export class PluginRuntime extends EventEmitter {
         actions: [...live?.actions.values() ?? []].map(({ id, title, description, effect, scope, input }) => ({ id, title, description, effect, scope, input })),
         recipes: [...live?.recipes.values() ?? []].map(({ id, title, version, description }) => ({ id, title, version, description })), settings: live?.settings ?? [], guides: builder.guides, canRollback: !!row.previous,
         ...(live && builder.app ? { appUrl: `/plugin-assets/${builder.id}/${row.digest}/${live.generation}/${builder.app}` } : {}),
+        ...(builder.workspacePanel ? { workspacePanel: builder.workspacePanel } : {}),
+        ...(builder.workspaceGroup ? { workspaceGroup: builder.workspaceGroup } : {}),
       };
     });
   }

@@ -17,7 +17,7 @@ export function usePlugins(ready: boolean) {
   useEffect(() => { if (!ready) return; let stopped = false; const poll = async () => { if (!stopped) await refresh(); }; void poll(); const timer = setInterval(() => { void poll(); }, 3000); return () => { stopped = true; clearInterval(timer); }; }, [ready, refresh]);
   return { state, error, refresh };
 }
-function PluginSurface({ plugin, projectId, refresh }: { plugin: PluginView; projectId: string | null; refresh(): Promise<void> }) {
+export function PluginSurface({ plugin, projectId, refresh, panelId }: { plugin: PluginView; projectId: string | null; refresh(): Promise<void>; panelId?: string }) {
   const { api } = useStudioClient();
   const container = useRef<HTMLDivElement>(null), [error, setError] = useState('');
   useEffect(() => {
@@ -32,7 +32,9 @@ function PluginSurface({ plugin, projectId, refresh }: { plugin: PluginView; pro
       const module = await import(/* @vite-ignore */ plugin.appUrl!); if (controller.signal.aborted) return;
       const app = module.default as PluginApp;
       if (app?.apiVersion !== 1 || !Array.isArray(app.panels) || app.panels.length > 10) throw Error('Unsupported plugin app entry');
+      if (panelId && !app.panels.some(panel => panel.id === panelId)) throw Error('Plugin workspace panel is unavailable');
       for (const panel of app.panels) {
+        if (panelId && panel.id !== panelId) continue;
         if (!panel || typeof panel.title !== 'string' || typeof panel.mount !== 'function') throw Error('Invalid plugin panel');
         const element = document.createElement('section'); element.className = 'plugin-surface'; element.setAttribute('aria-label', panel.title); root.append(element);
         if (panel.scope === 'project' && !projectId) { element.textContent = 'Select an app to open this panel.'; continue; }
@@ -42,7 +44,7 @@ function PluginSurface({ plugin, projectId, refresh }: { plugin: PluginView; pro
       }
     })().catch(() => { if (!controller.signal.aborted) setError('This plugin panel could not open. Use Manage plugin to reload it, or disable the plugin.'); });
     return () => { controller.abort(); for (const dispose of disposers.reverse()) { try { dispose(); } catch { /* A failing plugin must not break shell cleanup. */ } } root.replaceChildren(); };
-  }, [plugin.id, plugin.appUrl, projectId, refresh]);
+  }, [plugin.id, plugin.appUrl, panelId, projectId, refresh]);
   return <>{error && <p role="alert" className="plugin-error">{error}</p>}<div ref={container} /></>;
 }
 function PluginSettings({ plugin, busy, perform }: { plugin: PluginView; busy: boolean; perform(work: () => Promise<unknown>): void }) {

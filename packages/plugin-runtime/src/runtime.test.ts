@@ -7,12 +7,28 @@ import { Engine } from '../../core/src/engine.js';
 import { Projects } from '../../core/src/projects.js';
 import { scaffoldPlugin } from '../../cli/src/plugin-commands.js';
 import { archivePackage, inspectPackage } from './packages.js';
+import { manifestSchema } from './contracts.js';
 
 let root: string, source: string, engine: Engine, projectId: string;
 async function start() { engine = new Engine(await Projects.open(path.join(root, 'apps'), path.join(root, 'home')), false, false, undefined, {}, {}, undefined, { encryptionKey: 'a'.repeat(64) }); await engine.plugins.ready; }
 async function install() { const pkg = await inspectPackage(source); await engine.plugins.install(source, pkg.digest, true); return pkg; }
 beforeEach(async () => { root = await mkdtemp(path.join(os.tmpdir(), 'builder-plugins-')); source = path.join(root, 'sample'); await scaffoldPlugin(source); await start(); projectId = (await engine.projects.create({ name: 'Plugin app', slug: 'plugin-app' })).id; });
 afterEach(async () => { await engine.close(); await rm(root, { recursive: true, force: true }); });
+it('discovers backend workspaces only from a validated, enabled plugin package', async () => {
+  const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'));
+  manifest.builder.workspacePanel = 'backend'; manifest.builder.workspaceGroup = 'backend';
+  expect(manifestSchema.safeParse({ ...manifest.builder, app: undefined }).success).toBe(false);
+  expect(manifestSchema.safeParse({ ...manifest.builder, workspacePanel: undefined }).success).toBe(false);
+  expect(manifestSchema.safeParse({ ...manifest.builder, workspaceGroup: 'unknown' }).success).toBe(false);
+  await writeFile(path.join(source, 'package.json'), JSON.stringify(manifest));
+  await install();
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)).toMatchObject({ workspacePanel: 'backend', workspaceGroup: 'backend', status: 'active', appUrl: expect.any(String) });
+  await engine.plugins.change(manifest.builder.id, 'disable');
+  const disabled = engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)!;
+  expect(disabled.status).toBe('disabled'); expect(disabled.appUrl).toBeUndefined();
+  await engine.close(); await start();
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)).toMatchObject({ workspaceGroup: 'backend', status: 'disabled' });
+});
 it('installs defaults offline and preserves disabled and removed defaults across restart', async () => {
   expect(engine.plugins.snapshot()).toHaveLength(9); expect(engine.plugins.snapshot().every(p => p.status === 'active')).toBe(true);
   await engine.plugins.change('builder.plugin-guide', 'uninstall'); await engine.plugins.change('builder.icons', 'disable');

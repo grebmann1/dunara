@@ -21,6 +21,24 @@ Packages are limited to 200 regular text files and 8 MiB; individual files are a
 
 ## Builtin compatibility
 
+### Backend workspaces
+
+Providers appear as children of **Backend** in Studio. Supabase is the included provider; an installed plugin can add its own sibling without changing Supabase's bindings or routes. Declare a browser panel and its group in the package's `builder` manifest:
+
+```json
+{
+  "app": "app.js",
+  "workspacePanel": "backend",
+  "workspaceGroup": "backend"
+}
+```
+
+Export an API 1 app panel with the matching `id: "backend"`. Studio uses the plugin's name for the provider navigation and mounts only that panel with the selected `projectId`, scoped `invoke`, and cancellation signal. Providers own their workspace content and may add provider-specific sections. The host supplies a Reviews tab for the selected app's and provider's global actions; other apps' reviews remain separate. Writes still require their existing explicit, revision-bound review.
+
+Both manifest fields are optional. `workspacePanel` requires an app entry; `workspaceGroup` requires that panel. Only active providers appear in Backend. Disabling, failing, or removing a provider unmounts its panel and falls back to another available provider. Backend remains accessible when Supabase is disabled. Hosted plugin availability and server authorization remain controlled by the host. This is an additive API 1 extension; older runtimes that reject these manifest fields need a coordinated runtime/Studio/SDK upgrade before installation.
+
+This registers a workspace, not a Salesforce implementation or a new execution provider. No connection, data migration, or remote provisioning happens when the provider is selected.
+
 The bundled catalogue, feature implementations and application composition live in `packages/builtin-plugins`. Core owns the project/file/identity primitives and generic runtime. Old core feature imports remain as compatibility re-exports so existing tests, scripts and integrations keep working. Existing React feature workspaces remain in the distribution UI; SDK panels coexist with them and use the same action registry. These compatibility adapters are private implementation details, not public SDK APIs.
 
 There are 62 existing canonical actions plus `plugin_list`, `plugin_guide` and `plugin_action` in the default MCP inventory. Installed user actions receive bounded namespaced aliases and update discovery on enable/disable. Running assistants retain their turn inventory; a new turn rediscovers capabilities. Plugin changes through Studio interrupt active Assistant work and invalidate pending plugin reviews.
