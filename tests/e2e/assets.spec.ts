@@ -370,8 +370,13 @@ test('creative forms and selected review stay reachable at six widths and 200 pe
       }
       const details = page.getByRole('button', { name: 'Details', exact: true });
       if (await details.isVisible()) await details.click();
+      await expect(page.locator('.asset-review .media-comparison img')).toHaveJSProperty('naturalWidth', 100);
       const copy = page.getByRole('button', { name: 'Copy integration context' });
-      await copy.scrollIntoViewIfNeeded(); await expect(copy).toBeInViewport();
+      // Artwork layout and drawer autofocus can finish after the first scroll.
+      await expect(async () => {
+        await copy.scrollIntoViewIfNeeded({ timeout: 500 });
+        await expect(copy, `${width}px / ${zoom} zoom`).toBeInViewport({ timeout: 500 });
+      }).toPass({ timeout: 5000 });
       await page.getByRole('combobox', { name: 'Compare with' }).click();
       await expect(page.getByRole('listbox')).toBeInViewport();
       await page.keyboard.press('Escape');
