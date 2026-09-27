@@ -57,7 +57,8 @@ async function screenshots(page: Page, info: TestInfo, state: string) {
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     if (state === 'result') {
       const refine = panel(page).getByRole('button', { name: 'Refine the design', exact: true });
-      await expect(async () => { await refine.scrollIntoViewIfNeeded({ timeout: 500 }); await expect(refine).toBeInViewport({ ratio: 1, timeout: 500 }); }).toPass({ timeout: 5000 });
+      // Chromium can round the intersection just below 1 for a fully visible fractional-pixel edge.
+      await expect(async () => { await refine.scrollIntoViewIfNeeded({ timeout: 500 }); await expect(refine).toBeInViewport({ ratio: .99, timeout: 500 }); }).toPass({ timeout: 5000 });
     }
     const dialog = page.getByRole('dialog').last();
     expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
