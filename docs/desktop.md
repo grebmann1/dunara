@@ -33,7 +33,7 @@ With desktop running, run `node dist/packages/cli/src/index.js runtimes` and cho
 ```text
 /absolute/path/to/dunara/dist/packages/cli/src/index.js
 --connect-home
-/absolute/home/from/runtime/discovery
+/absolute/builder-state
 ```
 
 Use the actual home path from discovery. `--desktop-connect` still accepts an exact socket path. Do not add `--workspace`, `--home`, `--studio`, `--studio-only`, `--trust-execution` or `--lan` to this connection. The bridge creates no Engine; its canonical tools share the desktop's projects, previews, captures, assets, Launch Kits and Studio workspace/view state. JSON CLI commands use the same socket; see [Shared controls and project memory](shared-control.md). Disconnecting an agent does not stop desktop. The private current-user Unix socket accepts at most four clients. Its socket changes on backend restart; `--connect-home` resolves it when the agent reconnects. Other processes running as your user are within this local trust boundary.
