@@ -71,7 +71,7 @@ test('reviews exact contents, downloads unchanged files, retains kits after capt
   await expect(saved.getByText('Kit Alpha', { exact: true })).toBeVisible();
   await page.route('**/launch-kits/*/files/*', route => route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Download unavailable; retry' } }) }));
   await saved.getByRole('button', { name: 'Download Kit manifest', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Download unavailable; retry');
+  await expect(page.getByRole('alert').filter({ hasText: 'Download unavailable; retry' })).toBeVisible();
   await page.unroute('**/launch-kits/*/files/*');
   await saved.getByRole('button', { name: 'Delete kit', exact: true }).click();
   expect(await engine.launchKits.list(projectId)).toHaveLength(1);
