@@ -21,6 +21,10 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
   const ready = !!status?.configured && !!selected?.models.some(item => item.id === status.model);
   const remember = !!status?.rememberNewConnections;
   useEffect(() => {
+    if (key.current) key.current.value = '';
+    if (code.current) code.current.value = '';
+  }, [status?.epoch, status?.accountContext]);
+  useEffect(() => {
     alive.current = true;
     const refresh = async () => {
       if (operating.current) return;
@@ -32,7 +36,8 @@ export function AssistantSettings({ disabled, revision }: { disabled: boolean; r
       } catch { if (alive.current && generation.current === version) setError('AI connections are unavailable. Check the local runtime.'); }
     };
     void refresh(); const timer = setInterval(() => void refresh(), 1500);
-    return () => { alive.current = false; generation.current++; clearInterval(timer); if (key.current) key.current.value = ''; if (code.current) code.current.value = ''; };
+    // Image-provider revisions refresh status without discarding an unrelated Assistant credential draft.
+    return () => { alive.current = false; generation.current++; clearInterval(timer); };
   }, [revision]);
   async function act(path: string, input: unknown, message = '', activate?: string) {
     if (operating.current || disabled) return;
