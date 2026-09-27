@@ -53,10 +53,11 @@ test.afterEach(async ({ page }) => {
 async function screenshots(page: Page, info: TestInfo, state: string) {
   for (const size of sizes) {
     await page.setViewportSize(size);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     if (state === 'result') {
       const refine = panel(page).getByRole('button', { name: 'Refine the design', exact: true });
-      await expect(async () => { await refine.scrollIntoViewIfNeeded(); await expect(refine).toBeInViewport({ ratio: 1 }); }).toPass({ timeout: 5000 });
+      await expect(async () => { await refine.scrollIntoViewIfNeeded({ timeout: 500 }); await expect(refine).toBeInViewport({ ratio: 1, timeout: 500 }); }).toPass({ timeout: 5000 });
     }
     const dialog = page.getByRole('dialog').last();
     expect(await dialog.evaluate(node => node.scrollWidth - node.clientWidth)).toBeLessThanOrEqual(1);
