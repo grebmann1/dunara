@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Engine } from '../../packages/core/src/engine.js';
@@ -282,6 +282,11 @@ test('remembers a connected provider, storage preference, draft and layout acros
   const chat = page.getByRole('dialog', { name: 'Assistant', exact: true });
   await chat.getByRole('textbox', { name: 'Message assistant' }).fill('Keep this unsent Bonsai refinement');
   await chat.getByRole('button', { name: 'Close assistant' }).click();
+  // Closing flushes asynchronously; wait for durable storage before terminating the page and backend.
+  await expect.poll(async () => {
+    const saved = JSON.parse(await readFile(path.join(home, 'home/credentials/assistant-drafts.json'), 'utf8'));
+    return saved.rows.some((row: { value: { text: string } }) => row.value.text === 'Keep this unsent Bonsai refinement');
+  }).toBe(true);
   const origin = studio.origin;
   await page.goto('about:blank');
   await assistant.close(); await studio.close(); await engine.close();
