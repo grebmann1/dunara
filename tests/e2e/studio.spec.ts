@@ -313,15 +313,26 @@ test('late failures and delayed inspection stay scoped to their project', async 
   const inspectHeld = new Promise<void>(resolve => { releaseInspect = resolve; });
   let inspected!: () => void;
   const inspection = new Promise<void>(resolve => { inspected = resolve; });
-  await page.route(`**/projects/${first.id}`, async route => {
-    const response = await route.fetch(); inspected(); await inspectHeld; await fulfillUnlessAborted(route, { response });
-  });
+  let returned!: () => void;
+  const inspectionReturned = new Promise<void>(resolve => { returned = resolve; });
+  const inspect = engine.inspect.bind(engine);
+  // Hold the server response so project switching can cancel its request normally.
+  engine.inspect = async (...args) => {
+    const state = await inspect(...args);
+    if (args[0] === first.id) { inspected(); await inspectHeld; returned(); }
+    return state;
+  };
   await selectProject(page, first.id); await inspection;
   await selectProject(page, second.id);
   await expect(page.locator('.topbar h1')).toHaveText('Second app');
   releaseInspect();
+  await inspectionReturned;
+  const refreshed = page.waitForResponse(response => response.url().endsWith(`/api/projects/${second.id}`) && response.status() === 200);
+  engine.diagnostics.emit('change', second.id);
+  await refreshed;
   await page.unrouteAll({ behavior: 'wait' });
   await expect(page.locator('.topbar h1')).toHaveText('Second app');
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('bare origin and reload show authentication recovery rather than connecting forever', async ({ page }) => {
