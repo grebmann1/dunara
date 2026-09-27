@@ -38,8 +38,10 @@ test.beforeEach(async ({ page }) => {
     },
   });
   projectId = (await engine.projects.create({ name: 'Still Connected', slug: 'still-connected' })).id;
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   studio = await startStudio(engine, path.resolve('dist/studio'));
   await page.goto(studio.launchUrl);
+  await expect(page.getByRole('button', { name: 'Backend', exact: true })).toBeEnabled();
 });
 
 test('pages discovery, checks access, and switches a linked preview environment', async ({ page }, info) => {

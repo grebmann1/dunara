@@ -32,6 +32,7 @@ test.beforeEach(async () => {
     },
   }, undefined, { encryptionKey: 'a'.repeat(64) });
   projectId = (await engine.projects.create({ name: 'Habit Studio', slug: 'habit-studio' })).id;
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   endpoint = await startDesktopMcp(engine);
   behavior = async (_, callbacks, signal) => {
     await callbacks.tool('assistant_request_setup', { kind: 'app_openai', environment: 'development' }, signal);

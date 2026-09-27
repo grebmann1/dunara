@@ -111,11 +111,15 @@ test('chat retains reachable upload, remove, send and close controls on short sc
 
 test('Supabase setup and connection forms reflow without hiding actions', async ({ page }, info) => {
   await page.getByRole('button', { name: 'Backend', exact: true }).click();
+  await page.getByRole('button', { name: 'Enable for this app', exact: true }).click();
   const setup = page.getByRole('region', { name: 'Supabase setup guide', exact: true });
   await setup.getByRole('button', { name: 'Connect Supabase account', exact: true }).click();
   const form = page.getByRole('region', { name: 'Supabase connection', exact: true });
   for (const size of sizes) {
     await page.setViewportSize(size);
+    await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(page.getByRole('tab', { name: 'Settings', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(form.getByLabel('Personal access token', { exact: true })).toBeEnabled();
     await noOverflow(page, [form], `Supabase ${size.width}×${size.height}`);
     await form.getByRole('button', { name: 'Save Supabase connection', exact: true }).focus();
     await form.getByLabel('Personal access token', { exact: true }).focus();
