@@ -1,3 +1,7 @@
+import { ProjectImports } from '../../core/src/project-import.js';
+import { ProjectExports } from '../../core/src/project-export.js';
+import { ProjectJourney } from '../../core/src/journey.js';
+import { AgentArtifacts } from '../../core/src/agent-artifacts.js';
 import { AndroidDeliveries } from './features/android-deliveries.js';
 import type { PreviewDriver } from '../../core/src/preview-driver.js';
 import { Projects } from "../../core/src/projects.js";
@@ -36,6 +40,10 @@ import { BuilderKernel } from '../../core/src/kernel.js';
 /** First-party distribution composition; the core Engine export remains a compatibility facade. */
 export class Engine extends BuilderKernel {
   private shutdown?: Promise<void>;
+  readonly projectImports: ProjectImports;
+  readonly projectExports: ProjectExports;
+  readonly journey: ProjectJourney;
+  readonly agentArtifacts: AgentArtifacts;
   readonly plugins: PluginRuntime;
   readonly actions: BuiltinActions;
   readonly assets: Assets;
@@ -68,8 +76,12 @@ export class Engine extends BuilderKernel {
     this.mediaJobs = new MediaJobs(this.assets, imageProvider, 180_000, { home: projects.home, managed: runtime.managedImages, credentials: sharedOpenAIStore(projects.home, secretProtection(services)), ...providerOptions });
     const protection = secretProtection(services), accountStore = new EncryptedSettingsStore(projects.home, 'builder-account', savedAccountSchema, protection);
     this.account = new AccountSession(accountProvider ?? (services.account ? new AccountProvider(services.account) : undefined), Date.now, { available: !!protection, load: () => accountStore.load(), save: value => accountStore.save(value), remove: () => accountStore.remove() });
+    this.projectImports = new ProjectImports(projects, () => this.account.context().revision);
+    this.projectExports = new ProjectExports(projects);
+    this.agentArtifacts = new AgentArtifacts(() => this.account.context().revision);
+    this.journey = new ProjectJourney(projects, id => this.boardCaptures.sourceRevision(id));
     this.backendOAuth = new BackendOAuth(this.account, services.oauthBrokerOrigin, backendOptions.fetch);
-    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, paused: () => !!runtime.computePaused, changed: () => this.diagnostics.emit('change') });
+    this.backends = new Backends(projects, this.files, { encryptionKey: protection?.key, oauth: this.backendOAuth, ...backendOptions, enabled: id => this.backendActive(id, 'builder.supabase'), paused: () => !!runtime.computePaused, changed: () => this.diagnostics.emit('change') });
     const environment = (id: string) => this.backends.appEnvironment(id);
     const beforeStart = async (id: string) => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); };
     this.previews = runtime.previews?.(environment, beforeStart, this.diagnostics, projects) ?? new Previews(projects, this.diagnostics, trusted, lan, environment, beforeStart);
@@ -77,7 +89,7 @@ export class Engine extends BuilderKernel {
     this.recipeUpgrades = new RecipeUpgrades(projects, this.previews);
     this.nativeBuilds = new NativeBuilds(projects, this.previews);
     this.nativeWorkspaces = new NativeBuildWorkspaces(projects, trusted && !runtime.hosted, async (id, selection) => {
-      const binding = selection.environment === 'none' ? null : await this.backends.binding(id, selection.environment);
+      const binding = selection.environment === 'none' || !await this.backendActive(id, 'builder.supabase') ? null : await this.backends.binding(id, selection.environment);
       return { app: binding ? { EXPO_PUBLIC_SUPABASE_URL: binding.url, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: binding.publishableKey, EXPO_PUBLIC_BUILDER_ENVIRONMENT: binding.environment } : {}, revision: revision(JSON.stringify({ binding, previewConfiguration: await this.previews.configurationRevision(id) })) };
     }, async id => { await this.recipeUpgrades.assertReady(id); await this.nativeBuilds.assertReady(id); }, id => this.diagnostics.emit('change', id));
     this.androidDeliveries = new AndroidDeliveries(projects, this.nativeWorkspaces, trusted, !runtime.hosted, id => this.diagnostics.emit('change', id));
@@ -93,12 +105,13 @@ export class Engine extends BuilderKernel {
     };
     this.plugins = new PluginRuntime(projects.home, {
       files: id => ({ list: () => this.files.list(id), read: file => this.files.read(id, file), write: changes => this.files.write(id, changes) }),
+      backendEnabled: async (pluginId, projectId) => (await this.backendPluginState(projectId, pluginId)).enabled,
       binding: async id => {
         const account = this.account.context().revision, studio = await this.studio.snapshot();
         if (!id) return { account, selected: studio.projectId };
         await this.projects.get(id); const tree = await this.files.list(id);
         if (tree.truncated) throw new Error('Project exceeds the plugin review limits');
-        return { account, projectId: id, selected: studio.projectId, source: await this.boardCaptures.sourceRevision(id, tree) };
+        return { account, projectId: id, selected: studio.projectId, backendPlugins: await this.projects.backendPluginSelections(id), source: await this.boardCaptures.sourceRevision(id, tree) };
       },
       getCredential: async (id, name) => credentials(id).load()?.[name],
       setCredential: async (id, name, value) => { const store = credentials(id), values = store.load() ?? {}; if (value === null) delete values[name]; else values[name] = value; if (Object.keys(values).length) store.save(values); else store.remove(); },
@@ -120,6 +133,49 @@ export class Engine extends BuilderKernel {
     this.actions = new BuiltinActions(this);
     this.plugins.on('change', () => this.diagnostics.emit('change'));
   }
+  private async backendActive(projectId: string, pluginId: string) {
+    await this.plugins.ready;
+    return this.plugins.isEnabled(pluginId) && (await this.backendPluginState(projectId, pluginId)).enabled;
+  }
+  async backendPluginState(projectId: string, pluginId: string) {
+    await this.plugins.ready;
+    const plugin = this.plugins.snapshot().find(value => value.id === pluginId && value.workspaceGroup === 'backend');
+    if (!plugin) throw new Error('Install this backend plugin in Plugins first.');
+    const metadata = await this.projects.metadata(await this.projects.get(projectId));
+    const legacy = !('backendPlugins' in metadata);
+    const selection = (await this.projects.backendPluginSelections(projectId))[pluginId];
+    let configured = false;
+    if (legacy && !selection && pluginId === 'builder.supabase') configured = (await Promise.all(['development', 'staging', 'production'].map(environment => this.backends.binding(projectId, environment as import('../../platform/src/contracts.js').EnvironmentName)))).some(Boolean);
+    if (legacy && !selection && !configured && pluginId === 'builder.supabase') {
+      const connection = await this.files.read(projectId, 'backend/connection.json').catch(() => null);
+      if (connection) { try { const value = JSON.parse(connection.content); configured = typeof value.url === 'string' && !!value.url && typeof value.publishableKey === 'string' && !!value.publishableKey; } catch { /* Keep incomplete imports opt-in. */ } }
+    }
+    if (legacy && !selection && pluginId === 'salesforce.mobile-sdk') {
+      const marker = await this.files.read(projectId, 'backend/salesforce-installation.json').catch(() => null);
+      if (marker) { try { const value = JSON.parse(marker.content); configured = value.version === 1 && value.provider === pluginId && value.enabled === true; } catch { /* Invalid setup needs an explicit choice. */ } }
+    }
+    return { pluginId, projectId, enabled: selection?.enabled ?? configured, revision: selection?.revision ?? 'initial', available: plugin.status === 'active' };
+  }
+  async assertBackendEnabled(projectId: string, pluginId: string) {
+    if (!(await this.backendPluginState(projectId, pluginId)).enabled) throw new Error('Enable this backend for this app in Backend first.');
+  }
+  async setBackendPlugin(projectId: string, pluginId: string, input: unknown) {
+    const value = z.object({ enabled: z.boolean(), expectedRevision: z.string().max(64) }).strict().parse(input);
+    return this.projects.mutations.run(async () => {
+      if ((await this.studio.snapshot()).projectId !== projectId) throw new Error('Select this app before changing its backends.');
+      const state = await this.backendPluginState(projectId, pluginId);
+      if (state.revision !== value.expectedRevision) throw new Error('Backend selection changed. Refresh and try again.');
+      if (this.actions.busy(pluginId) || this.plugins.projectBusy(pluginId, projectId)) throw new Error('Wait for this backend’s current operation to finish.');
+      if (pluginId === 'builder.supabase' && (await this.backends.inspect(projectId)).operations.some(operation => !['succeeded', 'failed', 'cancelled'].includes(operation.state))) throw new Error('Finish or cancel this app’s backend reviews and operations first.');
+      if (value.enabled && !state.available) await this.plugins.change(pluginId, 'enable');
+      if (value.enabled && !this.plugins.isEnabled(pluginId)) throw new Error('Backend plugin could not be loaded. Check Plugins.');
+      const defaults = !('backendPlugins' in await this.projects.metadata(await this.projects.get(projectId))) ? Object.fromEntries(await Promise.all(this.plugins.snapshot().filter(plugin => plugin.workspaceGroup === 'backend').map(async plugin => [plugin.id, (await this.backendPluginState(projectId, plugin.id)).enabled]))) : {};
+      const save = async () => { await this.projects.setBackendPlugin(projectId, pluginId, value.enabled, defaults); this.plugins.invalidateProjectReviews(pluginId, projectId); };
+      if (pluginId === 'builder.supabase') await this.previews.withStopped(projectId, save); else await save();
+      this.diagnostics.emit('change');
+      return this.backendPluginState(projectId, pluginId);
+    });
+  }
   async inspect(id: string, paths: string[] = []) {
     const project = await this.projects.get(id);
     const design = await this.designs.read(id).catch(error => errorResult(error));
@@ -127,7 +183,7 @@ export class Engine extends BuilderKernel {
     const routeCandidates = discoverRoutes(tree);
     const [discoveredScreens, sourceRevision, metadata] = await Promise.all([screenCatalog(this.files, id, tree.files, routeCandidates), this.boardCaptures.sourceRevision(id, tree), this.projects.metadata(project)]);
     const screens = metadata.studio.board.screens ?? discoveredScreens;
-    return { project, tree, routeCandidates, screens, sourceRevision, boardCaptures: await this.boardCaptures.list(id, sourceRevision), files: await Promise.all(paths.map(p => this.files.read(id, p))), design, routes: recipes[0].routes, preview: this.previews.status(id), captures: this.captures.list(id) };
+    return { project, tree, routeCandidates, screens, sourceRevision, backendPlugins: await this.plugins.projectContext(id), boardCaptures: await this.boardCaptures.list(id, sourceRevision), files: await Promise.all(paths.map(p => this.files.read(id, p))), design, routes: recipes[0].routes, preview: this.previews.status(id), captures: this.captures.list(id) };
   }
   async selectBackendEnvironment(id: string, input: unknown, signal?: AbortSignal) {
     return this.projects.mutations.run(async () => {

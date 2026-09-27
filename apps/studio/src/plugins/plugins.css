@@ -4,6 +4,9 @@
 .plugins-heading p { font-size: 12px; color: var(--muted-foreground); margin-top: 6px; }
 .plugins-layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 24px; align-items: start; }
 .plugin-list, .plugin-detail { min-width: 0; }
+.plugin-library-tabs { margin-bottom: 16px; gap: 2px; }
+.plugin-library-tabs .section-tab { gap: 5px; padding-inline: 8px; }
+.plugin-filter-count { font-size: 10px; color: var(--muted-foreground); }
 .plugin-section-title { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .plugin-section-title h2, .plugin-box h2 { font-size: 14px; letter-spacing: 0; }
 .plugin-section-title > span { color: var(--muted-foreground); font-size: 11px; }
@@ -32,6 +35,7 @@
 .plugin-detail h2 { font-size: 18px; line-height: 1.4; letter-spacing: -.3px; overflow-wrap: anywhere; }
 .plugin-detail-heading h2 { outline: none; }
 .plugin-detail-heading p { margin: 3px 0 0; font-size: 11px; color: var(--muted-foreground); }
+.plugin-available-copy { margin-block: 16px 12px; }
 .plugin-description { color: var(--muted-foreground); font-size: 13px; margin: 14px 0; }
 .plugin-detail h3, .plugin-box h3, .plugin-install-dialog h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; letter-spacing: 0; }
 .plugin-controls { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
@@ -110,3 +114,5 @@
   .plugin-detail-heading > div { flex-basis: calc(100% - 58px); }
   .plugin-detail-heading > .plugin-status { margin-left: 48px; }
 }
+
+.plugin-backend-management { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }

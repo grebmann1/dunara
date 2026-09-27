@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import type { PluginView } from '../../../../packages/plugin-runtime/src/contracts';
 import { useStudioClient } from '../api';
 import { PluginSurface, type usePlugins } from '../plugins/PluginsPanel';
@@ -6,7 +6,7 @@ import { BackendTabs } from './BackendTabs';
 import { Button } from './ui/button';
 import '../backend.css';
 
-export function BackendPluginPanel({ plugin, projectId, catalog, disabled }: { plugin: PluginView; projectId: string; catalog: ReturnType<typeof usePlugins>; disabled: boolean }) {
+export function BackendPluginPanel({ plugin, projectId, catalog, disabled, projectControl }: { plugin: PluginView; projectId: string; catalog: ReturnType<typeof usePlugins>; disabled: boolean; projectControl?: ReactNode }) {
   const { api, capabilities } = useStudioClient();
   const [tab, setTab] = useState<'workspace' | 'reviews'>('workspace');
   const [busy, setBusy] = useState(false), [error, setError] = useState(''), [revision, setRevision] = useState(0);
@@ -20,6 +20,7 @@ export function BackendPluginPanel({ plugin, projectId, catalog, disabled }: { p
     finally { operating.current = false; setBusy(false); }
   }
   return <main className="destination backend-workspace"><header className="backend-title"><div><p className="backend-eyebrow">BACKEND</p><h1>{plugin.name}</h1><p>{plugin.description}</p></div></header>
+    {projectControl}
     {!capabilities.managePlugins ? <p>This backend integration is managed by your host.</p> : <BackendTabs<'workspace' | 'reviews'> label={`${plugin.name} sections`} tabs={[{ id: 'workspace', label: 'Workspace' }, { id: 'reviews', label: 'Reviews', count: reviews.length }]} active={tab} onChange={setTab}>{section => section === 'workspace' ? <>
       {reviews.length > 0 && <div className="backend-card backend-review-notice"><p>{reviews.length} proposed {reviews.length === 1 ? 'change is' : 'changes are'} ready for review.</p><Button onClick={() => setTab('reviews')}>Review changes</Button></div>}
       <fieldset disabled={disabled || busy} className="backend-plugin-surface"><PluginSurface key={revision} plugin={plugin} panelId={plugin.workspacePanel} projectId={projectId} refresh={catalog.refresh} /></fieldset>

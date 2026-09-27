@@ -40,6 +40,22 @@ beforeEach(async () => {
   gateway = await McpGateway.open(endpoint.socketPath, binding, controller.signal, { approvals: broker, async bindProject(id) { binding.projectId = id; } });
 });
 afterEach(async () => { vi.restoreAllMocks(); controller.abort(); broker.close(); await gateway.close(); await client.close(); await endpoint.close(); await engine.close(); await rm(root, { recursive: true, force: true }); });
+it('reads backend app installation and pending reviews only for the bound project', async () => {
+  expect(await gateway.projectContext(controller.signal)).toBeNull();
+  const projectId = await create(), id = 'salesforce.mobile-sdk';
+  await engine.plugins.change(id, 'enable');
+  await engine.projects.setBackendPlugin(projectId, id, true);
+  const other = await engine.projects.create({ name: 'Other backend app', slug: 'other-backend-app' });
+  await engine.projects.setBackendPlugin(other.id, id, true);
+  const otherReview = z.object({ reviewId: z.string() }).parse(await engine.plugins.invoke(id, 'install-in-app', {}, other.id));
+  const own = z.object({ reviewId: z.string() }).parse(await engine.plugins.invoke(id, 'install-in-app', {}, projectId));
+  const pending = await gateway.projectContext(controller.signal);
+  expect(pending).toMatchObject({ projectId, backendPlugins: expect.arrayContaining([expect.objectContaining({ pluginId: id, context: expect.objectContaining({ installation: expect.objectContaining({ state: 'not-installed' }) }), pendingReviews: [expect.objectContaining({ id: own.reviewId })] })]) });
+  expect(JSON.stringify(pending)).not.toContain(otherReview.reviewId);
+  await engine.plugins.answerReview(own.reviewId, true);
+  expect(await gateway.projectContext(controller.signal)).toMatchObject({ backendPlugins: expect.arrayContaining([expect.objectContaining({ pluginId: id, context: expect.objectContaining({ installation: expect.objectContaining({ state: 'installed' }) }), pendingReviews: [] })]) });
+  expect(broker.list()).toEqual([]);
+});
 it('preserves exact canonical discovery, annotations, resources/templates and prompts rather than a duplicate tool surface', async () => {
   const tools = await client.listTools(), resources = await client.listResources(), templates = await client.listResourceTemplates(), prompts = await client.listPrompts();
   const discovery = await call('builder_mcp_discover');
@@ -62,6 +78,7 @@ it('reviews phone network sharing before execution and exposes variable metadata
   expect(JSON.stringify(broker.list()[0]!.review)).toContain('local network');
   await decide();
   expect(await pending).toMatchObject({ isError: true, details: { structuredContent: { error: { code: 'TRUST_REQUIRED' } } } });
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   const inventory = z.object({ sourceRevision: z.string().nullable() }).parse(data(await call('backend_environment_inspect', { projectId })));
   const args = { projectId, input: { name: 'PAYMENTS_API_KEY', environment: 'development', expectedSourceRevision: inventory.sourceRevision } };
   expect((await call('backend_environment_declare', { ...args, input: { ...args.input, value: 'forbidden-private-canary' } })).isError).toBe(true);
@@ -111,6 +128,7 @@ it('keeps backend discovery and environment selection project-scoped with canoni
     await expect(call(name, { projectId: other })).rejects.toThrow('Cross-project');
     await expect(call(name, {})).rejects.toThrow('Cross-project');
   }
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   const page = { projectId, organizations: [{ slug: 'fixture-org', name: 'Fixture organization' }], projects: [], revision: 'a'.repeat(64), pagination: { offset: 0, limit: 50, nextOffset: null, truncated: false, totalOrganizations: 1, totalProjects: 0 }, connectionRevision: randomUUID(), selectionRequired: true as const };
   vi.spyOn(engine.backends, 'catalog').mockResolvedValue(page);
   expect(data(await call('backend_catalog', { projectId }))).toEqual((await client.callTool({ name: 'backend_catalog', arguments: { projectId } })).structuredContent);
@@ -125,6 +143,7 @@ it('keeps backend discovery and environment selection project-scoped with canoni
 });
 it('discovers provider fixtures, stages the identified link for human review and shares the selected environment', async () => {
   const projectId = await create(), ref = 'abcdefghijklmnopqrst', organization = 'fixture-org';
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   const remote = { id: ref, name: 'Explicit target', region: 'eu-central-1', status: 'ACTIVE_HEALTHY', organization_slug: organization };
   const provider = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     expect(init?.method).toBe('GET'); const url = String(input);
@@ -290,6 +309,7 @@ it('reviews the exact native device and signing plan and rejects changes while a
 
 it('shares configuration plans and private-input boundaries between the Assistant and external MCP', async () => {
   const projectId = await create(), ref = 'abcdefghijklmnopqrst', organization = 'fixture-org';
+  await engine.projects.setBackendPlugin(projectId, 'builder.supabase', true);
   const remote = { id: ref, name: 'Explicit target', region: 'eu-central-1', status: 'ACTIVE_HEALTHY', organization_slug: organization };
   const auth: Record<string, unknown> = { external_email_enabled: false, disable_signup: true, mailer_autoconfirm: true, smtp_pass: 'never-public-canary' };
   const provider = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -320,4 +340,26 @@ it('shares configuration plans and private-input boundaries between the Assistan
   const other = (await engine.projects.create({ name: 'Other', slug: 'other' })).id;
   await expect(call('backend_requirements', { projectId: other })).rejects.toThrow('Cross-project');
   await expect(call('backend_validate', { projectId: other, input: {} })).rejects.toThrow('Cross-project');
+});
+it('scopes backend reviews and journey writes, and reads the agent workflow map', async () => {
+  const projectId = await create();
+  const other = await engine.projects.create({ name: 'Other tools', slug: 'other-tools' });
+  expect((await call('builder_mcp_read_resource', { uri: 'builder://capabilities' })).content).toHaveLength(1);
+  expect(data(await call('project_backend_list', { projectId }))).toMatchObject({ backends: expect.arrayContaining([expect.objectContaining({ pluginId: 'builder.supabase', enabled: false })]) });
+  await expect(call('plugin_reviews', { projectId: other.id })).rejects.toThrow('Cross-project');
+  const state = data(await call('project_journey_read', { projectId }));
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: state.revision, patch: { brief: 'Agent-readable idea' } } })).isError).not.toBe(true);
+  expect((await engine.journey.read(projectId)).preferences.brief).toBe('Agent-readable idea');
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: state.revision, patch: { brief: 'stale' } } })).isError).toBe(true);
+  expect((await call('project_journey_update', { projectId, input: { expectedRevision: (await engine.journey.read(projectId)).revision, patch: { tested: true } } })).isError).toBe(true);
+});
+it('requires an exact user approval before dispatching a new Android build tool', async () => {
+  const projectId = await create(), selection = { workspaceId: randomUUID() }, proposedRevision = 'a'.repeat(64);
+  const plan = { selection, proposedRevision, packageName: 'com.example.fixture', backend: 'none', consequences: ['Compile local debug APK'] };
+  vi.spyOn(engine.androidDeliveries, 'plan').mockResolvedValue(plan);
+  const build = vi.spyOn(engine.androidDeliveries, 'build').mockRejectedValue(new Error('Offline test: no compiler invoked'));
+  const pending = call('android_delivery_build', { projectId, input: { selection, proposedRevision, requestId: randomUUID(), confirmed: true } });
+  await vi.waitFor(() => expect(broker.list()).toHaveLength(1));
+  expect(build).not.toHaveBeenCalled(); expect(broker.list()[0]!.review).toEqual(plan);
+  await decide(); expect((await pending).isError).toBe(true); expect(build).toHaveBeenCalledOnce();
 });

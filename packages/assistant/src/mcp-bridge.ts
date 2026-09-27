@@ -59,6 +59,12 @@ export class McpGateway implements AssistantGateway {
     } catch (error) { signal.removeEventListener('abort', close); await client.close(); throw error; }
   }
   private removeAbortListener = () => {};
+  async projectContext(signal: AbortSignal) {
+    if (!this.binding.projectId) return null;
+    const projectId = this.binding.projectId;
+    const inspected = metadata(await this.invoke('project_inspect', { projectId }, signal));
+    return { projectId, backendPlugins: inspected.backendPlugins ?? [], note: 'Plugin availability does not enable a backend for this app or authorize app installation. Respect projectEnabled; ask the user to enable a disabled backend in Backend. Pending reviews are not completed installations. Read project_inspect again after changes.' };
+  }
   async close() { this.closed = true; this.removeAbortListener(); await this.client.close(); }
   private guard(signal: AbortSignal) { signal.throwIfAborted(); this.lifetime.throwIfAborted(); if (this.closed) throw new Error('Assistant MCP connection is closed'); }
   private async invoke(name: string, args: Record<string, unknown>, signal: AbortSignal) {
@@ -80,6 +86,19 @@ export class McpGateway implements AssistantGateway {
     if (name === 'backend_recipe_apply') return metadata(await this.invoke('backend_recipe_preview', { projectId: args.projectId }, signal));
     const projectId = this.binding.projectId;
     const input = z.record(z.string(), z.unknown()).parse(args.input ?? {});
+    if (name === 'project_import_apply') return metadata(await this.invoke('project_import_inspect', { id: args.id }, signal));
+    if (name === 'project_remove_unavailable') {
+      const catalog = metadata(await this.invoke('project_catalog', {}, signal));
+      return { catalog, instruction: 'Forget this unavailable registration only; do not delete source.' };
+    }
+    if (name === 'android_delivery_build') return metadata(await this.invoke('android_delivery_plan', { projectId, selection: input.selection }, signal));
+    if (name === 'android_delivery_install') return metadata(await this.invoke('android_delivery_install_plan', { projectId, input: { id: input.id, expectedRevision: input.expectedRevision, deviceId: input.deviceId } }, signal));
+    if (name === 'android_delivery_cancel' || name === 'android_delivery_remove') {
+      const value = metadata(await this.invoke('android_delivery_list', { projectId }, signal));
+      const delivery = z.array(z.object({ id: z.uuid() }).passthrough()).parse(value.deliveries).find(value => value.id === input.id);
+      if (!delivery) throw new Error('Android delivery is unavailable. Refresh before reviewing.');
+      return { delivery, action: name };
+    }
     if (name === 'native_delivery_build') return metadata(await this.invoke('native_delivery_plan', { projectId, selection: input.selection }, signal));
     if (name === 'native_delivery_install') return metadata(await this.invoke('native_delivery_install_plan', { projectId, input: { deliveryId: input.deliveryId, expectedRevision: input.expectedRevision } }, signal));
     if (name === 'native_delivery_launch' || name === 'native_delivery_cancel' || name === 'native_delivery_remove') {
@@ -137,7 +156,7 @@ export class McpGateway implements AssistantGateway {
         const { uri } = z.object({ uri: z.string().max(512) }).strict().parse(args);
         const url = new URL(uri);
         if (url.protocol !== 'builder:' || url.username || url.password || url.search || url.hash || url.href !== uri || /%|\\/.test(uri)) throw new Error('Only canonical Dunara resource URIs are allowed');
-        if (!(['builder://guide', 'builder://projects'].includes(uri) && this.resources.includes(uri))) {
+        if (!(['builder://guide', 'builder://projects', 'builder://capabilities'].includes(uri) && this.resources.includes(uri))) {
           const match = /^builder:\/\/projects\/([a-f0-9-]{36})\//.exec(uri); this.scope(match?.[1]);
           if (!this.templates.some(template => new RegExp(`^${template.split(/(\{[^}]+\})/).map(part => part.startsWith('{') ? '[^/]+' : part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('')}$`).test(uri))) throw new Error('Unknown MCP resource template');
         }
@@ -160,10 +179,10 @@ export class McpGateway implements AssistantGateway {
         else { this.scope(this.binding.projectId); const current = await this.studio(signal); this.scope(current.projectId); }
       } else if (plugin?.scope === 'global') { /* Host binds global plugin reviews to the account and selection. */ }
       else if (name === 'plugin_action') { if (args.projectId != null) this.scope(args.projectId); }
-      else if (policy !== 'catalog' && policy !== 'project') this.scope(args.projectId);
+      else if (policy !== 'catalog' && policy !== 'project' && policy !== 'global-review') this.scope(args.projectId);
       const mutation = policy !== 'read' && policy !== 'catalog';
       if (mutation) await this.checkSelection(name, args, signal);
-      const approval = policy === 'review' || policy === 'project' || policy === 'cancel';
+      const approval = policy === 'global-review' || policy === 'review' || policy === 'project' || policy === 'cancel';
       if (approval) {
         const reviewed = await this.review(name, args, signal);
         await this.context.approvals.request(this.binding, name, args, reviewed, policy === 'project' ? 'This changes the conversation’s project scope. Only approve if you explicitly want this project action.' : name === 'media_cancel' ? 'Cancellation is not rollback or a guaranteed refund.' : 'Approve only after reviewing these exact inputs and the associated images or changes. This does not approve paid image execution or publication.', signal);

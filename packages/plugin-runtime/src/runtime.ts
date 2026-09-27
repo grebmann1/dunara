@@ -8,11 +8,12 @@ import { z } from 'zod';
 import { atomicWrite, exists, noSymlinks, readText, SerialQueue } from '../../core/src/storage.js';
 import type { ActionContext, Json, PluginAction, PluginFactory, PluginServer, PluginSetting } from '../../plugin-sdk/src/server.js';
 import type { PluginRecipe } from '../../plugin-sdk/src/recipes.js';
-import { localId, pluginId, storeSchema, version, type InstalledPlugin, type PluginStore, type PluginView } from './contracts.js';
+import { localId, pluginId, storeSchema, version, type AvailablePluginView, type InstalledPlugin, type PluginStore, type PluginView } from './contracts.js';
 import { inspectPackage, materializePackage, type PackageContents } from './packages.js';
 
 export type RuntimeHost = {
   files(projectId: string): ActionContext['files'];
+  backendEnabled?(pluginId: string, projectId: string): Promise<boolean>;
   binding(projectId: string | null): Promise<unknown>;
   getCredential(plugin: string, name: string): Promise<string | undefined>;
   setCredential(plugin: string, name: string, value: string | null): Promise<void>;
@@ -86,6 +87,29 @@ export class PluginRuntime extends EventEmitter {
     });
   }
   async inspect(source: string) { const pkg = await inspectPackage(source); return { package: pkg.package, digest: pkg.digest, files: Object.keys(pkg.files), trust: 'Full-trust local code. Installation grants access to this user’s machine.' }; }
+  available(): AvailablePluginView[] {
+    return [...this.builtins.values()].filter(builtin => !this.row(builtin.contents.package.builder.id, false)).map(({ contents }) => {
+      const { builder } = contents.package;
+      return { id: builder.id, name: builder.name, description: builder.description, version: contents.package.version, digest: contents.digest, source: 'builtin', status: 'available', capabilities: builder.capabilities, requires: builder.requires };
+    });
+  }
+  /** Install one shipped package; backend availability never opts an app in. */
+  async installBundled(id: string, digest: string) {
+    await this.ready;
+    return this.queue.run(async () => {
+      if (this.closed) throw Error('Plugin runtime is closed');
+      pluginId.parse(id);
+      const builtin = this.builtins.get(id);
+      if (!builtin || builtin.contents.digest !== digest) throw Error('Available plugin changed. Refresh the library and try again.');
+      if (this.row(id, false)) throw Error('Plugin is already installed');
+      if (this.store.installed.length >= 100) throw Error('Plugin installation limit reached');
+      await this.host.beforeChange?.(id);
+      await materializePackage(path.join(this.root, 'packages'), builtin.contents);
+      this.store.installed.push({ package: builtin.contents.package, digest, source: 'builtin', enabled: builtin.contents.package.builder.workspaceGroup === 'backend', installedAt: new Date().toISOString() });
+      this.store.uninstalled = this.store.uninstalled.filter(value => value !== id);
+      await this.save(); await this.activateAll(); this.emit('change'); return this.snapshot();
+    });
+  }
   async install(source: string, digest: string, trusted: boolean, development = false) {
     await this.ready;
     return this.queue.run(async () => {
@@ -200,6 +224,11 @@ export class PluginRuntime extends EventEmitter {
       let factory = builtin?.activate;
       if (!factory && row.package.builder.server) factory = (await import(`${pathToFileURL(path.join(root, row.package.builder.server)).href}?generation=${live.generation}`)).default as PluginFactory;
       if (factory) { if (typeof factory !== 'function') throw Error('Server must export a plugin factory'); await factory(api); }
+      if (row.package.builder.projectContext) {
+        const action = live.actions.get(row.package.builder.projectContext);
+        if (!action || action.effect !== 'read' || action.scope !== 'project') throw Error('Project context must name a read-only project action');
+        schema(action.input).parse({});
+      }
       registering = false; this.live.set(id, live);
     } catch (error) { registering = false; for (const dispose of live.disposers.reverse()) { try { await dispose(); } catch { /* Failed activation must release every registered resource. */ } } await this.dataQueue.run(async () => atomicWrite(this.dataFile(id), JSON.stringify(previousData))); throw error; }
   }
@@ -235,9 +264,18 @@ export class PluginRuntime extends EventEmitter {
     }
     const action = live.actions.get(name); if (!action) throw Error('Plugin action is unavailable'); return { live, action };
   }
+  projectBusy(id: string, projectId: string) { return (this.operations.get(id) ?? []).some(operation => operation.projectId === projectId && operation.state === 'running'); }
+  invalidateProjectReviews(id: string, projectId: string) { for (const [key, review] of this.reviews) if (review.pluginId === id && review.projectId === projectId) this.reviews.delete(key); this.emit('change'); }
+  private async assertBackendAction(id: string, projectId: string | null, action: PluginAction) {
+    const manifest = this.row(id)!.package.builder;
+    const inspection = action.effect === 'read' && ['inspect', 'backend-inspect', 'backend-operation', manifest.projectContext].includes(action.id);
+    const cancellation = id === 'builder.supabase' && action.id === 'backend-cancel';
+    if (projectId && manifest.workspaceGroup === 'backend' && !inspection && !cancellation && !(await this.host.backendEnabled?.(id, projectId) ?? false)) throw Error('Enable this backend for this app in Backend first.');
+  }
   async invoke(id: string, name: string, supplied: unknown, projectId: string | null, signal = new AbortController().signal): Promise<Json> {
     await this.ready; signal.throwIfAborted();
     const { live, action } = this.action(id, name); if (action.scope === 'project' && !projectId) throw Error('Select a project first'); if (action.scope === 'global' && projectId) projectId = null;
+    await this.assertBackendAction(id, projectId, action);
     const properties = action.input.properties;
     if (action.scope === 'project' && properties && typeof properties === 'object' && Object.hasOwn(properties, 'projectId')) {
       const object = z.record(z.string(), z.unknown()).parse(supplied);
@@ -257,15 +295,41 @@ export class PluginRuntime extends EventEmitter {
     return this.execute(id, action, input, projectId, live, signal, false);
   }
   private async execute(id: string, action: PluginAction, input: Json, projectId: string | null, live: Live, parent: AbortSignal, writable: boolean, review?: Json, operationId?: string) {
+    await this.assertBackendAction(id, projectId, action);
     const controller = new AbortController(), abort = () => controller.abort(); parent.addEventListener('abort', abort, { once: true }); if (parent.aborted) abort(); live.running.add(controller);
     try { controller.signal.throwIfAborted(); const output = await this.actionScope.run({ projectId, signal: controller.signal }, () => action.run(input, this.context(id, projectId, controller.signal, writable, review, operationId))); controller.signal.throwIfAborted(); return json(schema(action.output).parse(output)); }
     finally { controller.abort(); parent.removeEventListener('abort', abort); live.running.delete(controller); this.emit('change'); }
   }
   reviewsFor(id?: string) { for (const [key, review] of this.reviews) if (Date.parse(review.expiresAt) <= Date.now()) this.reviews.delete(key); return [...this.reviews.values()].filter(review => !id || review.pluginId === id).map(({ approved: _approved, fingerprint: _fingerprint, ...review }) => structuredClone(review)); }
+  /** Public per-app status for agents, excluding review inputs, plans and private settings. */
+  async projectContext(projectId: string) {
+    await this.ready;
+    // A large or unavailable source binding must not prevent ordinary project inspection.
+    const readable = await this.host.binding(projectId).then(() => true, () => false);
+    return Promise.all(this.snapshot().filter(plugin => plugin.workspaceGroup === 'backend').map(async plugin => {
+      const action = this.row(plugin.id)!.package.builder.projectContext;
+      let context: Json = null, contextStatus = readable && action && plugin.status === 'active' ? 'available' : 'unavailable';
+      if (readable && action && plugin.status === 'active') {
+        const controller = new AbortController();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        try {
+          context = bounded(await Promise.race([this.invoke(plugin.id, action, {}, projectId, controller.signal), new Promise<never>((_resolve, reject) => {
+            timer = setTimeout(() => { controller.abort(); reject(Error('Plugin context timed out')); }, 2000);
+          })]), 8192);
+        } catch { contextStatus = 'unavailable'; }
+        finally { clearTimeout(timer); controller.abort(); }
+      }
+      const pendingReviews = this.reviewsFor(plugin.id).filter(review => review.projectId === projectId).map(review => ({ id: review.id, action: review.action, state: 'awaiting-approval', expiresAt: review.expiresAt }));
+      const operations = (this.operations.get(plugin.id) ?? []).filter(operation => operation.projectId === projectId).slice(-5).map(({ id, action, state, updatedAt }) => ({ id, action, state, updatedAt }));
+      const projectEnabled = this.host.backendEnabled ? await this.host.backendEnabled(plugin.id, projectId).catch(() => false) : false;
+      return { pluginId: plugin.id, projectEnabled, name: plugin.name, pluginStatus: plugin.status, contextStatus, context, pendingReviews, operations, guides: plugin.guides };
+    }));
+  }
   async answerReview(reviewId: string, approve: boolean) {
     await this.ready; const review = this.reviews.get(reviewId); if (!review || Date.parse(review.expiresAt) <= Date.now()) throw Error('Review expired or is unavailable');
     this.reviews.delete(reviewId); this.emit('change'); if (!approve) return { dismissed: true };
     const { live, action } = this.action(review.pluginId, review.action); if (live.generation !== review.generation) throw Error('Plugin changed after review');
+    await this.assertBackendAction(review.pluginId, review.projectId, action);
     const signal = new AbortController().signal, plan = json(action.plan ? await this.actionScope.run({ projectId: review.projectId, signal }, () => action.plan!(review.input, this.context(review.pluginId, review.projectId, signal, false))) : { title: action.title, input: review.input });
     if (fingerprint({ binding: await this.host.binding(review.projectId), plan, input: review.input }) !== review.fingerprint) throw Error('Project, identity or action changed. Prepare a fresh review.');
     if (this.live.get(review.pluginId) !== live) throw Error('Plugin changed during review. Prepare a fresh review.');

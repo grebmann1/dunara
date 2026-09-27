@@ -5,11 +5,13 @@ import path from 'node:path';
 import { ReadBuffer, serializeMessage } from '@modelcontextprotocol/sdk/shared/stdio.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js';
+import { atomicWrite } from '../../core/src/storage.js';
+import { runtimeRecordSchema } from './discovery.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import type { Engine } from '../../core/src/engine.js';
 import { createMcpServer } from './server.js';
 
-const MAX_MESSAGE = 24 * 1024 * 1024;
+export const MAX_MESSAGE = 48 * 1024 * 1024;
 export class SocketTransport implements Transport {
   onclose?: () => void;
   onerror?: (error: Error) => void;
@@ -57,6 +59,7 @@ export async function startDesktopMcp(engine: Engine) {
   try {
     await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(socketPath, resolve); });
     await chmod(socketPath, 0o600);
+    await atomicWrite(path.join(directory, 'runtime.json'), JSON.stringify(runtimeRecordSchema.parse({ version: 1, pid: process.pid, home: engine.projects.home, workspace: engine.projects.workspace, socketPath, startedAt: new Date().toISOString() })));
   } catch (error) { server.close(); await rm(directory, { recursive: true, force: true }); throw error; }
   return { socketPath, async close() {
     const closed = new Promise<void>(resolve => server.close(() => resolve()));
@@ -78,7 +81,7 @@ export async function connectDesktop(socketPath: string) {
 
 export async function bridgeDesktop(socketPath: string) {
   const remote = await connectDesktop(socketPath);
-  const local = new StdioServerTransport();
+  const local = new StdioServerTransport(undefined, undefined, { maxBufferSize: MAX_MESSAGE });
   let closed = false;
   const close = () => { if (closed) return; closed = true; void local.close(); void remote.close(); };
   local.onmessage = message => { void remote.send(message).catch(close); };

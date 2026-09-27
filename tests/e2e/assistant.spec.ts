@@ -203,7 +203,8 @@ test('assistant stays beside the entire page and preserves exact phones and keyb
   await expect(page.getByRole('button', { name: 'Send message' })).toBeInViewport();
   await page.keyboard.press('Escape'); await expect(toggle).toBeFocused();
   await expect(page.getByText('Local, shared workspace.')).toHaveCount(0); expect(calls).toBe(0);
-  await page.unrouteAll({ behavior: 'wait' });
+  // Polling can leave a fixture response in flight after the final layout assertion.
+  await page.unrouteAll({ behavior: 'ignoreErrors' });
 });
 
 test('Inspector stages an active selection and two canonical PNGs without sending until explicit Send', async ({ page }) => {

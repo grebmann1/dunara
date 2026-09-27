@@ -14,7 +14,7 @@ async function start() { engine = new Engine(await Projects.open(path.join(root,
 async function install() { const pkg = await inspectPackage(source); await engine.plugins.install(source, pkg.digest, true); return pkg; }
 beforeEach(async () => { root = await mkdtemp(path.join(os.tmpdir(), 'builder-plugins-')); source = path.join(root, 'sample'); await scaffoldPlugin(source); await start(); projectId = (await engine.projects.create({ name: 'Plugin app', slug: 'plugin-app' })).id; });
 afterEach(async () => { await engine.close(); await rm(root, { recursive: true, force: true }); });
-it('discovers backend workspaces only from a validated, enabled plugin package', async () => {
+it('discovers backend workspaces from validated packages and only mounts enabled providers', async () => {
   const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'));
   manifest.builder.workspacePanel = 'backend'; manifest.builder.workspaceGroup = 'backend';
   expect(manifestSchema.safeParse({ ...manifest.builder, app: undefined }).success).toBe(false);
@@ -29,13 +29,55 @@ it('discovers backend workspaces only from a validated, enabled plugin package',
   await engine.close(); await start();
   expect(engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)).toMatchObject({ workspaceGroup: 'backend', status: 'disabled' });
 });
+it('validates automatic project context and contains failures without disclosing private errors', async () => {
+  const manifest = JSON.parse(await readFile(path.join(source, 'package.json'), 'utf8'));
+  Object.assign(manifest.builder, { workspaceGroup: 'backend', workspacePanel: 'backend', projectContext: 'agent-status' });
+  expect(manifestSchema.safeParse({ ...manifest.builder, server: undefined }).success).toBe(false);
+  await writeFile(path.join(source, 'package.json'), JSON.stringify(manifest));
+  for (const [effect, scope, input] of [['write', 'project', {}], ['read', 'global', {}], ['read', 'project', { type: 'object', properties: { secret: { type: 'string' } }, required: ['secret'] }]]) {
+    await writeFile(path.join(source, 'server.js'), `export default api => api.actions.register({id:'agent-status',title:'Status',description:'',effect:${JSON.stringify(effect)},scope:${JSON.stringify(scope)},input:${JSON.stringify(input)},output:{},run(){return {}}});`);
+    await install();
+    expect(engine.plugins.snapshot().find(plugin => plugin.id === manifest.builder.id)?.status).toBe('failed');
+    await engine.plugins.change(manifest.builder.id, 'uninstall');
+  }
+  for (const run of ["throw Error('private-context-canary')", "return {value:'x'.repeat(9000)}", "return ctx.files.write([{path:'BAD.md',content:'bad',expectedRevision:null}])", "return new Promise((_resolve,reject) => ctx.signal.addEventListener('abort', () => reject(Error('private-context-canary')), {once:true}))"]) {
+    await writeFile(path.join(source, 'server.js'), `export default api => api.actions.register({id:'agent-status',title:'Status',description:'',effect:'read',scope:'project',input:{},output:{},async run(_,ctx){${run}}});`);
+    await install();
+    const status = (await engine.plugins.projectContext(projectId)).find(plugin => plugin.pluginId === manifest.builder.id);
+    expect(status).toMatchObject({ pluginStatus: 'active', contextStatus: 'unavailable', context: null });
+    expect(JSON.stringify(status)).not.toContain('private-context-canary');
+    await expect(engine.files.read(projectId, 'BAD.md')).rejects.toThrow();
+    await engine.plugins.change(manifest.builder.id, 'uninstall');
+  }
+});
 it('installs defaults offline and preserves disabled and removed defaults across restart', async () => {
-  expect(engine.plugins.snapshot()).toHaveLength(9); expect(engine.plugins.snapshot().every(p => p.status === 'active')).toBe(true);
+  expect(engine.plugins.snapshot()).toHaveLength(10);
+  expect(engine.plugins.snapshot().filter(p => p.id !== 'salesforce.mobile-sdk').every(p => p.status === 'active')).toBe(true);
+  expect(engine.plugins.snapshot().find(p => p.id === 'salesforce.mobile-sdk')?.status).toBe('active');
   await engine.plugins.change('builder.plugin-guide', 'uninstall'); await engine.plugins.change('builder.icons', 'disable');
   await engine.close(); await start();
   expect(engine.plugins.snapshot().some(p => p.id === 'builder.plugin-guide')).toBe(false);
   expect(engine.plugins.snapshot().find(p => p.id === 'builder.icons')?.status).toBe('disabled');
   await engine.plugins.restoreDefaults(); expect(engine.plugins.isEnabled('builder.plugin-guide')).toBe(true); expect(engine.plugins.isEnabled('builder.icons')).toBe(false);
+});
+it('lists uninstalled bundled plugins and installs one backend without enabling it in any app or restoring others', async () => {
+  const id = 'salesforce.mobile-sdk';
+  expect(engine.plugins.available()).toEqual([]);
+  await engine.plugins.change(id, 'uninstall'); await engine.plugins.change('builder.plugin-guide', 'uninstall');
+  await engine.close(); await start();
+  const available = engine.plugins.available().find(plugin => plugin.id === id)!;
+  expect(available).toMatchObject({ name: 'Salesforce', status: 'available', source: 'builtin' });
+  expect(JSON.stringify(engine.plugins.available())).not.toContain(root);
+  await expect(engine.plugins.installBundled(id, '0'.repeat(64))).rejects.toThrow('changed');
+  expect(engine.plugins.snapshot().some(plugin => plugin.id === id)).toBe(false);
+  await engine.plugins.installBundled(id, available.digest);
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)).toMatchObject({ status: 'active', enabled: true });
+  expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
+  await expect(engine.files.read(projectId, 'backend/salesforce-installation.json')).rejects.toThrow();
+  await expect(engine.plugins.installBundled(id, available.digest)).rejects.toThrow('already installed');
+  await engine.close(); await start();
+  expect(engine.plugins.snapshot().find(plugin => plugin.id === id)?.status).toBe('active');
+  expect(engine.plugins.available().map(plugin => plugin.id)).toEqual(['builder.plugin-guide']);
 });
 it('requires trust and an unchanged package digest, reserves builtin identities, and rejects traversal/symlinks', async () => {
   const pkg = await inspectPackage(source);

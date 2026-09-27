@@ -16,7 +16,7 @@ import { type ConfigurationPlan } from "../../../platform/src/configuration.js";
 import type { BackendOAuth } from "../../../core/src/backend-oauth.js";
 type AnyPlan = BackendPlan | ConfigurationPlan;
 
-export type BackendOptions = { paused?: () => boolean; encryptionKey?: string; fetch?: Fetcher; changed?: () => void; oauth?: BackendOAuth };
+export type BackendOptions = { enabled?: (projectId: string) => Promise<boolean>; paused?: () => boolean; encryptionKey?: string; fetch?: Fetcher; changed?: () => void; oauth?: BackendOAuth };
 export class Backends {
   private database?: PlatformStore;
   private sessionToken?: string;
@@ -122,9 +122,10 @@ export class Backends {
   async inspect(projectId: string) {
     await this.projects.get(projectId);
     const selection = this.environmentState(projectId), connection = this.status();
+    const enabled = await this.options.enabled?.(projectId) ?? true;
     const active = selection.environments.find(binding => binding.environment === selection.activeEnvironment);
-    return { projectId, connection, ...selection, setup: await this.configuration.progress(projectId, selection.activeEnvironment), operations: this.store.list(this.actor, projectId).map(op => ({ ...op, steps: this.store.steps(this.actor, op.id) })),
-      readiness: { preview: active ? 'configured' as const : 'not_configured' as const, management: connection.configured ? 'credential_present' as const : 'connection_required' as const, providerPermissions: 'unknown' as const,
+    return { projectId, enabled, connection, ...selection, setup: await this.configuration.progress(projectId, selection.activeEnvironment), operations: this.store.list(this.actor, projectId).map(op => ({ ...op, steps: this.store.steps(this.actor, op.id) })),
+      readiness: { preview: !enabled ? 'disabled' as const : active ? 'configured' as const : 'not_configured' as const, management: connection.configured ? 'credential_present' as const : 'connection_required' as const, providerPermissions: 'unknown' as const,
         missingPrerequisites: [...(!connection.configured ? ['supabase_connection'] : []), ...(!active ? ['environment_binding'] : []), ...(connection.encryption.state !== 'ready' ? ['encrypted_storage_for_creation_and_saved_credentials'] : [])] } };
   }
   private environmentState(projectId: string) {
@@ -147,6 +148,7 @@ export class Backends {
     this.store.putRecord(this.actor, 'active-environment', projectId, { name: value.environment, generation: randomUUID() }); this.options.changed?.();
   }
   async appEnvironment(projectId: string): Promise<AppEnvironment> {
+    if (this.options.enabled && !await this.options.enabled(projectId)) return {};
     const binding = await this.binding(projectId, this.selectedEnvironment(projectId));
     return binding ? { EXPO_PUBLIC_SUPABASE_URL: binding.url, EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY: binding.publishableKey, EXPO_PUBLIC_BUILDER_ENVIRONMENT: binding.environment } : {};
   }

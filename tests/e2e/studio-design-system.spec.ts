@@ -18,7 +18,7 @@ test.beforeEach(async () => {
 });
 test.afterEach(async ({ page }) => {
   if (process.env.VISUAL) return;
-  await page.unrouteAll({ behavior: 'wait' }); await page.close();
+  await page.unrouteAll({ behavior: 'ignoreErrors' }); await page.close();
   await studio.close(); await engine.close(); await rm(dir, { recursive: true, force: true });
 });
 

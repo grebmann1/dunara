@@ -259,7 +259,10 @@ test('canvas reserves room for named screens and keeps on-demand tools from shif
       expect(await occupancy()).toEqual(before);
       await page.getByLabel('Agent-added screen').focus(); await page.keyboard.press('Escape');
       await expect(tools).toBeFocused();
-      if (count === 2) await page.getByRole('button', { name: 'Focus', exact: true }).click();
+      if (count === 2) {
+        await page.getByRole('button', { name: 'Focus', exact: true }).click();
+        await expect(page.locator('iframe')).toHaveCount(1);
+      }
     }
     await page.screenshot({ path: testInfo.outputPath(`canvas-occupancy-${width}.png`) });
   }

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { Engine } from '../../packages/core/src/engine.js';
@@ -78,6 +78,24 @@ test('keeps the connection interface usable at desktop and phone sizes', async (
   await configuration.getByLabel('Anthropic API key').fill('discard-this-unsaved-key');
   await configuration.getByRole('button', { name: 'Google Gemini', exact: true }).click();
   await expect(configuration.getByLabel('Google Gemini API key')).toHaveValue('');
+});
+
+test('refreshing image-provider settings preserves an unsent Assistant key until leaving Settings', async ({ page }) => {
+  await page.goto(studio.launchUrl); await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  const configuration = page.getByRole('region', { name: 'Assistant configuration' });
+  await configuration.getByText('API keys & endpoints', { exact: false }).click();
+  const key = configuration.getByLabel('Anthropic API key', { exact: true });
+  await key.fill('fixture-unsent-assistant-key');
+  const updated = await engine.mediaJobs.configureProvider({ action: 'disconnect', expectedRevision: engine.mediaJobs.providerStatus().revision });
+  await page.waitForResponse(async response => response.url().endsWith('/api/settings') && response.request().method() === 'GET' && (await response.json()).revision === updated.revision);
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  await expect(key).toHaveValue('fixture-unsent-assistant-key');
+  expect(assistant.status().connections.find(connection => connection.id === 'anthropic')?.configured).toBe(false);
+  expect(calls).toHaveLength(0);
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Settings', exact: true }).click();
+  await configuration.getByText('API keys & endpoints', { exact: false }).click();
+  await expect(key).toHaveValue('');
 });
 
 test('compact composer persists supported reasoning, keeps keyboard access and sends the chosen effort', async ({ page }, info) => {
@@ -282,6 +300,11 @@ test('remembers a connected provider, storage preference, draft and layout acros
   const chat = page.getByRole('dialog', { name: 'Assistant', exact: true });
   await chat.getByRole('textbox', { name: 'Message assistant' }).fill('Keep this unsent Bonsai refinement');
   await chat.getByRole('button', { name: 'Close assistant' }).click();
+  // Closing flushes asynchronously; wait for durable storage before terminating the page and backend.
+  await expect.poll(async () => {
+    const saved = JSON.parse(await readFile(path.join(home, 'home/credentials/assistant-drafts.json'), 'utf8'));
+    return saved.rows.some((row: { value: { text: string } }) => row.value.text === 'Keep this unsent Bonsai refinement');
+  }).toBe(true);
   const origin = studio.origin;
   await page.goto('about:blank');
   await assistant.close(); await studio.close(); await engine.close();

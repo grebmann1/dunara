@@ -26,8 +26,8 @@ import { NativeBuildPanel } from './components/NativeBuildPanel';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from './components/ui/dialog';
 import type { UnavailableProject } from '../../../packages/core/src/projects';
 import type { JourneyState } from '../../../packages/core/src/journey';
-import { BackendPanel, type SupabaseTab } from './components/BackendPanel';
-import { BackendPluginPanel } from './components/BackendPluginPanel';
+import { type SupabaseTab } from './components/BackendPanel';
+import { BackendProviderPanel } from './components/BackendProviderPanel';
 import { backendProviders } from './backend-providers';
 import { PluginsPanel, usePlugins } from './plugins/PluginsPanel';
 import { workspaceOwner } from '../../../packages/builtin-plugins/src/contributions';
@@ -246,8 +246,8 @@ export function App() {
         showAssistant();
       } : undefined} savedKitDraft={creativeDrafts.value.kit} onKitDraft={draft => creativeDrafts.update({ kit: draft })} />}
       {workspace === 'settings' && <SettingsPanel initialSection={settingsSection} enabledPlugins={enabledPlugins} project={state?.project} settings={settings} onSettings={setSettings} disabled={!usable} />}
-      {workspace === 'plugins' && <PluginsPanel catalog={pluginCatalog} projectId={selected || null} />}
-      {workspace === 'backend' && (selected && backendProvider ? backendProvider.id === 'builder.supabase' ? <BackendPanel key={`backend:${selected}`} projectId={selected} disabled={!usable} navigation={backendSelection?.projectId === selected && backendSelection.providerId === 'builder.supabase' ? backendSelection : undefined} /> : <BackendPluginPanel key={`${selected}:${backendProvider.id}`} plugin={backendProvider} projectId={selected} catalog={pluginCatalog} disabled={!usable} /> : <main className="destination backend-workspace"><p className="backend-eyebrow">DATA & SERVICES</p><h1>Backend</h1>{!selected ? <p>Select or create an app to manage its backends.</p> : !pluginCatalog.state ? <p role="status">Loading backend providers…</p> : <><p>No backend providers are enabled. Enable Supabase or install a backend plugin to get started.</p><Button onClick={() => setWorkspace('plugins')}>Open Plugins</Button></>}</main>)}
+      {workspace === 'plugins' && <PluginsPanel catalog={pluginCatalog} projectId={selected || null} onBackend={providerId => { setBackendSelection({ projectId: selected, providerId }); setWorkspace('backend'); }} />}
+      {workspace === 'backend' && (selected && backendProvider ? <BackendProviderPanel key={`${selected}:${backendProvider.id}`} plugin={backendProvider} projectId={selected} catalog={pluginCatalog} disabled={!usable} navigation={backendSelection?.projectId === selected && backendSelection.providerId === 'builder.supabase' ? backendSelection : undefined} /> : <main className="destination backend-workspace"><p className="backend-eyebrow">DATA & SERVICES</p><h1>Backend</h1>{!selected ? <p>Select or create an app to manage its backends.</p> : !pluginCatalog.state ? <p role="status">Loading backend providers…</p> : <><p>Install a backend plugin to make it available here, then enable it for this app.</p><Button onClick={() => setWorkspace('plugins')}>Open Plugins</Button></>}</main>)}
       {['assets', 'icons', 'activity'].includes(workspace) && !selected && <main className="destination"><h1>{workspace === 'icons' ? 'App Icons' : workspace === 'activity' ? 'Activity' : 'Assets'}</h1><p>Select or create a project to use this workspace. Settings is available without a project.</p></main>}
 
   </StudioShell></WorkspaceDockProvider>;

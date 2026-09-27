@@ -1,0 +1,22 @@
+.salesforce-workspace { container-type: inline-size; margin-top: 0; }
+.salesforce-workspace > .salesforce-installation { margin-top: 0; margin-bottom: 24px; }
+.salesforce-workspace .salesforce-toolbar { display: flex; align-items: end; justify-content: space-between; flex-wrap: wrap; gap: 12px; margin-bottom: 20px; }
+.salesforce-workspace label { display: grid; gap: 7px; font-size: 12px; font-weight: 500; }
+.salesforce-workspace input, .salesforce-workspace select { min-width: 0; width: 100%; min-height: var(--control-size, 36px); border: 1px solid var(--input); border-radius: 8px; background: var(--card); color: var(--foreground); padding: 8px 10px; font: inherit; font-size: 13px; }
+.salesforce-workspace .salesforce-toolbar select { min-width: 170px; }
+.salesforce-workspace .salesforce-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-block: 20px; }
+.salesforce-workspace .backend-card { margin-top: 16px; }
+.salesforce-workspace .salesforce-summary { display: grid; grid-template-columns: minmax(100px, 1fr) minmax(0, 2fr); gap: 10px 16px; font-size: 12px; margin: 18px 0; }
+.salesforce-workspace dt { color: var(--muted-foreground); }
+.salesforce-workspace dd { margin: 0; overflow-wrap: anywhere; }
+.salesforce-workspace .salesforce-primary { background: var(--primary); border-color: var(--primary); color: var(--primary-foreground); }
+.salesforce-workspace button { min-height: var(--control-size, 36px); font-size: 12px; }
+.salesforce-workspace button:disabled { opacity: .5; cursor: not-allowed; }
+.salesforce-workspace button:focus-visible, .salesforce-workspace input:focus-visible, .salesforce-workspace select:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.salesforce-workspace ul { padding-left: 20px; font-size: 12px; line-height: 1.8; overflow-wrap: anywhere; margin-block: 16px; }
+.salesforce-workspace [role=status]:empty { display: none; }
+@container (max-width: 600px) {
+  .salesforce-workspace .salesforce-fields { grid-template-columns: minmax(0, 1fr); }
+  .salesforce-workspace .salesforce-summary { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .salesforce-workspace dd { margin-bottom: 8px; }
+}

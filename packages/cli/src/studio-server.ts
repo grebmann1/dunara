@@ -1,4 +1,3 @@
-import { ProjectImports } from '../../core/src/project-import.js';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
@@ -22,8 +21,6 @@ import { nativeBuildConfiguration } from '../../core/src/native-builds.js';
 import { workspaceSelection } from '../../core/src/native-workspace-contracts.js';
 import { routeOwner } from '../../builtin-plugins/src/catalog.js';
 import { pluginId } from '../../plugin-runtime/src/contracts.js';
-import { ProjectJourney } from '../../core/src/journey.js';
-import { ProjectExports } from '../../core/src/project-export.js';
 
 const equal = (actual: string | undefined, expected: string) => !!actual && Buffer.byteLength(actual) === Buffer.byteLength(expected) && timingSafeEqual(Buffer.from(actual), Buffer.from(expected));
 async function body(req: IncomingMessage, limit = 1_000_000): Promise<unknown> {
@@ -47,9 +44,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
   assistant?.useSourceChanges(engine.sourceChanges, async projectId => {
     if ((await engine.studio.snapshot()).projectId !== projectId) throw new BuilderError('REVISION_CONFLICT', 'Select the conversation’s app before restoring its source.');
   });
-  const journey = new ProjectJourney(engine.projects, id => engine.boardCaptures.sourceRevision(id));
-  const projectExports = new ProjectExports(engine.projects);
-  const projectImports = new ProjectImports(engine.projects, () => engine.account.context().revision);
+  const { journey, projectExports, projectImports } = engine;
   await engine.plugins.ready;
   if (engine.plugins.isEnabled('builder.account')) await engine.account.restore();
   const drafts = new AssistantDrafts(engine.projects.home, assistant?.epoch ?? randomUUID(), () => engine.account.context());
@@ -104,11 +99,12 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           return res.end(archive.bytes);
         } finally { res.off('close', disconnect); }
       }
-      if (url.pathname === '/api/plugins' && req.method === 'GET') return json(res, { plugins: engine.plugins.snapshot(), reviews: engine.plugins.reviewsFor(), operations: engine.plugins.operationList(), recovery: engine.plugins.recovery });
+      if (url.pathname === '/api/plugins' && req.method === 'GET') return json(res, { plugins: engine.plugins.snapshot(), available: engine.plugins.available(), reviews: engine.plugins.reviewsFor(), operations: engine.plugins.operationList(), recovery: engine.plugins.recovery });
       if (url.pathname.startsWith('/api/plugins/') && req.method === 'POST') {
         const operation = url.pathname.slice('/api/plugins/'.length), input = await body(req);
         if (operation === 'inspect') { const value = z.object({ source: z.string().min(1).max(4096) }).strict().parse(input); return json(res, await engine.plugins.inspect(value.source)); }
         if (operation === 'install') { const value = z.object({ source: z.string().max(4096), digest: z.string().regex(/^[a-f0-9]{64}$/), trust: z.literal(true), development: z.boolean().default(false) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.install(value.source, value.digest, value.trust, value.development)); }
+        if (operation === 'install-bundled') { const value = z.object({ id: pluginId, digest: z.string().regex(/^[a-f0-9]{64}$/), confirm: z.literal(true) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.installBundled(value.id, value.digest)); }
         if (operation === 'change') { const value = z.object({ id: pluginId, operation: z.enum(['enable', 'disable', 'uninstall', 'reload', 'rollback']) }).strict().parse(input); await assistant?.interruptAccountWork(); return json(res, await engine.plugins.change(value.id, value.operation)); }
         if (operation === 'restore') { z.object({ confirm: z.literal(true) }).strict().parse(input); return json(res, await engine.plugins.restoreDefaults()); }
         if (operation === 'invoke') { const value = z.object({ id: pluginId, action: z.string().max(64), input: z.json().default({}), projectId: z.uuid().nullable().default(null) }).strict().parse(input); return json(res, await engine.plugins.invoke(value.id, value.action, value.input, value.projectId)); }
@@ -119,6 +115,13 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
         if (operation === 'credential') { const value = z.object({ id: pluginId, name: z.string().max(48), value: z.string().max(8192).nullable() }).strict().parse(input); await engine.plugins.setCredential(value.id, value.name, value.value); return json(res, { saved: true }); }
         if (operation === 'cancel') { const value = z.object({ id: pluginId }).strict().parse(input); engine.plugins.cancel(value.id); return json(res, { cancellationRequested: true }); }
         return json(res, { error: { message: 'Unknown plugin operation' } }, 404);
+      }
+      const backendPlugin = url.pathname.match(/^\/api\/projects\/([a-f0-9-]+)\/backend-plugins\/([a-z0-9.-]+)$/);
+      if (backendPlugin) {
+        const projectId = z.uuid().parse(backendPlugin[1]), id = pluginId.parse(backendPlugin[2]);
+        if (req.method === 'GET') return json(res, await engine.backendPluginState(projectId, id));
+        if (req.method === 'POST') { const input = await body(req, 8192); await assistant?.interruptAccountWork(); return json(res, await engine.setBackendPlugin(projectId, id, input)); }
+        return json(res, { error: { message: 'Method not allowed' } }, 405);
       }
       const owner = routeOwner(url.pathname); if (owner) engine.plugins.assertEnabled(owner);
       if (url.pathname.startsWith('/api/account/')) {
@@ -229,6 +232,7 @@ export async function startStudio(engine: Engine, assets: string, assistant?: As
           }
           const id = z.uuid().parse(backend![1]), action = backend![2];
           if (req.method === 'GET' && !action) return json(res, await engine.backends.inspect(id));
+          if (action !== 'cancel') await engine.assertBackendEnabled(id, 'builder.supabase');
           if (req.method === 'GET' && action === 'catalog') return json(res, await engine.backends.catalog(id));
           if (req.method === 'GET' && action === 'capabilities') return json(res, await engine.backends.capabilities(id));
           if (req.method !== 'POST' || !action) return json(res, { error: { message: 'Method not allowed' } }, 405);

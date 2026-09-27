@@ -27,6 +27,23 @@ async function setup(behavior: RunHarness['run'] = async () => {}, limits: Parti
 }
 async function finished(service: AssistantService) { await vi.waitFor(() => expect(service.status().busy).toBe(false)); }
 afterEach(async () => { await Promise.all(services.splice(0).map(service => service.close())); await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))); });
+it('refreshes backend installation context each project turn without granting approval', async () => {
+  const { service, gateway, harness } = await setup();
+  const context = vi.fn().mockResolvedValueOnce({ installation: 'not-installed', review: 'awaiting-approval' }).mockResolvedValueOnce({ installation: 'installed' }).mockRejectedValueOnce(Error('private-context-canary'));
+  Object.assign(gateway, { projectContext: context });
+  const conversation = await service.createConversation(randomUUID());
+  for (let turn = 0; turn < 3; turn++) {
+    await service.start({ conversationId: conversation.id, runId: randomUUID(), prompt: 'Inspect backend setup' }); await finished(service);
+  }
+  expect(harness.run.mock.calls[0]![0].context).toContain('awaiting-approval');
+  expect(harness.run.mock.calls[0]![0].context).toContain('not authorization');
+  expect(harness.run.mock.calls[1]![0].context).toContain('"installation":"installed"');
+  expect(harness.run.mock.calls[1]![0].context).not.toContain('awaiting-approval');
+  expect(harness.run.mock.calls[2]![0].context).toContain('Backend plugin context is unavailable');
+  expect(harness.run.mock.calls[2]![0].context).not.toContain('private-context-canary');
+  expect(context).toHaveBeenCalledTimes(3);
+  expect(gateway.call).not.toHaveBeenCalled();
+});
 it('runs app image suggestions with the selected model and no gateway or tool access', async () => {
   const { service, gateway, harness } = await setup(async (input, callbacks, signal) => {
     expect(input).toMatchObject({ mode: 'plan', task: 'image-prompt', model: 'gpt-6-astra', apiKey: key, tools: [] });

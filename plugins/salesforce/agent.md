@@ -1,0 +1,15 @@
+# Salesforce for the Assistant
+
+This API 1 backend plugin exposes project-scoped `inspect`, `project-context`, `install-in-app` and `configure`. Discover the installed action schemas through plugin_list. Writes prepare a human review; do not claim an action applied until its operation succeeded and the source confirms it.
+
+Read `project_inspect.backendPlugins` and the plugin’s `inspect` action first. `installation.state` distinguishes `not-installed`, `installed` and `needs-repair`. Pending reviews and operation results are scoped to this app; do not confuse a pending install with a completed one. The built-in Assistant receives fresh status each turn, but inspect again after changes. `configuration` contains public settings, not proof of a live connection. `compatibility` is a static manifest check, not native qualification. `integrationAdded` indicates files exist, not that the app imports them. Preserve other environments, providers, source edits and OAuth identities.
+
+Bundling or enabling the plugin is workspace availability, not permission to add Salesforce to apps. Propose Salesforce configuration or integration only for an app whose user has chosen Salesforce. Never add SDK dependencies, integration files or settings to unrelated apps or the default app template.
+
+Never ask for or put access/refresh tokens, passwords or client secrets in action inputs, generated source, logs or Assistant context. OAuth consumer keys are public. Native Mobile SDK owns the actual login and private token storage. This plugin has no credential capability or outbound provider requests.
+
+`install-in-app` adds src/salesforce/client.ts, src/salesforce/SalesforceProvider.tsx, salesforce/SETUP.md and backend/salesforce-installation.json. The user chooses **Install in app** in Backend → Salesforce and applies its review before `configure` is allowed. The legacy `add-react-integration` action is an alias with the same review and installation record. Never create the record directly to bypass this choice. Wire the React provider only after a native integration is qualified. For web, create a client with null SDK; do not import native modules or substitute sample data for a failed live call.
+
+The adapter targets the callback API of stable Mobile SDK 13.2.1, React Native 0.81.5 and React 19.1.0. Do not use the incompatible Promise API from the SDK 14 development README. Dunara's Expo 57/React Native 0.86.3 profile is incompatible with this stable dependency set. Do not change its manifest/lockfile or bypass preview guards. Native integration, SDK 14 qualification and offline MobileSync are separate work; report their actual status.
+
+Editor installation does not enable a backend for any app. Check `project_inspect.backendPlugins[].projectEnabled` before planning work. Direct the user to Backend → Salesforce → Enable for this app when it is false. Only then propose Install in app, and wait for its review. A retained installation marker does not override a disabled project choice. Supabase follows the same project enablement rule.
