@@ -534,6 +534,7 @@ test('project picker has an honest empty state and a single accessible project c
     await expect(list.getByRole('option', { selected: true })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(picker).toBeFocused();
+    await expect(page.getByRole('button', { name: '+ New app' })).toBeEnabled();
     await page.keyboard.press('Tab');
     await expect(page.getByRole('button', { name: '+ New app' })).toBeFocused();
     await expect(list).toHaveCount(0);

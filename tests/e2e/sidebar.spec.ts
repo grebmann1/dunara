@@ -93,6 +93,7 @@ test('phone navigation retains the header project picker and reachable actions',
     await expect(picker).toHaveText('Garden notebook');
     await page.getByRole('button', { name: 'Plugins', exact: true }).click();
     await expect(page.locator('#workspace-content')).toHaveAttribute('data-workspace', 'plugins');
+    await page.getByRole('button', { name: 'Settings', exact: true }).focus();
     await expect(page.getByRole('button', { name: 'Settings', exact: true })).toBeInViewport({ ratio: 1 });
     await expect(page.getByRole('button', { name: '+ New app', exact: true })).toBeInViewport({ ratio: 1 });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
