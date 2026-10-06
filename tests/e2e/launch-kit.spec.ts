@@ -167,11 +167,18 @@ test('stale icon, invalid URL and expired capture failures keep drafts for delib
   await expect(page.getByRole('alert')).toContainText('Library changed');
   await expect(page.getByRole('button', { name: 'Create local kit', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: 'Review local kit contents' }).click();
-  // Expire after the UI review, before POST; the service must refuse, never recapture.
-  retained = [];
+  // Expire when POST starts so background state polling cannot disable creation
+  // before this test reaches the service's expired-capture guard.
+  let creationRequests = 0;
+  await page.route(`**/api/projects/${projectId}/launch-kits/create`, async route => {
+    creationRequests++;
+    retained = [];
+    await route.continue();
+  });
   await page.getByRole('checkbox', { name: /I reviewed these exact contents/ }).check();
   await page.getByRole('button', { name: 'Create local kit', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Capture not found or expired' })).toBeVisible();
+  expect(creationRequests).toBe(1);
   await expect(page.getByLabel('Short summary', { exact: true })).toHaveValue('A user-authored draft');
   expect(await engine.launchKits.list(projectId)).toHaveLength(0);
 });

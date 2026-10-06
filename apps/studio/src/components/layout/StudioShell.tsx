@@ -102,7 +102,7 @@ export function StudioShell({ children, banners, overlays, footer, contentRef, p
         </nav>
         <SidebarProjects projects={projects} selected={selected} disabled={!usable || busy} onSelect={select} onCreate={create} />
         <div className="sidebar-footer">
-          {project && capabilities.localPaths && <ProjectDownload key={project.id} projectId={project.id} name={project.name} disabled={!usable || busy} />}
+          {project && <ProjectDownload key={project.id} projectId={project.id} name={project.name} disabled={!usable || busy} />}
           <Button disabled={!usable} variant="ghost" className="workspace-nav-item sidebar-action" aria-pressed={workspace === 'settings'} aria-current={workspace === 'settings' ? 'page' : undefined} onClick={() => navigate('settings')}><Settings aria-hidden /><span>Settings</span></Button>
           {accountControl && <div className="studio-account">{accountControl}</div>}
         </div>
