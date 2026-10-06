@@ -118,11 +118,13 @@ it.each([['401', 'sign-in'], ['429', 'usage'], ['500', 'unknown'], ['network', '
 }, 20000);
 it('forwards validated tool calls and actual PNG content through the real Responses adapter', async () => {
   const fixture = await provider('tool'), worker = harness(fixture.baseUrl); const value = input();
-  value.tools = [{ name: 'builder_probe', description: 'Offline protocol fixture', inputSchema: { type: 'object', properties: { flag: { type: 'string' } }, required: ['flag'], additionalProperties: false } }];
+  value.tools = [{ name: 'builder_probe', description: 'Offline protocol fixture', inputSchema: { type: 'object', properties: { flag: { type: 'string', pattern: '^yes$', maxLength: 3 } }, required: ['flag'], additionalProperties: false } }];
   const png = (await sharp({ create: { width: 16, height: 16, channels: 4, background: '#ffffff' } }).png().toBuffer()).toString('base64');
   const calls: string[] = [];
   await worker.run(value, { text() {}, async tool(name, args, signal) { signal.throwIfAborted(); calls.push(name); expect(args).toEqual({ flag: 'yes' }); return { content: [{ type: 'text', text: 'Review this offline PNG' }, { type: 'image', mimeType: 'image/png', data: png }], details: { structuredContent: { fixture: true } } }; } }, new AbortController().signal);
   expect(calls).toEqual(['builder_probe']); expect(fixture.requests).toHaveLength(2);
+  expect(fixture.requests[0]?.tools[0]).toMatchObject({ parameters: { properties: { flag: { type: 'string', maxLength: 3, description: 'Required pattern (validated by Dunara): ^yes$' } } } });
+  expect(JSON.stringify(fixture.requests[0]?.tools[0])).not.toContain('"pattern":');
   expect(fixture.requests[0]?.tools.map(tool => tool.name)).toEqual(['builder_probe']);
   expect(JSON.stringify(fixture.requests[1]?.input)).toContain(`data:image/png;base64,${png}`);
 }, 20000);

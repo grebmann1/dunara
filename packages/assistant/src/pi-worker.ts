@@ -1,5 +1,6 @@
 import { assistantProviderSchema, reasoningEffortSchema } from './provider-contracts.js';
 import { createAssistantRuntime } from './provider-runtime.js';
+import { responsesToolSchema } from './tool-schema.js';
 import { guidance } from '../../catalog/src/index.js';
 import { setupGuidance } from './setup.js';
 import { AssistantModelUnavailable, isModelUnavailable } from './provider-failure.js';
@@ -105,7 +106,7 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
   network.origin = new URL(model.baseUrl).origin;
   const errors = new Map<string, boolean>();
   const tools = input.tools.map(tool => ({
-    name: tool.name, label: tool.name, description: tool.description ?? tool.name, parameters: Type.Unsafe<Record<string, unknown>>(tool.inputSchema), executionMode: 'sequential' as const,
+    name: tool.name, label: tool.name, description: tool.description ?? tool.name, parameters: Type.Unsafe<Record<string, unknown>>(model.api === 'openai-responses' ? responsesToolSchema(tool.inputSchema) : tool.inputSchema), executionMode: 'sequential' as const,
     async execute(toolCallId: string, args: Record<string, unknown>, signal?: AbortSignal) {
       signal?.throwIfAborted();
       if (closed || pending.size) throw new Error('Assistant dispatch is not available');
