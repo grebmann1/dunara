@@ -15,7 +15,7 @@ import type { PiHarness } from './pi.js';
 const built: { PiHarness: typeof PiHarness } = await import(new URL('../../../dist/packages/assistant/src/pi.js', import.meta.url).href);
 const cleanups: Array<() => Promise<unknown>> = [];
 const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() })).default([]), input: z.unknown() }).passthrough();
-type Mode = 'text' | 'tool' | 'hold' | '401' | '429' | '500' | 'network' | 'model-unavailable';
+type Mode = 'text' | 'tool' | 'hold' | '401' | '429' | '500' | 'network' | 'model-unavailable' | 'empty' | 'incomplete';
 async function provider(mode: Mode) {
   const requests: Array<z.infer<typeof requestSchema>> = [];
   const server = createServer((req, res) => { void (async () => {
@@ -29,6 +29,9 @@ async function provider(mode: Mode) {
     res.writeHead(200, { 'Content-Type': 'text/event-stream' });
     send(res, { type: 'response.created', response: { id: 'resp_fixture', status: 'in_progress' } });
     if (mode === 'hold') return;
+    if (mode === 'empty' || mode === 'incomplete') {
+      send(res, { type: mode === 'empty' ? 'response.completed' : 'response.incomplete', response: { id: 'resp_fixture', status: mode === 'empty' ? 'completed' : 'incomplete', incomplete_details: mode === 'incomplete' ? { reason: 'max_output_tokens' } : null, output: [], usage: { input_tokens: 30, output_tokens: mode === 'empty' ? 0 : 4096, total_tokens: 30 } } }); res.end(); return;
+    }
     const item = mode === 'tool' && requests.length === 1 ? { id: 'fc_fixture', type: 'function_call', call_id: randomUUID(), name: 'builder_probe', arguments: JSON.stringify({ flag: 'yes' }), status: 'completed' } : { id: 'msg_fixture', type: 'message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'Offline worker complete.', annotations: [] }] };
     send(res, { type: 'response.output_item.added', output_index: 0, item: { ...item, arguments: '', content: [] } });
     if (item.type === 'function_call') send(res, { type: 'response.function_call_arguments.delta', output_index: 0, delta: item.arguments });
@@ -48,6 +51,11 @@ function harness(baseUrl: string, reasoning = false): RunHarness {
   cleanups.push(() => value.close()); return value;
 }
 afterEach(async () => { vi.unstubAllEnvs(); for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+it.each(['empty', 'incomplete'] as const)('fails a %s response through the real worker without retrying or claiming completion', async mode => {
+  const fixture = await provider(mode), worker = harness(fixture.baseUrl);
+  await expect(worker.run(input(), { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal)).rejects.toMatchObject({ name: 'AssistantProviderFailure', recovery: 'unknown' });
+  expect(fixture.requests).toHaveLength(1);
+}, 20000);
 it('reports an unavailable account model with a fixed recovery notice and no provider details or retry', async () => {
   const fixture = await provider('model-unavailable'), worker = harness(fixture.baseUrl);
   await expect(worker.run(input(), { text() {}, async tool() { throw new Error('No tools'); } }, new AbortController().signal)).rejects.toThrow('This model is not available for your connected account. Choose another model, then send your message again. No automatic retry was made.');

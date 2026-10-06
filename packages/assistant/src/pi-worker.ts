@@ -137,4 +137,9 @@ async function run(input: z.infer<typeof inputSchema>, fixture?: { baseUrl: stri
     if (last.stopReason === 'error' && isModelUnavailable(last.errorMessage ?? '')) throw new AssistantModelUnavailable();
     throw new AssistantProviderFailure(recoveryKind(last.errorMessage ?? ''));
   }
+  // A provider may finish with no visible output (including reasoning-only
+  // truncation). Never report that as a completed user turn or retry it.
+  if (last?.role !== 'assistant' || last.stopReason !== 'stop' || !last.content.some(block => block.type === 'text' && block.text.trim())) {
+    throw new AssistantProviderFailure('unknown');
+  }
 }
