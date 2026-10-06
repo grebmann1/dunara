@@ -8,6 +8,7 @@ import { managedAiEndpoint, type ManagedAiConnection } from '../../core/src/mana
 
 import { assistantProviderSchema, assistantProviders, providerDefinition, type AssistantProvider } from './provider-contracts.js';
 import type { ReasoningEffort } from './provider-contracts.js';
+import { assistantModels } from './models.js';
 export { assistantProviderSchema, providerDefinition, type AssistantProvider } from './provider-contracts.js';
 const token = z.string().min(1).max(16384).regex(/^[\x21-\x7e]+$/);
 const oauthCredential = z.object({ type: z.literal('oauth'), access: token, refresh: z.string().max(16384), expires: z.number().finite() }).catchall(z.unknown());
@@ -48,7 +49,7 @@ export class AssistantConnections {
     const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
     const { getSupportedThinkingLevels } = await import('@earendil-works/pi-ai');
     this.runtime = await ModelRuntime.create({ credentials: { async read() {}, async list() { return []; }, async modify() { throw new Error('Credential persistence disabled'); }, async delete() {} }, modelsPath: null, allowModelNetwork: false, refreshOnCreate: false });
-    for (const provider of assistantProviders) this.modelChoices.set(provider.id, this.runtime.getModels(provider.runtime).filter(model => model.input.includes('image') && !/chat-latest|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name, reasoningLevels: model.reasoning ? getSupportedThinkingLevels(model) : [] })));
+    for (const provider of assistantProviders) this.modelChoices.set(provider.id, assistantModels(this.runtime, provider.runtime).filter(model => model.input.includes('image') && !/chat-latest|realtime/.test(model.id)).map(model => ({ id: model.id, label: model.name, reasoningLevels: model.reasoning ? getSupportedThinkingLevels(model) : [] })));
   }
   models(id: AssistantProvider): AssistantModel[] {
     if (id === 'managed') return (this.host.managed?.models ?? []).map(model => ({ ...model, reasoningLevels: this.modelChoices.get(id)?.find(item => item.id === model.id)?.reasoningLevels }));

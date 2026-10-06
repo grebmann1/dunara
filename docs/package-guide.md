@@ -81,6 +81,8 @@ An optional `projectPersistence` adapter on `createBuilderRuntime` (or the third
 
 ## Studio
 
+Version 0.3.4 adds offline GPT-6.1 Sol selection for OpenAI API and host-managed Assistant connections. It uses Responses with text/image input and low, medium, high, xhigh or max reasoning. The documented model definition supplements the pinned adapter catalogue; host allowlists and billing still apply. Subscription model choices remain those advertised by their installed adapter.
+
 ```tsx
 import { Studio, createStudioClient } from '@mobile-builder/studio';
 import '@mobile-builder/studio/styles.css';
