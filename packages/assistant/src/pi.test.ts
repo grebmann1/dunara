@@ -14,7 +14,7 @@ import type { PiHarness } from './pi.js';
 
 const built: { PiHarness: typeof PiHarness } = await import(new URL('../../../dist/packages/assistant/src/pi.js', import.meta.url).href);
 const cleanups: Array<() => Promise<unknown>> = [];
-const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() })).default([]), input: z.unknown() }).passthrough();
+const requestSchema = z.object({ store: z.boolean(), tools: z.array(z.object({ name: z.string() }).passthrough()).default([]), input: z.unknown() }).passthrough();
 type Mode = 'text' | 'tool' | 'hold' | '401' | '429' | '500' | 'network' | 'model-unavailable' | 'empty' | 'incomplete';
 async function provider(mode: Mode) {
   const requests: Array<z.infer<typeof requestSchema>> = [];
