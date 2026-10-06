@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { Preview } from '../../packages/core/src/contracts.js';
 import { test, expect, type Page } from '@playwright/test';
-import { mkdtemp, copyFile, rm } from 'node:fs/promises';
+import { mkdtemp, copyFile, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { build } from 'vite';
@@ -34,6 +34,30 @@ async function fits(page: Page) {
   const workspace = (await page.locator('#workspace-content').boundingBox())!;
   const shell = (await page.locator('.studio').boundingBox())!;
   expect(workspace.width).toBeCloseTo(shell.width, 0);
+}
+
+for (const [width, height] of [[375, 812], [430, 932], [1440, 1100]] as const) {
+  test(`hosted projects offer a portable ZIP at ${width}px`, async ({ page }, info) => {
+    await page.setViewportSize({ width, height });
+    await page.goto(studio.launchUrl);
+    await expect(page.locator('.connection')).toHaveClass(/online/);
+    if (width < 760) await page.getByRole('button', { name: 'Expand sidebar', exact: true }).click();
+    await page.getByRole('button', { name: 'Download project', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Take your app with you', exact: true });
+    await expect(dialog).toBeVisible();
+    const downloadButton = dialog.getByRole('button', { name: 'Download ZIP', exact: true });
+    await expect(downloadButton).toBeInViewport({ ratio: 1 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath(`hosted-download-${width}.png`) });
+    const downloaded = page.waitForEvent('download');
+    await downloadButton.click();
+    const download = await downloaded;
+    expect(download.suggestedFilename()).toBe('garden-notebook.zip');
+    const archive = await readFile((await download.path())!);
+    expect(archive.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))).toBe(true);
+    expect(archive.includes(Buffer.from('package.json'))).toBe(true);
+    await expect(dialog).toContainText('is ready');
+  });
 }
 
 for (const [width, height] of [[375, 812], [430, 932]]) {

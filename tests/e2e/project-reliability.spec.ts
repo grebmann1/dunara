@@ -94,8 +94,11 @@ test('recovers a missing selected folder while healthy apps stay usable and remo
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth)).toBeLessThanOrEqual(1);
     await page.screenshot({ path: info.outputPath(`project-recovery-${size.width}.png`) });
   }
-  await rename(saved, project.root);
   await recovery.getByRole('button', { name: 'Check again', exact: true }).click();
+  await expect(recovery).toBeVisible();
+  // The background catalog refresh can recover immediately after restoration.
+  // Exercise manual retry while unavailable, then observe automatic recovery.
+  await rename(saved, project.root);
   await expect(recovery).toHaveCount(0);
   await rename(project.root, saved);
   await expect(recovery).toBeVisible();

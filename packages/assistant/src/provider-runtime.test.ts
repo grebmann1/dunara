@@ -27,3 +27,17 @@ it('allows explicit API endpoints, refuses subscription redirects and rejects un
   await expect(createAssistantRuntime({ ...input, provider: 'chatgpt', baseUrl: 'https://gateway.example/v1' })).rejects.toThrow('endpoint');
   await expect(createAssistantRuntime({ ...input, model: 'unknown-model' })).rejects.toThrow('unavailable');
 });
+it('makes Sol 6.1 available offline for personal and host-managed Responses connections', async () => {
+  const home = await mkdtemp(path.join(os.tmpdir(), 'assistant-sol-')); roots.push(home);
+  const managed = { label: 'Host credits', apiKey: 'fixture-managed-token', baseUrl: 'http://127.0.0.1:12345/v1', models: [{ id: 'gpt-6.1-sol', label: 'GPT-6.1 Sol' }] };
+  const connections = new AssistantConnections(home, undefined, () => {}, () => {}, undefined, { managed });
+  await connections.initialize();
+  for (const provider of ['openai', 'managed'] as const) {
+    expect(connections.models(provider).find(model => model.id === 'gpt-6.1-sol')).toMatchObject({ reasoningLevels: ['low', 'medium', 'high', 'xhigh', 'max'] });
+    const { model, runtime } = await createAssistantRuntime({ provider, model: 'gpt-6.1-sol', apiKey: managed.apiKey, ...(provider === 'managed' ? { baseUrl: managed.baseUrl } : {}) });
+    expect(model).toMatchObject({ id: 'gpt-6.1-sol', api: 'openai-responses', input: ['text', 'image'], cost: { input: 2, output: 10, cacheRead: 0.1, cacheWrite: 2.5 } });
+    expect((await runtime.getAuth(model))?.auth.apiKey).toBe(managed.apiKey);
+  }
+  expect(connections.models('chatgpt').some(model => model.id === 'gpt-6.1-sol')).toBe(false);
+  connections.close();
+});

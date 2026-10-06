@@ -98,6 +98,8 @@ export function vercelProvider(config: {
           timeout: input.durationMs,
           resources: { vcpus: 2 },
           networkPolicy: {
+            // SNI allowlist denies all other egress, including non-TLS traffic.
+            // Vercel rejects IPv6 CIDRs (even expanded notation) at creation.
             allow: input.allowedHosts,
             subnets: {
               deny: [
@@ -106,9 +108,6 @@ export function vercelProvider(config: {
                 "192.168.0.0/16",
                 "169.254.0.0/16",
                 "100.64.0.0/10",
-                "::1/128",
-                "fc00::/7",
-                "fe80::/10",
               ],
             },
           },

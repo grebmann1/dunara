@@ -56,7 +56,18 @@ it("Vercel closes ingress, pins placement, bounds lifetime and never uses auto-r
     region: "fra1",
     failoverRegions: [],
   });
-  expect(input.networkPolicy.subnets.deny).toContain("169.254.0.0/16");
+  expect(input.networkPolicy).toEqual({
+    allow: ["registry.npmjs.org", "studio.example.com"],
+    subnets: {
+      deny: [
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "100.64.0.0/10",
+      ],
+    },
+  });
   await box.write([{ path: "app.ts", content: Buffer.from("safe") }]);
   expect(Buffer.from(await box.read("/tmp/artifact")).toString()).toBe(
     "artifact",

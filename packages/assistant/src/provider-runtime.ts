@@ -3,6 +3,7 @@ import type { HarnessInput } from './contracts.js';
 import { providerDefinition } from './provider-contracts.js';
 import type { PiFixture } from './pi.js';
 import { managedAiEndpoint } from '../../core/src/managed-ai.js';
+import { assistantModels } from './models.js';
 
 /** Each worker receives one frozen credential, with no ambient credentials or refresh tokens. */
 export async function createAssistantRuntime(input: Pick<HarnessInput, 'provider' | 'model' | 'apiKey' | 'baseUrl'>, fixture?: PiFixture) {
@@ -25,7 +26,7 @@ export async function createAssistantRuntime(input: Pick<HarnessInput, 'provider
     provider = 'builder-fixture'; modelId = fixture.model;
     runtime.registerProvider(provider, { api: 'openai-responses', baseUrl: fixture.baseUrl, models: [{ id: modelId, name: 'Offline fixture', reasoning: fixture.reasoning ?? false, input: ['text', 'image'], contextWindow: 128000, maxTokens: 4096, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }] });
   }
-  let model = runtime.getModel(provider, modelId);
+  let model = assistantModels(runtime, provider).find(model => model.id === modelId);
   if (!model || !model.input.includes('image')) throw new Error('Selected assistant model is unavailable');
   if (input.baseUrl && !fixture) {
     const url = new URL(input.baseUrl);
